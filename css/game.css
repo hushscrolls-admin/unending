@@ -448,20 +448,30 @@ body {
 #abilities button .cd {
   position: absolute;
   inset: 0;
-  background: conic-gradient(
-    rgba(8, 10, 18, 0.62) calc(var(--cd, 0) * 1%),
-    transparent 0
-  );
+  background:
+    linear-gradient(rgba(4, 6, 12, 0.28), rgba(4, 6, 12, 0.28)),
+    conic-gradient(
+      rgba(2, 3, 8, 0.84) calc(var(--cd, 0) * 1%),
+      transparent 0
+    );
   pointer-events: none;
 }
 
 #abilities button b {
   position: relative;
+  z-index: 1;
   font-weight: 400;
+  letter-spacing: 0.2px;
+  text-shadow:
+    0 0 4px #000,
+    0 1px 0 #000,
+    1px 1px 0 #000,
+    -1px 0 #000;
 }
 
 #abilities button:disabled {
-  opacity: 0.4;
+  opacity: 0.78;
+  color: #d4e6ff;
   cursor: default;
 }
 
@@ -470,7 +480,9 @@ body {
 }
 
 #abilities button.ready:not(:disabled):not(.urgent) {
-  border-color: #6ec4ff;
+  border-color: #ffe27a;
+  color: #fff4d0;
+  box-shadow: 0 0 0 1px #c9a227;
 }
 
 #abilities button.urgent {

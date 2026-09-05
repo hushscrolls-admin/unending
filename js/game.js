@@ -1672,18 +1672,56 @@
     }
   }
 
+  function drawStamp(text, x, y, opts) {
+    const o = opts || {};
+    ctx.save();
+    ctx.font = o.font || "bold 18px VT323, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const pad = o.pad || 7;
+    const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+    const h = o.h || 20;
+    ctx.fillStyle = o.bg || "rgba(4, 3, 2, 0.88)";
+    ctx.strokeStyle = o.border || "#ffe27a";
+    ctx.lineWidth = 2;
+    ctx.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+    ctx.strokeRect(Math.round(x - w / 2) + 0.5, Math.round(y - h / 2) + 0.5, w - 1, h - 1);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0,0,0,0.92)";
+    ctx.strokeText(text, x, y + 1);
+    ctx.fillStyle = o.color || "#ffe27a";
+    ctx.fillText(text, x, y + 1);
+    ctx.restore();
+  }
+
   function drawCdRing(x, y, r, frac, color) {
+    const ready = Math.max(0, Math.min(1, 1 - frac));
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.fillStyle = "rgba(6, 5, 4, 0.88)";
+    ctx.arc(x, y, r + 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 5;
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.strokeStyle = ready >= 0.99 ? "#fff4a8" : "rgba(40,36,28,0.95)";
     ctx.lineWidth = 4;
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    const ready = Math.max(0, Math.min(1, 1 - frac));
+    ctx.lineWidth = 4;
     ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ready);
     ctx.stroke();
+    if (ready >= 0.99) {
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255, 244, 168, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   function skillCdFrac(slot) {
@@ -1693,38 +1731,111 @@
     return Math.min(1, (Number(h.skillCd[slot]) || 0) / Math.max(0.01, cdScale(s.cd)));
   }
 
-  function drawHealVfx(e, gy) {
+  function drawHealVfx(e, gy, labels) {
     const range = e.def.healRange || 0;
     if (!range) return;
-    ctx.save();
-    ctx.fillStyle = "rgba(201,162,39,0.1)";
-    ctx.strokeStyle = "rgba(255,210,80,0.7)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(sx(e.x), gy - 6, range, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.font = "16px VT323, monospace";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#e6c15a";
-    ctx.fillText("HEAL RANGE", sx(e.x), gy + 14);
     const t = e.healTarget;
-    if (t && t.hp > 0) {
-      const pulse = e.healFlash || 0;
-      ctx.strokeStyle = pulse > 0 ? "rgba(255,240,130,1)" : "rgba(255,214,80,0.92)";
-      ctx.lineWidth = pulse > 0 ? 5 : 3.5;
+    if (!labels) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 210, 70, 0.26)";
+      ctx.strokeStyle = "#ffe27a";
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(sx(e.x), gy - 88);
-      ctx.lineTo(sx(t.x), gy - 70);
-      ctx.stroke();
-      ctx.fillStyle = pulse > 0 ? "rgba(255,230,90,0.45)" : "rgba(255,200,60,0.28)";
-      ctx.beginPath();
-      ctx.arc(sx(t.x), gy - 50, 24, 0, Math.PI * 2);
+      ctx.ellipse(sx(e.x), gy - 6, range, 18, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#ffe27a";
-      ctx.fillText("PATIENT", sx(t.x), gy - 58);
+      ctx.stroke();
+      if (t && t.hp > 0) {
+        const pulse = e.healFlash || 0;
+        ctx.strokeStyle = "#1a1004";
+        ctx.lineWidth = pulse > 0 ? 7 : 5;
+        ctx.beginPath();
+        ctx.moveTo(sx(e.x), gy - 88);
+        ctx.lineTo(sx(t.x), gy - 70);
+        ctx.stroke();
+        ctx.strokeStyle = pulse > 0 ? "#fff3a0" : "#ffe27a";
+        ctx.lineWidth = pulse > 0 ? 5 : 3.5;
+        ctx.beginPath();
+        ctx.moveTo(sx(e.x), gy - 88);
+        ctx.lineTo(sx(t.x), gy - 70);
+        ctx.stroke();
+        ctx.fillStyle = pulse > 0 ? "rgba(255,230,90,0.5)" : "rgba(255,200,60,0.32)";
+        ctx.beginPath();
+        ctx.arc(sx(t.x), gy - 50, 26, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
+    drawStamp("HEAL RANGE", sx(e.x), gy + 36, { color: "#ffe27a", border: "#c9a227" });
+    if (t && t.hp > 0) {
+      drawStamp("PATIENT", sx(t.x), gy - 78, {
+        color: "#1a1208",
+        bg: "#ffe27a",
+        border: "#fff4a8",
+      });
+    }
+  }
+
+  function drawHeroCdPips(gy) {
+    const h = run.hero;
+    if (!h || (state !== "fight" && state !== "dead")) return;
+    const cdx = sx(h.x) - 74;
+    const cdy = gy - 156;
+    const cdef = classDef(h.klass);
+    ctx.save();
+    ctx.fillStyle = "rgba(4, 3, 2, 0.86)";
+    ctx.strokeStyle = "#e6c15a";
+    ctx.lineWidth = 2;
+    ctx.fillRect(cdx - 18, cdy - 18, 36, 108);
+    ctx.strokeRect(cdx - 18.5, cdy - 18.5, 37, 109);
+    ctx.font = "bold 16px VT323, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const rings = [
+      { y: cdy, frac: Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), color: "#e6c15a", lab: "S" },
+      { y: cdy + 26, frac: skillCdFrac(0), color: "#7ad0ff", lab: "1" },
+      { y: cdy + 52, frac: skillCdFrac(1), color: "#7ad0ff", lab: "2" },
+      { y: cdy + 78, frac: skillCdFrac(2), color: "#7ad0ff", lab: "3" },
+    ];
+    for (const p of rings) {
+      drawCdRing(cdx, p.y, 12, p.frac, p.color);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#000";
+      ctx.strokeText(p.lab, cdx, p.y + 1);
+      ctx.fillStyle = p.frac <= 0.02 ? "#fff4a8" : p.color;
+      ctx.fillText(p.lab, cdx, p.y + 1);
     }
     ctx.restore();
+  }
+
+  function drawWolfTags(gy) {
+    const w = run.wolf;
+    if (!w || (state !== "fight" && state !== "dead")) return;
+    if (w.hp > 0) {
+      const tanking = run.enemies.some((e) => threatFor(e) === w);
+      const tag = w.leap ? "SIC" : w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
+      const hot = w.taunt > 0 || w.leap || tanking;
+      drawStamp(tag, sx(w.x), gy + 18, {
+        color: hot ? "#1a1208" : "#d8f0a8",
+        bg: hot ? "#ffe27a" : "rgba(8, 12, 6, 0.9)",
+        border: hot ? "#fff4a8" : "#8faf4a",
+        font: "bold 20px VT323, monospace",
+        h: 22,
+      });
+    } else {
+      drawStamp("DOWN", sx(w.x), gy - 108, {
+        color: "#fff0e0",
+        bg: "#6a2018",
+        border: "#ff8a6a",
+        font: "bold 20px VT323, monospace",
+        h: 22,
+      });
+      drawStamp("1 / 3 revive", sx(w.x), gy + 18, {
+        color: "#ffe27a",
+        border: "#c07040",
+        font: "bold 16px VT323, monospace",
+      });
+    }
   }
 
   function drawBurn(e, gy) {
@@ -1743,11 +1854,13 @@
       ctx.fillStyle = i % 2 ? "#ffe27a" : "#ff5a22";
       ctx.fillRect(sx(e.x) + ox - 2, gy - 36 + oy, 4, 7);
     }
-    ctx.font = "16px VT323, monospace";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ff8a3a";
-    ctx.fillText("BURN " + Math.ceil(burn.t) + "s", sx(e.x), gy - 78);
     ctx.restore();
+    drawStamp("BURN " + Math.ceil(burn.t) + "s", sx(e.x), gy - 86, {
+      color: "#fff0d8",
+      bg: "#5a180c",
+      border: "#ff8a3a",
+      font: "bold 16px VT323, monospace",
+    });
   }
 
   function heroSprite(h) {
@@ -1836,29 +1949,11 @@
         ctx.arc(sx(h.x), gy - 80, 80 + (0.45 - h.novaT) * 180, 0, Math.PI * 2);
         ctx.stroke();
       }
-      const cdx = sx(h.x) - 68;
-      const cdy = gy - 148;
-      const cdef = classDef(h.klass);
-      ctx.save();
-      ctx.font = "12px VT323, monospace";
-      ctx.textAlign = "center";
-      drawCdRing(cdx, cdy, 10, Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), "#e6c15a");
-      ctx.fillStyle = "#e6c15a";
-      ctx.fillText("S", cdx, cdy + 3);
-      for (let i = 0; i < 3; i++) {
-        const py = cdy + 24 * (i + 1);
-        drawCdRing(cdx, py, 10, skillCdFrac(i), "#6ec4ff");
-        ctx.fillStyle = "#6ec4ff";
-        ctx.fillText(String(i + 1), cdx, py + 3);
-      }
-      ctx.restore();
     }
 
     if (run.wolf && (state === "fight" || state === "dead")) {
       const w = run.wolf;
       ctx.save();
-      ctx.textAlign = "center";
-      ctx.font = "16px VT323, monospace";
       if (w.hp > 0) {
         const bob = w.anim === "walk" ? Math.sin(w.animT * 12) * 3 : 0;
         const tanking = run.enemies.some((e) => threatFor(e) === w);
@@ -1870,9 +1965,6 @@
           ctx.stroke();
         }
         drawImg(img.wolf, sx(w.x), gy + 8 + bob, 92, { flash: w.flash > 0 });
-        let tag = w.leap ? "SIC" : w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
-        ctx.fillStyle = w.taunt > 0 || w.leap ? "#ffe27a" : "#c9e6a0";
-        ctx.fillText(tag, sx(w.x), gy - 4);
         if (w.taunt > 0) {
           ctx.strokeStyle = "rgba(230,193,90,0.85)";
           ctx.lineWidth = 2;
@@ -1894,10 +1986,6 @@
         ctx.globalAlpha = 0.32;
         drawImg(img.wolf, sx(w.x), gy + 8, 92);
         ctx.globalAlpha = 1;
-        ctx.fillStyle = "#c07040";
-        ctx.fillText("WOLF DOWN", sx(w.x), gy - 110);
-        ctx.fillStyle = "#e8c090";
-        ctx.fillText("1 / 3 revive", sx(w.x), gy - 92);
       }
       ctx.restore();
     }
@@ -1912,7 +2000,6 @@
       const face = e.facing || -1;
       const lunge = e.anim === "atk" && e.animT < 0.2 ? 14 * face : 0;
       const hgt = 150 * (e.def.scale || 1);
-      if (e.def.heal) drawHealVfx(e, gy);
       drawImg(spr, sx(e.x) + lunge, gy + 6 + bob, hgt, {
         flash: e.flash > 0 || e.cc > 0 || e.igniteFlash > 0,
         flip: face > 0,
@@ -1931,7 +2018,17 @@
       drawBurn(e, gy);
     }
 
+    for (const e of run.enemies) {
+      if (e.def.heal) drawHealVfx(e, gy, false);
+    }
+
     drawWorldBars(gy);
+
+    for (const e of run.enemies) {
+      if (e.def.heal) drawHealVfx(e, gy, true);
+    }
+    drawWolfTags(gy);
+    drawHeroCdPips(gy);
 
     for (const r of fx.rings) {
       ctx.save();
