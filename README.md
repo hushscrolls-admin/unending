@@ -1,43 +1,42 @@
-# Style Time
+# Unending
 
-A kids salon / life-sim for Android and iOS. Create a stylist, work a three-day week of morning → salon → night, then spend a day off with friends.
+A 2D sidescrolling idle fighter. One mercenary on the left of the road. Hordes walk out of the trees. Gold buys steel. Death buys Glory.
 
-Built in **Unity 6 LTS** (URP) with a **2.5D** presentation: a Blender doll later, painted 2D rooms now. Portrait, offline, no ads.
+Inspired by the layout and upgrade-loop feel of *Magic Archery* (character planted left, auto-action, spend while you watch), with melee combat and a prestige restart.
 
-## Open the project
+## Play
 
-1. Install **Unity 6000.5.8f1** (or any Unity 6 LTS) via Unity Hub.
-2. Add Android and iOS build support if you want device builds.
-3. Open this folder as the project. First import will resolve URP.
-4. Press Play on `Assets/Scenes/Boot.unity`.
+Serve the folder (browsers block `file://` image loads in some setups):
 
-The game builds its UI at runtime, so Play Mode works without extra scene setup.
+```bash
+python3 -m http.server 8765
+```
 
-On the salon customer screen, **Closing time** skips the 5-minute clock so you can test the night routine without waiting.
+Open `http://localhost:8765`.
 
-## Vertical slice (what plays today)
+## Loop
 
-- Create a stylist (body, skin, hair, eyes, freckles, name, maths level)
-- Morning: dress, brush teeth, cereal, leave
-- Work: 5-minute salon, nails customers, make change at the chosen maths level
-- Night: dinner, shower (clothed), teeth, pyjamas, sleep
-- Save / continue across four local slots
+- The fighter holds the left. Melee walks to him. Archers and casters keep their distance.
+- **3** Charge: dash to the back line and stay there fighting. Press again to jump home.
+- Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins.
+- Kills drop gold, mana, hearts, and short buffs (rage / haste).
+- Spend gold in the Armory during the fight.
+- **Click** the battlefield or press **Space** for a Power Strike.
+- **1** Mend (25 mana). **2** Whirlwind (6s, three hits on both sides).
+- New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
+- Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
+- On death you keep Glory and buy permanent starting bonuses, then rise again. Gold and run upgrades reset.
 
-Not in this slice yet: haircut / makeup / dye, the 3-day week + day off, shops, house editor, NPC friends, Blender hero doll.
+## Controls
 
-## Maths levels
-
-| Profile | Change-making |
+| Input | Action |
 |---|---|
-| Little Stylist | Pick the pictured coin pile |
-| Coin Counter | Tap coins until they equal the change |
-| Change Maker | Type whole dollars |
-| Shop Maths | Type dollars and cents |
+| Click / Space | Power Strike |
+| 1 | Mend |
+| 2 | Whirlwind (cooldown) |
+| 3 | Charge / Return (toggle) |
+| P | Pause |
 
-## Blender doll (later)
+## Art
 
-Export a Unity Humanoid FBX, T-pose, 1 unit = 1 metre, same bind pose for hair and clothes. Slot names are already in `AppearanceData` / `OutfitData`. The stand-in UI doll uses those same ids.
-
-## Safety
-
-No online chat, no ads, no analytics. Shower uses a bathrobe. Saves stay on device.
+Chunky 16-bit pixel sprites, chroma-keyed from generated stills and video-harvested idle/attack/walk frames. See `assets/` and `tools/process_sprites.py`.

@@ -1,0 +1,34 @@
+{
+  "style": "chunky 16-bit pixel art, dark-fantasy rust/iron/teal palette, magenta-keyed sprites",
+  "background": "assets/bg/forest.jpg",
+  "hero": {
+    "still": "assets/sprites/hero/hero.png",
+    "idle": ["idle_1.png", "idle_2.png", "idle_3.png", "idle_4.png", "idle_5.png", "idle_6.png"],
+    "attack": ["atk_1.png", "atk_2.png", "atk_3.png", "atk_4.png"],
+    "fpsIdle": 6,
+    "fpsAttack": 12
+  },
+  "enemies": {
+    "grunt": "assets/sprites/enemies/grunt.png",
+    "shield": "assets/sprites/enemies/shield.png",
+    "berserk": "assets/sprites/enemies/berserk.png",
+    "archer": "assets/sprites/enemies/archer.png",
+    "mage": "assets/sprites/enemies/mage.png",
+    "healer": "assets/sprites/enemies/healer.png",
+    "gruntWalk": ["walk_1.png", "walk_2.png", "walk_3.png", "walk_4.png", "walk_5.png", "walk_6.png"]
+  },
+  "fx": {
+    "arrow": "assets/sprites/fx/arrow.png",
+    "bolt": "assets/sprites/fx/bolt.png"
+  },
+  "ui": {
+    "coin": "assets/ui/coin.png",
+    "heart": "assets/ui/heart.png",
+    "mana": "assets/ui/mana.png"
+  },
+  "notes": [
+    "Slight magenta JPEG fringe on some keyed edges.",
+    "Grunt attack video swung the wrong way; grunt attacks use a still + lunge.",
+    "Forest background ping-pongs instead of wrapping to hide the non-tileable seam."
+  ]
+}

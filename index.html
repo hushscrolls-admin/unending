@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unending</title>
+    <link rel="icon" href="assets/ui/coin.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/game.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="bars">
+          <div class="bar hp"><i id="hp-fill"></i><span id="hp-text">0/0</span></div>
+          <div class="bar mp"><i id="mp-fill"></i><span id="mp-text">0/0</span></div>
+        </div>
+        <div class="stat gold"><img src="assets/ui/coin.png" alt="" /> <span id="gold">0</span></div>
+        <div class="stat mana"><img src="assets/ui/mana.png" alt="" /> <span id="mana-stat">0</span></div>
+        <div class="stat">Wave <span id="wave">1</span></div>
+        <div class="stat">Kills <span id="kills">0</span></div>
+        <div class="stat glory">Glory <span id="glory">0</span></div>
+      </div>
+
+      <aside id="shop" class="hidden">
+        <h2>Armory</h2>
+        <div class="hint">Gold from the fallen. Spend it while he fights.</div>
+        <div id="abilities">
+          <button id="btn-mend" type="button">Mend (25)</button>
+          <button id="btn-whirl" type="button">Whirlwind (6s)</button>
+          <button id="btn-charge" type="button">Charge</button>
+        </div>
+        <h2>Stats</h2>
+        <div id="char-stats">
+          <div><span>Damage</span><b id="st-dmg">8</b></div>
+          <div><span>Speed</span><b id="st-spd">0.90/s</b></div>
+          <div><span>Armor</span><b id="st-armor">0</b></div>
+          <div><span>Crit</span><b id="st-crit">5%</b></div>
+          <div><span>Leech</span><b id="st-leech">0%</b></div>
+          <div><span>Fortune</span><b id="st-fortune">100%</b></div>
+          <div><span>Regen</span><b id="st-regen">2.2/s</b></div>
+          <div><span>Buffs</span><b id="st-buffs">—</b></div>
+        </div>
+        <h2>Upgrades</h2>
+        <div id="upgrades"></div>
+      </aside>
+
+      <div id="keys" class="hidden">Click / Space: Power Strike · 1 Mend · 2 Whirlwind · 3 Charge / Return</div>
+      <div id="toast"></div>
+
+      <div id="title" class="overlay">
+        <h1>UNENDING</h1>
+        <p>A lone fighter. An endless road. They will not stop coming.</p>
+        <p class="sub">
+          He stands on the left and cuts down whatever walks out of the trees.
+          Buy steel with gold. Die, and spend Glory on permanent blood.
+        </p>
+        <button class="cta" id="btn-start" type="button">Begin the road</button>
+      </div>
+
+      <div id="dead" class="overlay hidden">
+        <h1>FALLEN</h1>
+        <p id="dead-summary">Wave 1 · 0 kills</p>
+        <p class="sub">Glory earned this death: <span id="dead-glory">0</span></p>
+        <h2 style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #d9a0ff">
+          Prestige
+        </h2>
+        <div id="prestige-shop"></div>
+        <button class="cta" id="btn-again" type="button" style="margin-top: 16px">
+          Rise again
+        </button>
+      </div>
+    </div>
+
+    <script src="js/content.js"></script>
+    <script src="js/game.js"></script>
+  </body>
+</html>
