@@ -39,6 +39,8 @@
       hero: null,
       wolf: null,
       enemies: [],
+      boughtAny: false,
+      shopNudge: false,
       levels: Object.fromEntries(RUN_UPGRADES.map((u) => [u.id, 0])),
     };
   }
@@ -172,7 +174,7 @@
       const lv = prestLv(n.id);
       if (lv > 0 && n.apply) n.apply(hero, lv);
     }
-    run.gold = prestLv("purse") * 18;
+    run.gold = 12 + prestLv("purse") * 18;
     if (hero.heirloom) run.levels.iron = Math.max(run.levels.iron || 0, 1);
     for (const u of RUN_UPGRADES) {
       const lv = run.levels[u.id] || 0;
@@ -448,6 +450,11 @@
     const gold = Math.floor(e.gold * run.hero.goldFind);
     run.gold += gold;
     floatText(e.x, groundY() - 190, "+" + gold + "g", "#e6c15a");
+    if (!run.boughtAny && !run.shopNudge && run.gold >= 12) {
+      run.shopNudge = true;
+      toast("Armory ready");
+      buildShop();
+    }
     if (e.magic) run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + e.magic);
     const r = Math.random();
     if (r < 0.12) drop("heart", e.x, groundY() - 80);
@@ -512,6 +519,8 @@
         dots: [],
         cc: 0,
         charged: false,
+        healTarget: null,
+        healFlash: 0,
       });
     });
     const fresh = shopUnlocksAt(n);
@@ -741,7 +750,8 @@
   }
 
   function nextWaveDelay(wave) {
-    return 5.5 + wave * 0.5;
+    const early = wave < 4 ? 1.8 : 0;
+    return 5.5 + wave * 0.45 + early;
   }
 
   function charge() {
@@ -1152,10 +1162,22 @@
             if (hurt) {
               const amt = e.def.heal * waveScale(Math.max(1, run.wave - 1)).hp;
               hurt.hp = Math.min(hurt.maxHp, hurt.hp + amt);
+              e.healTarget = hurt;
+              e.healFlash = 0.45;
               floatText(hurt.x, groundY() - 180, "+" + fmt(amt), "#c9a227");
               sfx(640, 0.08, "sine", 0.03);
             }
           }
+          const focus =
+            nearest(
+              e.x,
+              (o) =>
+                o !== e &&
+                o.hp < o.maxHp * 0.95 &&
+                Math.abs(o.x - e.x) <= healRange
+            ) || (e.hp < e.maxHp * 0.95 ? e : e.healTarget);
+          if (focus && focus.hp > 0) e.healTarget = focus;
+          e.healFlash = Math.max(0, (e.healFlash || 0) - dt);
         }
         if (e.def.projectile) {
           const range = e.def.atkRange || e.def.keep + 80;
@@ -1327,6 +1349,80 @@
     ctx.strokeRect(x - w / 2, y, w, 6);
   }
 
+  function drawCdRing(x, y, r, frac, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.lineWidth = 4;
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    const ready = Math.max(0, Math.min(1, 1 - frac));
+    ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ready);
+    ctx.stroke();
+  }
+
+  function skillCdFrac(slot) {
+    const h = run.hero;
+    const s = classDef(h.klass).skills[slot];
+    if (!s.cd) return 0;
+    return Math.min(1, (h.skillCd[slot] || 0) / Math.max(0.01, cdScale(s.cd)));
+  }
+
+  function drawHealVfx(e, gy) {
+    const range = e.def.healRange || 0;
+    if (!range) return;
+    ctx.save();
+    ctx.fillStyle = "rgba(201,162,39,0.07)";
+    ctx.strokeStyle = "rgba(201,162,39,0.5)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(sx(e.x), gy - 6, range, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    const t = e.healTarget;
+    if (t && t.hp > 0) {
+      const pulse = e.healFlash || 0;
+      ctx.strokeStyle = pulse > 0 ? "rgba(255,230,110,0.95)" : "rgba(201,162,39,0.75)";
+      ctx.lineWidth = pulse > 0 ? 3.5 : 2;
+      if (pulse <= 0) ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.moveTo(sx(e.x), gy - 88);
+      ctx.lineTo(sx(t.x), gy - 70);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = pulse > 0 ? "rgba(255,220,80,0.35)" : "rgba(201,162,39,0.18)";
+      ctx.beginPath();
+      ctx.arc(sx(t.x), gy - 50, 22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBurn(e, gy) {
+    const burn = e.dots && e.dots.find((d) => d.kind === "burn");
+    if (!burn) return;
+    ctx.save();
+    ctx.globalAlpha = 0.4 + Math.sin(e.animT * 10) * 0.12;
+    ctx.fillStyle = "rgba(255,80,20,0.45)";
+    ctx.beginPath();
+    ctx.arc(sx(e.x), gy - 48, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 5; i++) {
+      const ox = Math.sin(e.animT * 11 + i * 1.3) * 12;
+      const oy = -((e.animT * 50 + i * 11) % 40);
+      ctx.fillStyle = i % 2 ? "#ffe27a" : "#ff5a22";
+      ctx.fillRect(sx(e.x) + ox - 2, gy - 36 + oy, 4, 7);
+    }
+    ctx.font = "16px VT323, monospace";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ff8a3a";
+    ctx.fillText("BURN " + Math.ceil(burn.t) + "s", sx(e.x), gy - 78);
+    ctx.restore();
+  }
+
   function heroSprite(h) {
     const c = classDef(h.klass);
     if (c.anims) {
@@ -1384,22 +1480,70 @@
         ctx.arc(sx(h.x), gy - 80, 80 + (0.45 - h.novaT) * 180, 0, Math.PI * 2);
         ctx.stroke();
       }
+      const cdx = sx(h.x) - 42;
+      const cdy = gy - 200;
+      const cdef = classDef(h.klass);
+      drawCdRing(cdx, cdy, 10, Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), "#e6c15a");
+      ctx.fillStyle = "#e6c15a";
+      ctx.font = "12px VT323, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("S", cdx, cdy + 3);
+      for (let i = 0; i < 3; i++) {
+        drawCdRing(cdx + 22 * (i + 1), cdy, 10, skillCdFrac(i), "#6ec4ff");
+        ctx.fillStyle = "#6ec4ff";
+        ctx.fillText(String(i + 1), cdx + 22 * (i + 1), cdy + 3);
+      }
     }
 
     if (run.wolf && (state === "fight" || state === "dead")) {
       const w = run.wolf;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.font = "16px VT323, monospace";
       if (w.hp > 0) {
         const bob = w.anim === "walk" ? Math.sin(w.animT * 12) * 3 : 0;
-        drawImg(img.wolf, sx(w.x), gy + 8 + bob, 92, { flash: w.flash > 0 });
-        drawHpBar(sx(w.x), gy - 108, 58, w.hp, w.maxHp, "#c9a06a");
-        if (w.taunt > 0) {
-          ctx.strokeStyle = "rgba(230,193,90,0.7)";
-          ctx.lineWidth = 2;
+        const tanking = run.enemies.some((e) => threatFor(e) === w);
+        if (tanking) {
+          ctx.strokeStyle = "rgba(255,170,70,0.55)";
+          ctx.lineWidth = 6;
           ctx.beginPath();
-          ctx.arc(sx(w.x), gy - 40, 36, 0, Math.PI * 2);
+          ctx.arc(sx(w.x), gy - 36, 40, 0, Math.PI * 2);
           ctx.stroke();
         }
+        drawImg(img.wolf, sx(w.x), gy + 8 + bob, 92, { flash: w.flash > 0 });
+        drawHpBar(sx(w.x), gy - 108, 58, w.hp, w.maxHp, "#c9a06a");
+        ctx.fillStyle = "#e6c15a";
+        ctx.fillText("WOLF", sx(w.x), gy - 118);
+        let tag = w.leap ? "SIC" : w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
+        ctx.fillStyle = w.taunt > 0 || w.leap ? "#ffe27a" : "#c9e6a0";
+        ctx.fillText(tag, sx(w.x), gy - 4);
+        if (w.taunt > 0) {
+          ctx.strokeStyle = "rgba(230,193,90,0.85)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sx(w.x), gy - 40, 36 + Math.sin(w.animT * 8) * 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        for (const e of run.enemies) {
+          if (threatFor(e) !== w) continue;
+          ctx.strokeStyle = "rgba(230,193,90,0.35)";
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(sx(e.x), gy - 60);
+          ctx.lineTo(sx(w.x), gy - 40);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      } else {
+        ctx.globalAlpha = 0.32;
+        drawImg(img.wolf, sx(w.x), gy + 8, 92);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#c07040";
+        ctx.fillText("WOLF DOWN", sx(w.x), gy - 110);
+        ctx.fillStyle = "#e8c090";
+        ctx.fillText("1 / 3 revive", sx(w.x), gy - 92);
       }
+      ctx.restore();
     }
 
     const sorted = [...run.enemies].sort((a, b) => a.x - b.x);
@@ -1412,6 +1556,7 @@
       const face = e.facing || -1;
       const lunge = e.anim === "atk" && e.animT < 0.2 ? 14 * face : 0;
       const hgt = 150 * (e.def.scale || 1);
+      if (e.def.heal) drawHealVfx(e, gy);
       drawImg(spr, sx(e.x) + lunge, gy + 6 + bob, hgt, {
         flash: e.flash > 0 || e.cc > 0,
         flip: face > 0,
@@ -1425,12 +1570,7 @@
         e.maxHp,
         e.def.color
       );
-      if (e.dots && e.dots.some((d) => d.kind === "burn")) {
-        ctx.fillStyle = "rgba(255,90,30,0.35)";
-        ctx.beginPath();
-        ctx.arc(sx(e.x) + 18, gy - 40, 7, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      drawBurn(e, gy);
     }
 
     for (const r of fx.rings) {
@@ -1561,7 +1701,12 @@
     const buffs = [];
     if (rage) buffs.push("Rage " + Math.ceil(h.buffs.rage) + "s");
     if (haste) buffs.push("Haste " + Math.ceil(h.buffs.haste) + "s");
-    if (wolfAlive() && run.wolf.taunt > 0) buffs.push("Wolf taunt");
+    if (run.wolf) {
+      if (wolfAlive()) {
+        const tag = run.wolf.leap ? "Sic" : run.wolf.taunt > 0 ? "Taunt" : "Guard";
+        buffs.push("Wolf " + fmt(run.wolf.hp) + "/" + fmt(run.wolf.maxHp) + " " + tag);
+      } else buffs.push("Wolf down — 1 or 3");
+    }
     if (lastStanding()) buffs.push("Last Stand");
     if (h.secondWind > 0) buffs.push("Wind " + h.secondWind);
     const buffEl = document.getElementById("st-buffs");
@@ -1569,8 +1714,11 @@
     buffEl.classList.toggle("hot", buffs.length > 0);
     for (let i = 0; i < 3; i++) {
       const btn = document.getElementById("btn-s" + (i + 1));
-      btn.textContent = skillLabel(i);
+      const lab = btn.querySelector("b") || btn;
+      lab.textContent = skillLabel(i);
       btn.disabled = skillDisabled(i);
+      const frac = skillCdFrac(i);
+      btn.style.setProperty("--cd", String(Math.round(frac * 100)));
     }
     for (const u of RUN_UPGRADES) {
       const btn = document.getElementById("buy-" + u.id);
@@ -1610,9 +1758,16 @@
     const next = nextShopUnlockWave(wave);
     const nextEl = document.getElementById("shop-next");
     if (nextEl) {
-      nextEl.textContent = next
-        ? "Next crate opens at wave " + next + "."
-        : "The armory is fully open.";
+      if (!run.boughtAny && wave < 5) {
+        nextEl.textContent =
+          run.gold >= 12
+            ? "First steel is in reach — buy Iron, Swift, or Vitality."
+            : "First steel costs 12g. The first raiders pay for it.";
+      } else {
+        nextEl.textContent = next
+          ? "Next crate opens at wave " + next + "."
+          : "The armory is fully open.";
+      }
     }
     for (const u of RUN_UPGRADES) {
       const need = shopUnlockWave(u);
@@ -1628,6 +1783,7 @@
         box.appendChild(row);
         continue;
       }
+      if (open && lv === 0 && !run.boughtAny && run.gold >= u.cost(0)) row.classList.add("ready");
       row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span></div>
         <button id="buy-${u.id}" type="button">${fmt(u.cost(lv))}</button>
         <div class="desc">${u.desc}</div>`;
@@ -1656,6 +1812,7 @@
     if (run.wave < shopUnlockWave(u)) return;
     run.gold -= c;
     run.levels[id] = lv + 1;
+    run.boughtAny = true;
     u.apply(run.hero);
     if (u.id === "pack") applyPack(run.hero);
     buildShop();
@@ -1695,6 +1852,8 @@
       const col = document.createElement("div");
       col.className = "tree-col";
       col.innerHTML = `<h3>${titles[i]}</h3>`;
+      const trunk = document.createElement("div");
+      trunk.className = "tree-trunk";
       list
         .sort((a, b) => a.row - b.row)
         .forEach((u) => {
@@ -1702,20 +1861,23 @@
           const open = prestReqMet(u, persist.prest);
           const maxed = lv >= (u.max || 8);
           const c = u.cost(lv);
-          const node = document.createElement("div");
-          node.className =
-            "tree-node" + (lv > 0 ? " owned" : open ? " open" : " locked");
+          const state = lv > 0 ? "owned" : open ? "open" : "locked";
+          const step = document.createElement("div");
+          step.className = "tree-step depth-" + u.row + " " + state;
           const req = prestReqText(u);
           const btnLabel = maxed ? "MAX" : c + " glory";
-          node.innerHTML = `<div class="name">${u.name} <span>${lv}/${u.max}</span></div>
+          step.innerHTML = `<div class="tree-node ${state}">
+            <div class="name">${u.name} <span>${lv}/${u.max}</span></div>
             <div class="desc">${u.desc}</div>
             ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
-            <button type="button">${btnLabel}</button>`;
-          const btn = node.querySelector("button");
+            <button type="button">${btnLabel}</button>
+          </div>`;
+          const btn = step.querySelector("button");
           btn.disabled = maxed || !open || persist.glory < c;
           btn.onclick = () => buyPrestige(u.id);
-          col.appendChild(node);
+          trunk.appendChild(step);
         });
+      col.appendChild(trunk);
       box.appendChild(col);
     });
   }

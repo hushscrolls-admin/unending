@@ -19,7 +19,7 @@ Open `http://localhost:8765`.
 - The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
 - Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range, and extra waves wait if the road is already crowded.
 - Kills drop gold, mana, hearts, and short buffs (rage / haste).
-- Spend gold in the Armory during the fight. Wave 1 only stocks Iron / Swift / Vitality. Guard and Fortune open at 5, leech / edge / reach at 9, Tempest / Cinder / Sharpen at 13, Echo / Pack at 17.
+- Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first Iron / Swift / Vitality buy before Wave 4. Later crates still open at 5 / 9 / 13 / 17.
 - **Click** the battlefield or press **Space** for the class strike.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).

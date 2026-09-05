@@ -100,7 +100,7 @@ const ENEMIES = {
     atkRate: 0.85,
     reach: 78,
     keep: 78,
-    gold: 8,
+    gold: 12,
     magic: 2,
     color: "#7a8a4a",
   },
@@ -306,7 +306,7 @@ const RUN_UPGRADES = [
     desc: "+2 damage",
     icon: "⚔",
     unlockWave: 1,
-    cost: (lv) => Math.floor(18 * Math.pow(1.38, lv)),
+    cost: (lv) => (lv === 0 ? 12 : Math.floor(18 * Math.pow(1.38, lv))),
     apply: (hero) => {
       hero.dmg += 2;
     },
@@ -317,7 +317,7 @@ const RUN_UPGRADES = [
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => Math.floor(20 * Math.pow(1.4, lv)),
+    cost: (lv) => (lv === 0 ? 13 : Math.floor(20 * Math.pow(1.4, lv))),
     apply: (hero) => {
       hero.atkRate *= 1.08;
     },
@@ -328,7 +328,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => Math.floor(22 * Math.pow(1.36, lv)),
+    cost: (lv) => (lv === 0 ? 14 : Math.floor(22 * Math.pow(1.36, lv))),
     apply: (hero) => {
       hero.maxHp += 25;
       hero.hp = Math.min(hero.maxHp, hero.hp + 25);
