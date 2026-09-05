@@ -13,6 +13,12 @@
   const LIVE_CAP = 8;
   const VITAL_CAP = 900;
   const PREST_ALIASES = { secondWind: "secondwind", lastStand: "laststand" };
+  const HEAL_GOLD = "#ffe27a";
+  const HEAL_GOLD_HOT = "#fff4a8";
+  const HEAL_GOLD_INK = "#1a1208";
+  const HEAL_GOLD_FILL = "rgba(255, 226, 122, 0.3)";
+  const HEAL_GOLD_HALO = "rgba(255, 226, 122, 0.4)";
+  const HEAL_GOLD_HALO_HOT = "rgba(255, 244, 168, 0.72)";
 
   const img = {};
   const meta = { loaded: false };
@@ -316,6 +322,7 @@
       novaT: 0,
       cauterizeT: 0,
       cauterizeWard: 0,
+      cauterizeIgnited: 0,
       healFlash: 0,
       buffs: { rage: 0, haste: 0 },
     };
@@ -968,7 +975,6 @@
     h.healFlash = 0.85;
     h.flash = Math.max(h.flash, 0.35);
     floatText(h.x + 86, groundY() - 236, "+" + fmt(got || heal), "#ff8a4a");
-    toast("Cauterize", 1.1);
     let ignited = 0;
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 200) {
@@ -978,6 +984,13 @@
         ignited += 1;
         floatText(e.x, groundY() - 188, "IGNITE", "#ff6a22");
       }
+    }
+    h.cauterizeIgnited = ignited;
+    if (ignited === 0) {
+      toast("Cauterize +" + fmt(got || heal) + " — no foes to ignite", 1.8);
+      floatText(h.x + 10, groundY() - 196, "NO FOES", HEAL_GOLD);
+    } else {
+      toast("Cauterize", 1.1);
     }
     fx.rings.push({ x: h.x, t: 0.85, color: "rgba(255,90,20,1)", r: 36, w: 8, grow: 160 });
     fx.rings.push({ x: h.x, t: 1.0, color: "rgba(255,180,60,0.95)", r: 64, w: 6, grow: 130 });
@@ -1458,7 +1471,7 @@
               clampVitals(hurt, { fallback: hurt.maxHp, cap: 4000 });
               e.healTarget = hurt;
               e.healFlash = 0.9;
-              floatText(hurt.x, groundY() - 180, "+" + fmt(amt), "#c9a227");
+              floatText(hurt.x, groundY() - 180, "+" + fmt(amt), HEAL_GOLD);
               sfx(640, 0.08, "sine", 0.03);
             }
           }
@@ -1853,33 +1866,48 @@
     const t = e.healTarget;
     if (!labels) {
       ctx.save();
-      ctx.fillStyle = "rgba(255, 210, 70, 0.26)";
-      ctx.strokeStyle = "#ffe27a";
-      ctx.lineWidth = 4;
+      ctx.fillStyle = HEAL_GOLD_FILL;
+      ctx.strokeStyle = HEAL_GOLD_INK;
+      ctx.lineWidth = 6;
       ctx.beginPath();
       ctx.ellipse(sx(e.x), gy - 6, range, 18, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      ctx.strokeStyle = HEAL_GOLD;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(sx(e.x), gy - 6, range, 18, 0, 0, Math.PI * 2);
+      ctx.stroke();
       if (t && t.hp > 0) {
         const pulse = e.healFlash || 0;
-        ctx.strokeStyle = "#1a1004";
+        ctx.strokeStyle = HEAL_GOLD_INK;
         ctx.lineWidth = pulse > 0 ? 7 : 5;
         ctx.beginPath();
         ctx.moveTo(sx(e.x), gy - 88);
         ctx.lineTo(sx(t.x), gy - 70);
         ctx.stroke();
-        ctx.strokeStyle = pulse > 0 ? "#fff3a0" : "#ffe27a";
+        ctx.strokeStyle = pulse > 0 ? HEAL_GOLD_HOT : HEAL_GOLD;
         ctx.lineWidth = pulse > 0 ? 5 : 3.5;
         ctx.beginPath();
         ctx.moveTo(sx(e.x), gy - 88);
         ctx.lineTo(sx(t.x), gy - 70);
         ctx.stroke();
-        ctx.fillStyle = pulse > 0 ? "rgba(255,230,90,0.72)" : "rgba(255,200,60,0.32)";
+        ctx.fillStyle = pulse > 0 ? HEAL_GOLD_HALO_HOT : HEAL_GOLD_HALO;
         ctx.beginPath();
         ctx.arc(sx(t.x), gy - 50, pulse > 0 ? 38 : 26, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = HEAL_GOLD_INK;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(sx(t.x), gy - 50, pulse > 0 ? 38 : 26, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = pulse > 0 ? HEAL_GOLD_HOT : HEAL_GOLD;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(sx(t.x), gy - 50, pulse > 0 ? 38 : 26, 0, Math.PI * 2);
+        ctx.stroke();
         if (pulse > 0) {
-          ctx.strokeStyle = "#fff4a8";
+          ctx.strokeStyle = HEAL_GOLD_HOT;
           ctx.lineWidth = 4;
           ctx.beginPath();
           ctx.arc(sx(t.x), gy - 50, 44 + (0.9 - pulse) * 20, 0, Math.PI * 2);
@@ -1890,9 +1918,9 @@
       return;
     }
     drawStamp("HEAL RANGE", sx(e.x), gy + 50, {
-      color: "#1a1208",
-      bg: "#ffe27a",
-      border: "#fff4a8",
+      color: HEAL_GOLD_INK,
+      bg: HEAL_GOLD,
+      border: HEAL_GOLD_HOT,
       font: "bold 16px VT323, monospace",
       h: 20,
     });
@@ -1910,9 +1938,9 @@
       const hot = (e.healFlash || 0) > 0.05;
       const py = self || (t.igniteFlash || 0) > 0.25 ? gy - 58 : gy + 20;
       drawStamp("PATIENT", sx(t.x), py, {
-        color: "#1a1208",
-        bg: hot ? "#fff4a8" : "#ffe27a",
-        border: "#fffef0",
+        color: HEAL_GOLD_INK,
+        bg: hot ? HEAL_GOLD_HOT : HEAL_GOLD,
+        border: HEAL_GOLD_HOT,
         font: "bold 20px VT323, monospace",
         h: 24,
         pad: 9,
@@ -2207,6 +2235,15 @@
             font: "bold 22px VT323, monospace",
             h: 24,
           });
+          if (!(h.cauterizeIgnited > 0)) {
+            drawStamp("NO FOES TO IGNITE", sx(h.x), gy - 292, {
+              color: "#1a1008",
+              bg: HEAL_GOLD,
+              border: HEAL_GOLD_HOT,
+              font: "bold 16px VT323, monospace",
+              h: 20,
+            });
+          }
         }
         if (h && h.healFlash > 0 && !(h.cauterizeT > 0)) {
           drawStamp("HEAL", sx(h.x), gy - 322, {
