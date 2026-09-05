@@ -979,7 +979,7 @@
       ellipse: true,
       fill: "rgba(255,70,16,0.32)",
     });
-    shake = Math.max(shake, 11);
+    shake = Math.max(shake, 6);
     sfx(360, 0.2, "sawtooth", 0.08);
     sfx(220, 0.12, "square", 0.05);
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
@@ -1781,9 +1781,6 @@
     ctx.lineWidth = 2;
     ctx.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
     ctx.strokeRect(Math.round(x - w / 2) + 0.5, Math.round(y - h / 2) + 0.5, w - 1, h - 1);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(0,0,0,0.92)";
-    ctx.strokeText(text, x, y + 1);
     ctx.fillStyle = o.color || "#ffe27a";
     ctx.fillText(text, x, y + 1);
     ctx.restore();
