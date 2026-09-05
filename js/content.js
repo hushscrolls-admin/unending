@@ -50,11 +50,11 @@ const CLASSES = {
     maxMana: 110,
     manaRegen: 3.8,
     strikeName: "Fireball",
-    strikeCd: 1.55,
+    strikeCd: 1.4,
     skills: [
       { id: "cauterize", name: "Cauterize", mana: 22 },
       { id: "inferno", name: "Inferno", cd: 8 },
-      { id: "nova", name: "Frost Nova", mana: 24, cd: 7 },
+      { id: "nova", name: "Frost Nova", mana: 24, cd: 6 },
     ],
   },
   ranger: {
@@ -554,7 +554,6 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 2,
     synergy: ["all"],
-    req: [{ id: "blood", lv: 1 }],
     desc: "At fatal or 30% HP, heal 26% (charges = ranks)",
     cost: (lv) => 3 + lv * 3,
     apply: (h, lv) => {
@@ -584,7 +583,6 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 5,
     synergy: ["mage"],
-    req: [{ id: "purse", lv: 1 }],
     desc: "+0.7 mana regen each run",
     cost: (lv) => 2 + lv * 2,
     apply: (h, lv) => {

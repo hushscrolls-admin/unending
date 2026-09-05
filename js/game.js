@@ -315,6 +315,7 @@
       inferno: null,
       novaT: 0,
       cauterizeT: 0,
+      cauterizeWard: 0,
       healFlash: 0,
       buffs: { rage: 0, haste: 0 },
     };
@@ -536,8 +537,12 @@
   function hitHero(amount, srcX, crit) {
     const h = run.hero;
     let armor = h.armor;
-    if (h.klass === "mage" && run.wave > 0 && run.wave <= 7) armor += 2.4;
-    const d = dmgIn(amount, armor);
+    if (h.klass === "mage" && run.wave > 0) {
+      if (run.wave <= 4) armor += 3.2;
+      else if (run.wave <= 7) armor += 1.8;
+    }
+    let d = dmgIn(amount, armor);
+    if (h.cauterizeWard > 0) d *= 0.78;
     h.hp -= d;
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
     h.flash = 0.12;
@@ -959,6 +964,7 @@
     const heal = h.maxHp * 0.32;
     const got = healHero(heal);
     h.cauterizeT = 1.15;
+    h.cauterizeWard = 2.4;
     h.healFlash = 0.85;
     h.flash = Math.max(h.flash, 0.35);
     floatText(h.x + 86, groundY() - 236, "+" + fmt(got || heal), "#ff8a4a");
@@ -1286,6 +1292,7 @@
     h.skillCd[2] = Math.max(0, (Number(h.skillCd[2]) || 0) - dt);
     h.novaT = Math.max(0, h.novaT - dt);
     h.cauterizeT = Math.max(0, (h.cauterizeT || 0) - dt);
+    h.cauterizeWard = Math.max(0, (h.cauterizeWard || 0) - dt);
     h.healFlash = Math.max(0, (h.healFlash || 0) - dt);
     h.buffs.rage = Math.max(0, h.buffs.rage - dt);
     h.buffs.haste = Math.max(0, h.buffs.haste - dt);
