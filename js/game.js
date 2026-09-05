@@ -1694,7 +1694,8 @@
     for (const cluster of clusters) {
       cluster.forEach((u, i) => {
         u.lane = i;
-        u.chipSide = i === 0 ? 0 : i % 2 === 0 ? 1 : -1;
+        u.fan = i - (cluster.length - 1) / 2;
+        u.chipSide = 0;
       });
     }
     return units;
@@ -1763,7 +1764,7 @@
     assignBarLanes(pack);
     pack.sort((a, b) => a.lane - b.lane);
     for (const b of pack) {
-      drawHpBar(sx(b.x) + (b.lane - 1) * 28, b.y - b.lane * 32, b.w, b.hp, b.max, b.color, {
+      drawHpBar(sx(b.x) + (b.fan || 0) * 40, b.y - b.lane * 40, b.w, b.hp, b.max, b.color, {
         h: b.h,
         label: b.label,
         chipSide: b.chipSide,
@@ -2014,6 +2015,12 @@
     const oy = state === "fight" && shake ? (Math.random() - 0.5) * shake : 0;
     ctx.translate(ox, oy);
     drawBg();
+    if (state === "dead") {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "rgba(6, 8, 14, 0.8)";
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
 
     const gy = groundY();
     const h = run.hero;
@@ -2295,6 +2302,7 @@
       ctx.fillStyle = "rgba(255,226,122,0.12)";
       ctx.fillRect(sx(h.x) - 40, gy - 160, 80, 160);
     }
+
   }
 
   function skillLabel(slot) {
