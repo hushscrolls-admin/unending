@@ -736,7 +736,7 @@
     h.novaT = 0.45;
     const dmg = h.dmg * 0.55 * rageMult();
     for (const e of [...run.enemies]) {
-      if (Math.abs(e.x - h.x) < 210) {
+      if (Math.abs(e.x - h.x) < 300) {
         hitEnemy(e, dmg, false);
         applyCc(e, 2.2);
       }
