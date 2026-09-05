@@ -11,6 +11,8 @@
   const RETURN_SPEED = 500;
   const SHOP_W = 332;
   const LIVE_CAP = 8;
+  const VITAL_CAP = 900;
+  const PREST_ALIASES = { secondWind: "secondwind", lastStand: "laststand" };
 
   const img = {};
   const meta = { loaded: false };
@@ -22,6 +24,7 @@
   let camera = 0;
   let shake = 0;
   let toastT = 0;
+  let jumpBannerT = 0;
   let waveBanner = 0;
   let paused = false;
   let healCueOn = false;
@@ -77,19 +80,33 @@
     return seconds * Math.max(0.45, 1 - haste);
   }
 
-  function loadSave() {
+  function readDisk() {
     try {
       const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
-      if (raw && typeof raw === "object") {
-        return {
-          glory: raw.glory || 0,
-          bestWave: raw.bestWave || 0,
-          klass: validClass(raw.klass),
-          prest: normalizePrest(raw.prest),
-        };
-      }
+      return raw && typeof raw === "object" ? raw : null;
     } catch (e) {
-      /* ignore */
+      return null;
+    }
+  }
+
+  function mergePrest(a, b) {
+    const out = normalizePrest(a);
+    const extra = normalizePrest(b);
+    for (const n of PRESTIGE_TREE) {
+      out[n.id] = Math.max(out[n.id] || 0, extra[n.id] || 0);
+    }
+    return out;
+  }
+
+  function loadSave() {
+    const raw = readDisk();
+    if (raw) {
+      return {
+        glory: raw.glory || 0,
+        bestWave: raw.bestWave || 0,
+        klass: validClass(raw.klass),
+        prest: normalizePrest(raw.prest),
+      };
     }
     return {
       glory: 0,
@@ -100,15 +117,57 @@
   }
 
   function save() {
-    localStorage.setItem(
-      SAVE_KEY,
-      JSON.stringify({
-        glory: persist.glory,
-        bestWave: persist.bestWave,
-        prest: persist.prest,
-        klass: persist.klass,
-      })
+    const disk = readDisk();
+    if (disk && disk.prest) persist.prest = mergePrest(persist.prest, disk.prest);
+    else persist.prest = normalizePrest(persist.prest);
+    persist.bestWave = Math.max(persist.bestWave || 0, (disk && disk.bestWave) || 0);
+    try {
+      localStorage.setItem(
+        SAVE_KEY,
+        JSON.stringify({
+          glory: persist.glory,
+          bestWave: persist.bestWave,
+          prest: persist.prest,
+          klass: persist.klass,
+        })
+      );
+    } catch (e) {
+      /* quota / private mode — keep memory ranks */
+    }
+    syncTreeHeld();
+  }
+
+  function hydratePersist() {
+    const disk = readDisk();
+    persist.prest = mergePrest(persist.prest, disk && disk.prest);
+    persist.bestWave = Math.max(persist.bestWave || 0, (disk && disk.bestWave) || 0);
+    if (disk && disk.klass) persist.klass = persist.klass || validClass(disk.klass);
+  }
+
+  function treeHeldText() {
+    const owned = PRESTIGE_TREE.filter((n) => (persist.prest[n.id] || 0) > 0).map(
+      (n) => n.name + " " + persist.prest[n.id]
     );
+    return owned.length ? "Blood Tree held: " + owned.join(" · ") : "Blood Tree: no ranks yet.";
+  }
+
+  function syncTreeHeld() {
+    const el = document.getElementById("tree-held");
+    if (el) el.textContent = treeHeldText();
+    const bank = document.getElementById("glory-bank");
+    if (bank) bank.textContent = fmt(persist.glory);
+  }
+
+  function snapshotPersist() {
+    hydratePersist();
+    save();
+    return {
+      glory: persist.glory,
+      bestWave: persist.bestWave,
+      prest: Object.assign({}, persist.prest),
+      disk: readDisk(),
+      held: treeHeldText(),
+    };
   }
 
   function fmt(n) {
@@ -119,17 +178,19 @@
     return String(n);
   }
 
-  const VITAL_CAP = 900;
-  const PREST_ALIASES = { secondWind: "secondwind", lastStand: "laststand" };
-
   function normalizePrest(prest) {
     const out = Object.fromEntries(PRESTIGE_TREE.map((n) => [n.id, 0]));
-    const src = prest || {};
+    const src = prest && typeof prest === "object" && !Array.isArray(prest) ? prest : {};
+    const alias = Object.assign({}, PREST_ALIASES);
+    for (const node of PRESTIGE_TREE) {
+      alias[node.id.toLowerCase()] = node.id;
+      alias[node.name.toLowerCase()] = node.id;
+    }
     for (const [k, v] of Object.entries(src)) {
-      const id = PREST_ALIASES[k] || k;
+      const id = alias[k] || alias[String(k).toLowerCase()] || k;
       if (out[id] == null) continue;
-      const n = Math.floor(Number(v) || 0);
-      if (n > out[id]) out[id] = n;
+      const rank = Math.floor(Number(v) || 0);
+      if (rank > out[id]) out[id] = rank;
     }
     for (const node of PRESTIGE_TREE) {
       out[node.id] = Math.max(0, Math.min(node.max || 8, out[node.id] || 0));
@@ -283,18 +344,8 @@
   }
 
   function startRun() {
-    persist.prest = normalizePrest(persist.prest);
-    try {
-      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
-      if (raw && raw.prest) {
-        const disk = normalizePrest(raw.prest);
-        for (const n of PRESTIGE_TREE) {
-          persist.prest[n.id] = Math.max(persist.prest[n.id] || 0, disk[n.id] || 0);
-        }
-      }
-    } catch (e) {
-      /* keep memory ranks */
-    }
+    hydratePersist();
+    save();
     Object.assign(run, emptyRun());
     run.hero = makeHero();
     run.wolf = classDef().companion ? makeWolf() : null;
@@ -318,6 +369,13 @@
     buildShop();
     syncClassChrome();
     syncHud();
+    syncTreeHeld();
+    if (jumpDest > 0) {
+      showJumpBanner("Jumped to wave " + jumpDest);
+    } else {
+      const held = treeHeldText();
+      if (held.indexOf("held:") >= 0) toast(held, 2.2);
+    }
     sfx(220, 0.12, "square", 0.04);
   }
 
@@ -327,6 +385,7 @@
   }
 
   function die() {
+    hydratePersist();
     const g = gloryFor(run.wave, run.kills);
     persist.glory += g;
     persist.bestWave = Math.max(persist.bestWave, run.wave);
@@ -369,12 +428,21 @@
     }
   }
 
-  function toast(msg) {
+  function toast(msg, dur) {
     const el = document.getElementById("toast");
+    if (!el) return;
     el.textContent = msg;
     el.classList.add("show");
-    toastT = 1.4;
-    waveBanner = 1.4;
+    toastT = dur || 1.4;
+    waveBanner = toastT;
+  }
+
+  function showJumpBanner(msg) {
+    const el = document.getElementById("jump-banner");
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add("show");
+    jumpBannerT = 3.6;
   }
 
   // --- combat helpers ---
@@ -620,7 +688,8 @@
     const fresh = shopUnlocksAt(n);
     const crate = fresh.length && n > 1 ? "  ·  " + fresh.map((u) => u.name).join(" / ") : "";
     if (jumpDest === n) {
-      toast((isBossWave(n) ? "Jump → BOSS " + defTitle(n) : "Jump → wave " + n) + crate);
+      const msg = (isBossWave(n) ? "Jumped to BOSS " + defTitle(n) : "Jumped to wave " + n) + crate;
+      showJumpBanner(msg);
       jumpDest = 0;
     } else if (isBossWave(n)) {
       toast("BOSS  " + defTitle(n));
@@ -1107,6 +1176,13 @@
     if (toastT > 0) {
       toastT -= dt;
       if (toastT <= 0) document.getElementById("toast").classList.remove("show");
+    }
+    if (jumpBannerT > 0) {
+      jumpBannerT -= dt;
+      if (jumpBannerT <= 0) {
+        const ban = document.getElementById("jump-banner");
+        if (ban) ban.classList.remove("show");
+      }
     }
     if (state !== "fight" || paused) {
       shake = 0;
@@ -2035,6 +2111,7 @@
     buffEl.textContent = buffs.length ? buffs.join(" · ") : "—";
     buffEl.classList.toggle("hot", buffs.length > 0);
     syncAbilities();
+    syncTreeHeld();
     for (const u of RUN_UPGRADES) {
       const btn = document.getElementById("buy-" + u.id);
       if (!btn) continue;
@@ -2145,9 +2222,12 @@
     const c = u.cost(lv);
     if (persist.glory < c) return false;
     persist.glory -= c;
-    persist.prest[u.id] = lv + 1;
-    persist.prest = normalizePrest(persist.prest);
+    persist.prest[u.id] = (persist.prest[u.id] || 0) + 1;
+    persist.prest = mergePrest(persist.prest, (readDisk() || {}).prest);
     save();
+    const disk = readDisk();
+    const wrote = disk && disk.prest && (disk.prest[u.id] || 0) >= persist.prest[u.id];
+    if (!wrote) toast("Blood Tree save failed — ranks kept in this tab", 3);
     const bank = document.getElementById("glory-bank");
     if (bank) bank.textContent = fmt(persist.glory);
     document.getElementById("glory").textContent = fmt(persist.glory);
@@ -2163,6 +2243,7 @@
     box.innerHTML = "";
     const bank = document.getElementById("glory-bank");
     if (bank) bank.textContent = fmt(persist.glory);
+    syncTreeHeld();
     const cols = [[], [], []];
     for (const n of PRESTIGE_TREE) cols[n.col].push(n);
     const titles = ["Vital", "Might", "Fortune"];
@@ -2319,14 +2400,20 @@
     jump(wave) {
       const dest = Math.max(1, Math.floor(wave || 1));
       jumpDest = dest;
-      run.wave = dest - 1;
-      run.enemies = [];
-      run.waveTimer = 0.05;
-      toast(
+      if (state === "fight") {
+        run.wave = dest - 1;
+        run.enemies = [];
+        run.waveTimer = 0.05;
+      }
+      const msg =
         state === "fight"
-          ? "Jump → wave " + dest
-          : "Jump queued → wave " + dest + ". Rise to start."
-      );
+          ? "Jumped to wave " + dest
+          : "Jump queued: wave " + dest + " — Rise to start there";
+      showJumpBanner(msg);
+      return { wave: dest, queued: state !== "fight", persist: snapshotPersist() };
+    },
+    tree() {
+      return snapshotPersist();
     },
     checkVitals() {
       const h = run.hero;

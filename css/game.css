@@ -619,9 +619,33 @@ body {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s;
+  z-index: 30;
 }
 
 #toast.show {
+  opacity: 1;
+}
+
+#jump-banner {
+  position: absolute;
+  left: 50%;
+  top: 14%;
+  transform: translateX(-50%);
+  font-family: "Press Start 2P", monospace;
+  font-size: 15px;
+  color: #ffe27a;
+  background: rgba(8, 6, 4, 0.82);
+  border: 2px solid #c9a227;
+  padding: 10px 16px;
+  text-shadow: 0 3px 0 #000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 40;
+  white-space: nowrap;
+}
+
+#jump-banner.show {
   opacity: 1;
 }
 

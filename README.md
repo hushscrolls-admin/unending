@@ -45,7 +45,7 @@ Three branches. Old saves keep Blood / Might / Purse / Greed / Spark / Fate rank
 | **Might** | Might → Tempo → Execute → Overkill → Bloodlust |
 | **Fortune** | Purse → Greed → Spark → Fate → Heirloom |
 
-Child nodes unlock after one rank in the parent (not two), so the interesting leaves are reachable sooner. Leaf glory costs stay high.
+Child nodes unlock after one rank in the parent (not two), so the interesting leaves are reachable sooner. Leaf glory costs stay high. Ranks save to `localStorage` (`unending-save-v1`) on every buy and survive die → Rise, `unending.jump(n)`, and reload. The Armory line “Blood Tree held” lists owned ranks during a run.
 
 ## Controls
 
