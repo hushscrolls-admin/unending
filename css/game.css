@@ -469,6 +469,10 @@ body {
   background: #2a3c64;
 }
 
+#abilities button.ready:not(:disabled):not(.urgent) {
+  border-color: #6ec4ff;
+}
+
 #abilities button.urgent {
   color: #c9e6a0;
   border-color: #8fd18f;

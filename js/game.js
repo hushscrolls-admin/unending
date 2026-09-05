@@ -84,10 +84,7 @@
           glory: raw.glory || 0,
           bestWave: raw.bestWave || 0,
           klass: validClass(raw.klass),
-          prest: Object.assign(
-            Object.fromEntries(PRESTIGE_UPGRADES.map((u) => [u.id, 0])),
-            raw.prest || {}
-          ),
+          prest: normalizePrest(raw.prest),
         };
       }
     } catch (e) {
@@ -97,7 +94,7 @@
       glory: 0,
       bestWave: 0,
       klass: "warrior",
-      prest: Object.fromEntries(PRESTIGE_UPGRADES.map((u) => [u.id, 0])),
+      prest: normalizePrest({}),
     };
   }
 
@@ -115,9 +112,84 @@
 
   function fmt(n) {
     n = Math.floor(n);
+    if (!Number.isFinite(n)) return "0";
     if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + "M";
     if (Math.abs(n) >= 1e4) return (n / 1e3).toFixed(1) + "K";
     return String(n);
+  }
+
+  const VITAL_CAP = 900;
+  const PREST_ALIASES = { secondWind: "secondwind", lastStand: "laststand" };
+
+  function normalizePrest(prest) {
+    const out = Object.fromEntries(PRESTIGE_TREE.map((n) => [n.id, 0]));
+    const src = prest || {};
+    for (const [k, v] of Object.entries(src)) {
+      const id = PREST_ALIASES[k] || k;
+      if (out[id] == null) continue;
+      const n = Math.floor(Number(v) || 0);
+      if (n > out[id]) out[id] = n;
+    }
+    for (const node of PRESTIGE_TREE) {
+      out[node.id] = Math.max(0, Math.min(node.max || 8, out[node.id] || 0));
+    }
+    return out;
+  }
+
+  function heroFallbackMax() {
+    const h = run.hero;
+    if (!h) return 100;
+    const c = classDef(h.klass);
+    return (
+      c.hp +
+      prestLv("blood") * 20 +
+      (run.levels.vital || 0) * 25 +
+      (h.klass !== "ranger" ? (h.pack || 0) * 20 : 0)
+    );
+  }
+
+  function clampVitals(u, opts) {
+    if (!u) return false;
+    const o = opts || {};
+    const cap = o.cap || VITAL_CAP;
+    const fallback = Math.max(1, o.fallback || 100);
+    let fixed = false;
+    if (!Number.isFinite(u.maxHp) || u.maxHp <= 0 || u.maxHp > cap) {
+      u.maxHp = Math.max(1, Math.min(cap, fallback));
+      fixed = true;
+    }
+    if (!Number.isFinite(u.hp)) {
+      u.hp = 0;
+      fixed = true;
+    }
+    if (u.hp > u.maxHp) {
+      u.hp = u.maxHp;
+      fixed = true;
+    }
+    if (u.hp < 0) {
+      u.hp = 0;
+      fixed = true;
+    }
+    if (u.maxMana != null) {
+      if (!Number.isFinite(u.maxMana) || u.maxMana <= 0) {
+        u.maxMana = o.manaFallback || 80;
+        fixed = true;
+      }
+      if (!Number.isFinite(u.mana)) u.mana = 0;
+      u.mana = Math.max(0, Math.min(u.mana, u.maxMana));
+    }
+    return fixed;
+  }
+
+  function healHero(amount) {
+    const h = run.hero;
+    if (!h) return 0;
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
+    const add = Math.max(0, Number(amount) || 0);
+    const before = h.hp;
+    h.hp = Math.min(h.maxHp, h.hp + add);
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
+    return h.hp - before;
   }
 
   function pickClass(id) {
@@ -183,6 +255,7 @@
       for (let i = 0; i < lv; i++) u.apply(hero);
     }
     hero.hp = Math.min(hero.maxHp, hero.hp);
+    clampVitals(hero, { fallback: hero.klass ? classDef(hero.klass).hp + prestLv("blood") * 20 : 100, manaFallback: c.maxMana });
     return hero;
   }
 
@@ -209,6 +282,18 @@
   }
 
   function startRun() {
+    persist.prest = normalizePrest(persist.prest);
+    try {
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+      if (raw && raw.prest) {
+        const disk = normalizePrest(raw.prest);
+        for (const n of PRESTIGE_TREE) {
+          persist.prest[n.id] = Math.max(persist.prest[n.id] || 0, disk[n.id] || 0);
+        }
+      }
+    } catch (e) {
+      /* keep memory ranks */
+    }
     Object.assign(run, emptyRun());
     run.hero = makeHero();
     run.wolf = classDef().companion ? makeWolf() : null;
@@ -316,6 +401,7 @@
     const h = run.hero;
     const d = dmgIn(amount, h.armor);
     h.hp -= d;
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
     h.flash = 0.12;
     shake = Math.max(shake, 6);
     floatText(
@@ -328,7 +414,8 @@
     if (h.hp <= h.maxHp * 0.3 && h.secondWind > 0) {
       h.secondWind -= 1;
       const heal = h.maxHp * 0.26;
-      h.hp = h.hp <= 0 ? heal : Math.min(h.maxHp, h.hp + heal);
+      if (h.hp <= 0) h.hp = heal;
+      else healHero(heal);
       floatText(h.x, groundY() - 210, "SECOND WIND", "#8fd18f");
       sfx(520, 0.14, "sine", 0.05);
     }
@@ -433,8 +520,7 @@
       fromDot ? "#ff8a3a" : crit ? "#ffe27a" : "#fff"
     );
     if (h && h.leech > 0 && !fromDot) {
-      const heal = d * h.leech;
-      h.hp = Math.min(h.maxHp, h.hp + heal);
+      healHero(d * h.leech);
     }
     if (e.hp > 0 && h && h.cinder && !fromDot) {
       applyDot(e, { kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 });
@@ -709,8 +795,8 @@
     const h = run.hero;
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.28;
-    h.hp = Math.min(h.maxHp, h.hp + heal);
-    floatText(h.x, groundY() - 200, "+" + fmt(heal), "#8fd18f");
+    const got = healHero(heal);
+    floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     sfx(480, 0.12, "sine", 0.05);
   }
 
@@ -718,11 +804,10 @@
     const h = run.hero;
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.24;
-    h.hp = Math.min(h.maxHp, h.hp + heal);
+    const got = healHero(heal);
     h.cauterizeT = 0.75;
     h.flash = Math.max(h.flash, 0.22);
-    floatText(h.x, groundY() - 236, "CAUTERIZE", "#ffb060");
-    floatText(h.x, groundY() - 206, "+" + fmt(heal), "#ff8a4a");
+    floatText(h.x + 72, groundY() - 224, "+" + fmt(got || heal), "#ff8a4a");
     let ignited = 0;
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 170) {
@@ -749,15 +834,15 @@
     shake = Math.max(shake, 7);
     sfx(360, 0.16, "sawtooth", 0.07);
     sfx(220, 0.1, "square", 0.045);
-    if (ignited === 0) floatText(h.x + 40, groundY() - 180, "no foes in range", "#e8c090");
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
   }
 
   function fieldDress() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.2;
-    h.hp = Math.min(h.maxHp, h.hp + heal);
-    floatText(h.x, groundY() - 200, "+" + fmt(heal), "#8fd18f");
+    const got = healHero(heal);
+    floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     if (run.wolf) {
       if (run.wolf.hp <= 0) {
         const fresh = makeWolf();
@@ -835,6 +920,7 @@
     fx.rings.push({ x: x, t: 0.4, color: "rgba(255,90,20,0.75)", r: 30 });
     shake = 6;
     sfx(160, 0.08, "sawtooth", 0.04);
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
   }
 
   function frostNova() {
@@ -854,6 +940,7 @@
     fx.rings.push({ x: h.x, t: 0.5, color: "rgba(140,210,255,0.85)", r: 50 });
     shake = 5;
     sfx(620, 0.16, "sine", 0.05);
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
   }
 
   function volley() {
@@ -932,14 +1019,15 @@
     else if (id === "charge") charge();
     else if (id === "nova") frostNova();
     else if (id === "sic") sicEm();
+    syncAbilities();
   }
 
   function pickup(d) {
     const h = run.hero;
     if (d.kind === "heart") {
       const heal = h.maxHp * 0.18;
-      h.hp = Math.min(h.maxHp, h.hp + heal);
-      floatText(h.x, groundY() - 180, "heal", "#ff8a8a");
+      healHero(heal);
+      floatText(h.x + 56, groundY() - 180, "heal", "#ff8a8a");
     } else if (d.kind === "mana") {
       h.mana = Math.min(h.maxMana, h.mana + 18);
       floatText(h.x, groundY() - 180, "mana", "#6ec4ff");
@@ -1018,15 +1106,17 @@
     if (state !== "fight" || paused) {
       shake = 0;
       updateFx(dt);
+      syncHud();
       return;
     }
     const h = run.hero;
     const c = classDef(h.klass);
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: c.maxMana });
     h.flash = Math.max(0, h.flash - dt);
-    h.strikeCd = Math.max(0, h.strikeCd - dt);
-    h.skillCd[0] = Math.max(0, h.skillCd[0] - dt);
-    h.skillCd[1] = Math.max(0, h.skillCd[1] - dt);
-    h.skillCd[2] = Math.max(0, h.skillCd[2] - dt);
+    h.strikeCd = Math.max(0, (Number(h.strikeCd) || 0) - dt);
+    h.skillCd[0] = Math.max(0, (Number(h.skillCd[0]) || 0) - dt);
+    h.skillCd[1] = Math.max(0, (Number(h.skillCd[1]) || 0) - dt);
+    h.skillCd[2] = Math.max(0, (Number(h.skillCd[2]) || 0) - dt);
     h.novaT = Math.max(0, h.novaT - dt);
     h.cauterizeT = Math.max(0, (h.cauterizeT || 0) - dt);
     h.buffs.rage = Math.max(0, h.buffs.rage - dt);
@@ -1187,8 +1277,9 @@
             );
             if (!hurt && e.hp < e.maxHp - 1) hurt = e;
             if (hurt) {
-              const amt = e.def.heal * waveScale(Math.max(1, run.wave - 1)).hp;
+              const amt = allyHealAmount(e.def, run.wave);
               hurt.hp = Math.min(hurt.maxHp, hurt.hp + amt);
+              clampVitals(hurt, { fallback: hurt.maxHp, cap: 4000 });
               e.healTarget = hurt;
               e.healFlash = 0.45;
               floatText(hurt.x, groundY() - 180, "+" + fmt(amt), "#c9a227");
@@ -1442,26 +1533,20 @@
   }
 
   function drawWorldBars(gy) {
-    const bars = [];
     const h = run.hero;
     if (h && (state === "fight" || state === "dead")) {
-      bars.push({
-        x: h.x,
-        y: gy - 212,
-        w: 100,
-        h: 12,
-        hp: h.hp,
-        max: h.maxHp,
-        color: "#d45454",
+      drawHpBar(sx(h.x), gy - 226, 104, h.hp, h.maxHp, "#d45454", {
+        h: 13,
         label: "YOU",
         urgent: healUrgent(),
       });
     }
+    const pack = [];
     if (run.wolf && run.wolf.hp > 0 && (state === "fight" || state === "dead")) {
-      bars.push({
+      pack.push({
         x: run.wolf.x,
-        y: gy - 118,
-        w: 78,
+        y: gy - 122,
+        w: 80,
         h: 10,
         hp: run.wolf.hp,
         max: run.wolf.maxHp,
@@ -1472,7 +1557,7 @@
     for (const e of run.enemies) {
       if (e.hp <= 0) continue;
       const hgt = 150 * (e.def.scale || 1);
-      bars.push({
+      pack.push({
         x: e.x,
         y: gy - hgt - 22,
         w: e.def.boss ? 118 : 76,
@@ -1483,13 +1568,12 @@
         label: e.def.boss ? (e.def.name.split(" ").pop() || "BOSS") : "",
       });
     }
-    assignBarLanes(bars);
-    bars.sort((a, b) => a.lane - b.lane);
-    for (const b of bars) {
-      drawHpBar(sx(b.x), b.y - b.lane * 16, b.w, b.hp, b.max, b.color, {
+    assignBarLanes(pack);
+    pack.sort((a, b) => a.lane - b.lane);
+    for (const b of pack) {
+      drawHpBar(sx(b.x) + b.lane * 7, b.y - b.lane * 18, b.w, b.hp, b.max, b.color, {
         h: b.h,
         label: b.label,
-        urgent: b.urgent,
       });
     }
   }
@@ -1512,7 +1596,7 @@
     const h = run.hero;
     const s = classDef(h.klass).skills[slot];
     if (!s.cd) return 0;
-    return Math.min(1, (h.skillCd[slot] || 0) / Math.max(0.01, cdScale(s.cd)));
+    return Math.min(1, (Number(h.skillCd[slot]) || 0) / Math.max(0.01, cdScale(s.cd)));
   }
 
   function drawHealVfx(e, gy) {
@@ -1625,7 +1709,7 @@
         ctx.font = "22px VT323, monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffb060";
-        ctx.fillText("CAUTERIZE", sx(h.x), gy - 252);
+        ctx.fillText("CAUTERIZE", sx(h.x), gy - 268);
         for (let i = 0; i < 7; i++) {
           const ox = Math.sin(t * 14 + i * 1.1) * 28;
           const oy = -((0.75 - t) * 70 + i * 8);
@@ -1840,8 +1924,9 @@
     if (!h) return true;
     const s = classDef(h.klass).skills[slot];
     if (s.mana && h.mana < s.mana) return true;
-    if (s.cd && h.skillCd[slot] > 0) return true;
+    if (s.cd && (Number(h.skillCd[slot]) || 0) > 0) return true;
     if (s.id === "whirl" && h.whirl) return true;
+    if (s.id === "inferno" && h.inferno) return true;
     return false;
   }
 
@@ -1868,9 +1953,44 @@
     }
   }
 
+  function syncAbilities() {
+    const h = run.hero;
+    for (let i = 0; i < 3; i++) {
+      const btn = document.getElementById("btn-s" + (i + 1));
+      if (!btn) continue;
+      const lab = btn.querySelector("b") || btn;
+      lab.textContent = skillLabel(i);
+      const dead = skillDisabled(i);
+      btn.disabled = dead;
+      btn.classList.toggle("ready", !dead && !!h && state === "fight");
+      const frac = h ? skillCdFrac(i) : 0;
+      btn.style.setProperty("--cd", String(Math.round((Number.isFinite(frac) ? frac : 0) * 100)));
+    }
+    const healBtn = document.getElementById("btn-s1");
+    const urgent = healUrgent();
+    if (healBtn) {
+      healBtn.classList.toggle("urgent", urgent);
+      if (urgent && !healCueOn) {
+        healCueOn = true;
+        const name = classDef(h.klass).skills[0].name;
+        toast(name + " ready");
+        healBtn.classList.remove("ready-flash");
+        void healBtn.offsetWidth;
+        healBtn.classList.add("ready-flash");
+      } else if (!urgent && healCueClear()) {
+        healCueOn = false;
+        healBtn.classList.remove("ready-flash");
+      }
+    }
+  }
+
   function syncHud() {
     const h = run.hero;
-    if (!h) return;
+    if (!h) {
+      syncAbilities();
+      return;
+    }
+    clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
     document.getElementById("hp-fill").style.width = (100 * h.hp) / h.maxHp + "%";
     document.getElementById("mp-fill").style.width = (100 * h.mana) / h.maxMana + "%";
     const hpBar = document.querySelector(".bar.hp");
@@ -1909,30 +2029,7 @@
     const buffEl = document.getElementById("st-buffs");
     buffEl.textContent = buffs.length ? buffs.join(" · ") : "—";
     buffEl.classList.toggle("hot", buffs.length > 0);
-    for (let i = 0; i < 3; i++) {
-      const btn = document.getElementById("btn-s" + (i + 1));
-      const lab = btn.querySelector("b") || btn;
-      lab.textContent = skillLabel(i);
-      btn.disabled = skillDisabled(i);
-      const frac = skillCdFrac(i);
-      btn.style.setProperty("--cd", String(Math.round(frac * 100)));
-    }
-    const healBtn = document.getElementById("btn-s1");
-    const urgent = healUrgent();
-    if (healBtn) {
-      healBtn.classList.toggle("urgent", urgent);
-      if (urgent && !healCueOn) {
-        healCueOn = true;
-        const name = classDef(h.klass).skills[0].name;
-        toast(name + " ready");
-        healBtn.classList.remove("ready-flash");
-        void healBtn.offsetWidth;
-        healBtn.classList.add("ready-flash");
-      } else if (!urgent && healCueClear()) {
-        healCueOn = false;
-        healBtn.classList.remove("ready-flash");
-      }
-    }
+    syncAbilities();
     for (const u of RUN_UPGRADES) {
       const btn = document.getElementById("buy-" + u.id);
       if (!btn) continue;
@@ -2004,6 +2101,7 @@
       row.querySelector("button").onclick = () => buyRun(u.id);
     }
     syncClassChrome();
+    syncAbilities();
   }
 
   function applyPack(hero) {
@@ -2014,6 +2112,7 @@
     } else if (hero.klass !== "ranger") {
       hero.maxHp += 20;
       hero.hp = Math.min(hero.maxHp, hero.hp + 20);
+      clampVitals(hero, { fallback: heroFallbackMax(), manaFallback: classDef(hero.klass).maxMana });
     }
   }
 
@@ -2042,6 +2141,7 @@
     if (persist.glory < c) return false;
     persist.glory -= c;
     persist.prest[u.id] = lv + 1;
+    persist.prest = normalizePrest(persist.prest);
     save();
     const bank = document.getElementById("glory-bank");
     if (bank) bank.textContent = fmt(persist.glory);
@@ -2212,9 +2312,21 @@
       buildShop();
     },
     jump(wave) {
-      run.wave = Math.max(0, (wave || 1) - 1);
+      const dest = Math.max(1, Math.floor(wave || 1));
+      run.wave = dest - 1;
       run.enemies = [];
       run.waveTimer = 0.05;
+      toast(
+        state === "fight"
+          ? "Jump → wave " + dest
+          : "Jump queued → wave " + dest + ". Rise to start."
+      );
+    },
+    checkVitals() {
+      const h = run.hero;
+      if (!h) return null;
+      clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
+      return { hp: h.hp, maxHp: h.maxHp, mana: h.mana, maxMana: h.maxMana, kills: run.kills };
     },
     smite() {
       [...run.enemies].forEach(killEnemy);

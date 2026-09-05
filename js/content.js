@@ -40,9 +40,9 @@ const CLASSES = {
     style: "ranged",
     proj: "fire",
     companion: false,
-    hp: 74,
+    hp: 84,
     dmg: 7,
-    armor: 0,
+    armor: 1,
     atkRate: 0.7,
     reach: 86,
     range: 400,
@@ -180,8 +180,8 @@ const ENEMIES = {
     gold: 15,
     magic: 7,
     color: "#c9a227",
-    heal: 10,
-    healRate: 2.6,
+    heal: 7,
+    healRate: 3.2,
     healRange: 168,
   },
   assassin: {
@@ -288,8 +288,8 @@ const ENEMIES = {
     gold: 80,
     magic: 22,
     color: "#d07030",
-    heal: 14,
-    healRate: 2.2,
+    heal: 9,
+    healRate: 2.9,
     healRange: 180,
     projectile: "bolt",
     projSpeed: 260,
@@ -509,7 +509,7 @@ const PRESTIGE_TREE = [
     row: 1,
     max: 5,
     synergy: ["warrior"],
-    req: [{ id: "blood", lv: 2 }],
+    req: [{ id: "blood", lv: 1 }],
     desc: "+1.2 armor each run",
     cost: (lv) => 2 + lv * 2,
     apply: (h, lv) => {
@@ -524,7 +524,7 @@ const PRESTIGE_TREE = [
     row: 1,
     max: 5,
     synergy: ["all"],
-    req: [{ id: "might", lv: 2 }],
+    req: [{ id: "might", lv: 1 }],
     desc: "+5% attack speed each run",
     cost: (lv) => 2 + lv * 2,
     apply: (h, lv) => {
@@ -539,7 +539,7 @@ const PRESTIGE_TREE = [
     row: 1,
     max: 5,
     synergy: ["all"],
-    req: [{ id: "purse", lv: 2 }],
+    req: [{ id: "purse", lv: 1 }],
     desc: "+12% gold find each run",
     cost: (lv) => 2 + lv * 2,
     apply: (h, lv) => {
@@ -554,7 +554,7 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 2,
     synergy: ["all"],
-    req: [{ id: "hide", lv: 2 }],
+    req: [{ id: "hide", lv: 1 }],
     desc: "At fatal or 30% HP, heal 26% (charges = ranks)",
     cost: (lv) => 4 + lv * 3,
     apply: (h, lv) => {
@@ -569,7 +569,7 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 3,
     synergy: ["warrior"],
-    req: [{ id: "tempo", lv: 2 }],
+    req: [{ id: "tempo", lv: 1 }],
     desc: "+18% damage to foes below 40% HP",
     cost: (lv) => 4 + lv * 3,
     apply: (h, lv) => {
@@ -584,7 +584,7 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 5,
     synergy: ["mage"],
-    req: [{ id: "greed", lv: 2 }],
+    req: [{ id: "greed", lv: 1 }],
     desc: "+0.7 mana regen each run",
     cost: (lv) => 2 + lv * 2,
     apply: (h, lv) => {
@@ -631,7 +631,7 @@ const PRESTIGE_TREE = [
     row: 3,
     max: 5,
     synergy: ["all"],
-    req: [{ id: "spark", lv: 2 }],
+    req: [{ id: "spark", lv: 1 }],
     desc: "+18% glory on death",
     cost: (lv) => 2 + lv * 3,
   },
@@ -771,4 +771,9 @@ function waveScale(n) {
     dmg: Math.pow(1.09, n - 1),
     gold: 1 + (n - 1) * 0.08,
   };
+}
+
+function allyHealAmount(def, wave) {
+  const n = Math.max(1, wave || 1);
+  return (def.heal || 0) * (1 + (n - 1) * 0.055);
 }

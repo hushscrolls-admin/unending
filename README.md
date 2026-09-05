@@ -17,7 +17,7 @@ Open `http://localhost:8765`.
 ## Loop
 
 - The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
-- Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range, and extra waves wait if the road is already crowded.
+- Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range with a modest drip (not a full-pack reset), and extra waves wait if the road is already crowded.
 - Kills drop gold, mana, hearts, and short buffs (rage / haste).
 - Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first Iron / Swift / Vitality buy before Wave 4. Later crates still open at 5 / 9 / 13 / 17. Armory rows and Blood Tree nodes carry **Warrior / Mage / Ranger / All** tags so you can plan class synergies, not just flat power.
 - **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or the wolf) are low and the heal is ready. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
@@ -30,7 +30,7 @@ Open `http://localhost:8765`.
 | Class | Auto | Strike (Click / Space) | 1 | 2 | 3 |
 |---|---|---|---|---|---|
 | **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash to the back line |
-| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 7s) — freeze the pack |
+| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 7s) — freeze the pack. Starts a bit sturdier (84 HP, 1 armor) so early waves are less of a brick wall. |
 | **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (25 mana) — heal you and the wolf (revives if down) | Volley (7s) — five arrows | Sic 'em (8s) — wolf leaps the back line and taunts melee |
 
 The Ranger's wolf is a companion tank. Melee prefers the closer target; Sic 'em forces them onto the wolf for a few seconds. If the wolf falls, Field Dress or Sic 'em brings it back.
@@ -44,6 +44,8 @@ Three branches. Old saves keep Blood / Might / Purse / Greed / Spark / Fate rank
 | **Vital** | Blood → Hide → Second Wind → Thorns → Last Stand |
 | **Might** | Might → Tempo → Execute → Overkill → Bloodlust |
 | **Fortune** | Purse → Greed → Spark → Fate → Heirloom |
+
+Child nodes unlock after one rank in the parent (not two), so the interesting leaves are reachable sooner. Leaf glory costs stay high.
 
 ## Controls
 
