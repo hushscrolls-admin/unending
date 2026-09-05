@@ -333,17 +333,21 @@
     return hero;
   }
 
+  function wolfWave() {
+    return Math.max(1, run.wave || 1, jumpDest || 0);
+  }
+
   function wolfBaseStats() {
     const pack = (run.hero && run.hero.pack) || 0;
-    const wave = Math.max(1, run.wave || 1);
-    const scale = 1 + Math.min(1.25, (wave - 1) * 0.095);
-    const hp = Math.round((88 + prestLv("blood") * 12) * scale * (1 + pack * 0.25));
+    const wave = wolfWave();
+    const scale = 1 + Math.min(2.8, (wave - 1) * 0.22);
+    const hp = Math.round((96 + prestLv("blood") * 14) * scale * (1 + pack * 0.22));
     return {
       hp,
       maxHp: hp,
       dmg: 6 + prestLv("might") + pack * 2 + Math.min(3, (wave - 1) * 0.18),
-      armor: 4.5 + prestLv("hide") * 0.8 + Math.min(5.5, (wave - 1) * 0.38) + pack * 0.5,
-      regen: 1.8 + Math.min(2.8, (wave - 1) * 0.16),
+      armor: 5.5 + prestLv("hide") * 0.8 + Math.min(9, (wave - 1) * 0.72) + pack * 0.6,
+      regen: 2.2 + Math.min(4.5, (wave - 1) * 0.32),
     };
   }
 
@@ -394,8 +398,9 @@
       dmg: Math.round(w.dmg * 10) / 10,
       regen: Math.round((w.regen || 0) * 10) / 10,
       down: w.hp <= 0,
-      wave: run.wave,
-      expect: base,
+      wave: wolfWave(),
+      taunt: w.taunt > 0,
+      expect: { hp: base.hp, armor: Math.round(base.armor * 10) / 10, regen: Math.round(base.regen * 10) / 10 },
     };
   }
 
@@ -416,6 +421,7 @@
     if (jumpDest > 0) {
       run.wave = jumpDest - 1;
       run.waveTimer = 0.05;
+      syncWolfVitals(false);
     }
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
@@ -562,7 +568,10 @@
   function hitWolf(amount, crit) {
     const w = run.wolf;
     if (!w || w.hp <= 0) return;
-    const d = dmgIn(amount, w.armor + (w.taunt > 0 ? 4 : 0));
+    const armor = w.armor + (w.taunt > 0 ? 8 : 0);
+    let d = dmgIn(amount, armor);
+    if (w.taunt > 0) d *= 0.72;
+    d = Math.min(d, Math.max(6, w.maxHp * 0.13));
     w.hp -= d;
     w.flash = 0.12;
     floatText(
@@ -982,11 +991,11 @@
       if (run.wolf.hp <= 0) {
         const fresh = makeWolf();
         fresh.x = h.x + 60;
-        fresh.hp = Math.round(fresh.maxHp * 0.55);
+        fresh.hp = Math.round(fresh.maxHp * 0.6);
         run.wolf = fresh;
         floatText(fresh.x, groundY() - 150, "UP", "#c9e6a0");
       } else {
-        const wh = run.wolf.maxHp * 0.5;
+        const wh = run.wolf.maxHp * 0.55;
         run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + wh);
         floatText(run.wolf.x, groundY() - 150, "+" + fmt(wh), "#8fd18f");
       }
@@ -2568,6 +2577,7 @@
         run.wave = dest - 1;
         run.enemies = [];
         run.waveTimer = 0.05;
+        syncWolfVitals(false);
       }
       const msg =
         state === "fight"
