@@ -315,6 +315,7 @@
       inferno: null,
       novaT: 0,
       cauterizeT: 0,
+      healFlash: 0,
       buffs: { rage: 0, haste: 0 },
     };
     for (const n of PRESTIGE_TREE) {
@@ -940,6 +941,7 @@
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.28;
     const got = healHero(heal);
+    h.healFlash = 0.7;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     sfx(480, 0.12, "sine", 0.05);
   }
@@ -949,35 +951,37 @@
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.24;
     const got = healHero(heal);
-    h.cauterizeT = 0.75;
-    h.flash = Math.max(h.flash, 0.22);
-    floatText(h.x + 72, groundY() - 224, "+" + fmt(got || heal), "#ff8a4a");
+    h.cauterizeT = 1.15;
+    h.healFlash = 0.85;
+    h.flash = Math.max(h.flash, 0.35);
+    floatText(h.x + 86, groundY() - 236, "+" + fmt(got || heal), "#ff8a4a");
+    toast("Cauterize", 1.1);
     let ignited = 0;
     for (const e of [...run.enemies]) {
-      if (Math.abs(e.x - h.x) < 170) {
+      if (Math.abs(e.x - h.x) < 200) {
         hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
         applyDot(e, { kind: "burn", dps: h.dmg * 0.32, dur: 2.8 });
-        e.igniteFlash = 0.55;
+        e.igniteFlash = 1.05;
         ignited += 1;
-        floatText(e.x, groundY() - 168, "IGNITE", "#ff6a22");
+        floatText(e.x, groundY() - 188, "IGNITE", "#ff6a22");
       }
     }
-    fx.rings.push({ x: h.x, t: 0.55, color: "rgba(255,90,20,0.95)", r: 28, w: 6, grow: 110 });
-    fx.rings.push({ x: h.x, t: 0.7, color: "rgba(255,180,60,0.8)", r: 50, w: 4, grow: 90 });
-    fx.rings.push({ x: h.x, t: 0.4, color: "rgba(255,240,140,0.9)", r: 16, w: 7, grow: 70 });
+    fx.rings.push({ x: h.x, t: 0.85, color: "rgba(255,90,20,1)", r: 36, w: 8, grow: 160 });
+    fx.rings.push({ x: h.x, t: 1.0, color: "rgba(255,180,60,0.95)", r: 64, w: 6, grow: 130 });
+    fx.rings.push({ x: h.x, t: 0.7, color: "rgba(255,240,140,1)", r: 22, w: 8, grow: 90 });
     fx.rings.push({
       x: h.x,
-      t: 0.85,
-      color: "rgba(255,110,30,0.7)",
-      r: 70,
-      w: 3,
-      grow: 50,
+      t: 1.1,
+      color: "rgba(255,110,30,0.9)",
+      r: 90,
+      w: 5,
+      grow: 80,
       ellipse: true,
-      fill: "rgba(255,70,16,0.18)",
+      fill: "rgba(255,70,16,0.32)",
     });
-    shake = Math.max(shake, 7);
-    sfx(360, 0.16, "sawtooth", 0.07);
-    sfx(220, 0.1, "square", 0.045);
+    shake = Math.max(shake, 11);
+    sfx(360, 0.2, "sawtooth", 0.08);
+    sfx(220, 0.12, "square", 0.05);
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
   }
 
@@ -986,6 +990,7 @@
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.2;
     const got = healHero(heal);
+    h.healFlash = 0.7;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     if (run.wolf) {
       if (run.wolf.hp <= 0) {
@@ -1274,6 +1279,7 @@
     h.skillCd[2] = Math.max(0, (Number(h.skillCd[2]) || 0) - dt);
     h.novaT = Math.max(0, h.novaT - dt);
     h.cauterizeT = Math.max(0, (h.cauterizeT || 0) - dt);
+    h.healFlash = Math.max(0, (h.healFlash || 0) - dt);
     h.buffs.rage = Math.max(0, h.buffs.rage - dt);
     h.buffs.haste = Math.max(0, h.buffs.haste - dt);
     h.mana = Math.min(h.maxMana, h.mana + h.manaRegen * dt);
@@ -1437,7 +1443,7 @@
               hurt.hp = Math.min(hurt.maxHp, hurt.hp + amt);
               clampVitals(hurt, { fallback: hurt.maxHp, cap: 4000 });
               e.healTarget = hurt;
-              e.healFlash = 0.45;
+              e.healFlash = 0.9;
               floatText(hurt.x, groundY() - 180, "+" + fmt(amt), "#c9a227");
               sfx(640, 0.08, "sine", 0.03);
             }
@@ -1568,6 +1574,29 @@
     return x - camera;
   }
 
+  function playClipW() {
+    return Math.max(240, W - SHOP_W + 8);
+  }
+
+  function clipPlay(fn) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, playClipW(), H);
+    ctx.clip();
+    fn();
+    ctx.restore();
+  }
+
+  function hudNum(n, cap) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "0";
+    const x = Math.round(v * 10) / 10;
+    const max = cap == null ? 99 : cap;
+    if (x < 0) return "0";
+    if (x > max) return String(max);
+    return String(x);
+  }
+
   function drawImg(image, x, y, height, opts) {
     if (!image) return;
     const o = opts || {};
@@ -1632,14 +1661,18 @@
     ctx.strokeRect(left + 0.5, y + 0.5, w - 1, hgt - 1);
     const pair = hpPair(hp, max);
     const label = o.label ? o.label + " " + pair.text : pair.text;
-    ctx.font = "bold 12px VT323, monospace";
+    ctx.font = "bold 13px VT323, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(8,4,2,0.9)";
-    ctx.strokeText(label, x, y + hgt / 2 + 0.5);
+    const tw = Math.ceil(ctx.measureText(label).width) + 10;
+    const ty = y - 12;
+    ctx.fillStyle = "rgba(6, 4, 2, 0.94)";
+    ctx.strokeStyle = o.urgent ? "#ffe27a" : "#4a3820";
+    ctx.lineWidth = 1.6;
+    ctx.fillRect(Math.round(x - tw / 2), Math.round(ty - 8), tw, 16);
+    ctx.strokeRect(Math.round(x - tw / 2) + 0.5, Math.round(ty - 8) + 0.5, tw - 1, 15);
     ctx.fillStyle = "#f4e6c8";
-    ctx.fillText(label, x, y + hgt / 2 + 0.5);
+    ctx.fillText(label, x, ty + 1);
     ctx.restore();
   }
 
@@ -1820,10 +1853,17 @@
         ctx.moveTo(sx(e.x), gy - 88);
         ctx.lineTo(sx(t.x), gy - 70);
         ctx.stroke();
-        ctx.fillStyle = pulse > 0 ? "rgba(255,230,90,0.5)" : "rgba(255,200,60,0.32)";
+        ctx.fillStyle = pulse > 0 ? "rgba(255,230,90,0.72)" : "rgba(255,200,60,0.32)";
         ctx.beginPath();
-        ctx.arc(sx(t.x), gy - 50, 26, 0, Math.PI * 2);
+        ctx.arc(sx(t.x), gy - 50, pulse > 0 ? 38 : 26, 0, Math.PI * 2);
         ctx.fill();
+        if (pulse > 0) {
+          ctx.strokeStyle = "#fff4a8";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(sx(t.x), gy - 50, 44 + (0.9 - pulse) * 20, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
       ctx.restore();
       return;
@@ -1957,33 +1997,48 @@
         flip: !!c.flip,
         hue: c.hue,
       });
-      if (h.cauterizeT > 0) {
-        const t = h.cauterizeT;
-        const a = Math.min(1, t / 0.75);
+      if (h.cauterizeT > 0 || h.healFlash > 0) {
+        const t = h.cauterizeT || 0;
+        const hf = h.healFlash || 0;
+        const a = Math.max(t / 1.15, hf / 0.85, 0);
         ctx.save();
-        ctx.globalAlpha = 0.28 + a * 0.4;
-        ctx.fillStyle = "rgba(255,80,16,0.32)";
-        ctx.beginPath();
-        ctx.ellipse(sx(h.x), gy - 6, 96 + (0.75 - t) * 36, 18, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,190,70,0.95)";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.globalAlpha = a;
-        ctx.strokeStyle = "rgba(255,120,40,0.95)";
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(sx(h.x), gy - 80, 40 + (0.75 - t) * 78, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.font = "22px VT323, monospace";
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#ffb060";
-        ctx.fillText("CAUTERIZE", sx(h.x), gy - 268);
-        for (let i = 0; i < 7; i++) {
-          const ox = Math.sin(t * 14 + i * 1.1) * 28;
-          const oy = -((0.75 - t) * 70 + i * 8);
-          ctx.fillStyle = i % 2 ? "#ffe27a" : "#ff5a22";
-          ctx.fillRect(sx(h.x) + ox - 2, gy - 70 + oy, 4, 8);
+        if (t > 0) {
+          ctx.globalAlpha = 0.22 + a * 0.35;
+          ctx.fillStyle = "rgba(255,70,10,0.28)";
+          ctx.fillRect(0, gy - 28, playClipW(), 36);
+          ctx.globalAlpha = 0.45 + a * 0.5;
+          ctx.fillStyle = "rgba(255,90,16,0.4)";
+          ctx.beginPath();
+          ctx.ellipse(sx(h.x), gy - 6, 120 + (1.15 - t) * 50, 22, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ffe27a";
+          ctx.lineWidth = 4;
+          ctx.stroke();
+          ctx.globalAlpha = a;
+          ctx.strokeStyle = "#ff6a22";
+          ctx.lineWidth = 7;
+          ctx.beginPath();
+          ctx.arc(sx(h.x), gy - 80, 48 + (1.15 - t) * 90, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = "#fff4a8";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(sx(h.x), gy - 80, 70 + (1.15 - t) * 70, 0, Math.PI * 2);
+          ctx.stroke();
+          for (let i = 0; i < 12; i++) {
+            const ox = Math.sin(t * 16 + i * 0.9) * 36;
+            const oy = -((1.15 - t) * 90 + i * 7);
+            ctx.fillStyle = i % 2 ? "#ffe27a" : "#ff4a14";
+            ctx.fillRect(sx(h.x) + ox - 3, gy - 70 + oy, 5, 10);
+          }
+        }
+        if (hf > 0 && t <= 0) {
+          ctx.globalAlpha = Math.min(1, hf * 1.4);
+          ctx.strokeStyle = "#8fd18f";
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.arc(sx(h.x), gy - 80, 42 + (0.7 - hf) * 50, 0, Math.PI * 2);
+          ctx.stroke();
         }
         ctx.restore();
       }
@@ -2069,11 +2124,15 @@
       });
       if (e.igniteFlash > 0) {
         ctx.save();
-        ctx.globalAlpha = Math.min(1, e.igniteFlash * 1.6);
-        ctx.strokeStyle = "rgba(255,90,20,0.95)";
-        ctx.lineWidth = 4;
+        ctx.globalAlpha = Math.min(1, e.igniteFlash * 1.2);
+        ctx.fillStyle = "rgba(255,70,10,0.28)";
         ctx.beginPath();
-        ctx.arc(sx(e.x), gy - 52, 26 + (0.55 - e.igniteFlash) * 18, 0, Math.PI * 2);
+        ctx.arc(sx(e.x), gy - 48, 34 + (1.05 - e.igniteFlash) * 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ff6a22";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(sx(e.x), gy - 52, 30 + (1.05 - e.igniteFlash) * 28, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -2084,13 +2143,43 @@
       if (e.def.heal) drawHealVfx(e, gy, false);
     }
 
-    drawWorldBars(gy);
-
-    for (const e of run.enemies) {
-      if (e.def.heal) drawHealVfx(e, gy, true);
-    }
-    drawWolfTags(gy);
-    drawHeroCdPips(gy);
+    clipPlay(() => {
+      drawWorldBars(gy);
+      for (const e of run.enemies) {
+        if (e.def.heal) drawHealVfx(e, gy, true);
+      }
+      drawWolfTags(gy);
+      drawHeroCdPips(gy);
+      if (h && h.cauterizeT > 0) {
+        drawStamp("CAUTERIZE", sx(h.x), gy - 248, {
+          color: "#1a1008",
+          bg: "#ff8a3a",
+          border: "#ffe27a",
+          font: "bold 22px VT323, monospace",
+          h: 24,
+        });
+      }
+      if (h && h.healFlash > 0 && !(h.cauterizeT > 0)) {
+        drawStamp("HEAL", sx(h.x), gy - 248, {
+          color: "#102010",
+          bg: "#8fd18f",
+          border: "#d8f0a8",
+          font: "bold 20px VT323, monospace",
+          h: 22,
+        });
+      }
+      for (const e of run.enemies) {
+        if ((e.igniteFlash || 0) > 0.25) {
+          drawStamp("IGNITE", sx(e.x), gy - 96, {
+            color: "#fff4e0",
+            bg: "#7a1808",
+            border: "#ff8a3a",
+            font: "bold 18px VT323, monospace",
+            h: 20,
+          });
+        }
+      }
+    });
 
     for (const r of fx.rings) {
       ctx.save();
@@ -2141,14 +2230,34 @@
       ctx.globalAlpha = 1;
     }
 
-    ctx.font = "22px VT323, monospace";
-    ctx.textAlign = "center";
-    for (const f of fx.floats) {
-      ctx.globalAlpha = Math.max(0, f.t * 1.4);
-      ctx.fillStyle = f.color;
-      ctx.fillText(f.text, sx(f.x), f.y);
-      ctx.globalAlpha = 1;
-    }
+    clipPlay(() => {
+      for (const f of fx.floats) {
+        const px = sx(f.x);
+        if (px < -40) continue;
+        const word = /[A-Za-z]/.test(f.text);
+        if (word) {
+          drawStamp(f.text, px, f.y, {
+            color: f.color,
+            bg: "rgba(6,4,2,0.9)",
+            border: f.color,
+            font: "bold 16px VT323, monospace",
+            h: 18,
+          });
+        } else {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, f.t * 1.4);
+          ctx.font = "bold 18px VT323, monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(6,4,2,0.9)";
+          ctx.strokeText(f.text, px, f.y);
+          ctx.fillStyle = f.color;
+          ctx.fillText(f.text, px, f.y);
+          ctx.restore();
+        }
+      }
+    });
 
     if (h && h.buffs.haste > 0) {
       ctx.fillStyle = "rgba(255,226,122,0.12)";
@@ -2266,11 +2375,11 @@
     dmgEl.classList.toggle("hot", rage || lastStanding());
     spdEl.textContent = (h.atkRate * (haste ? 1.35 : 1) * (lastStanding() ? 1.2 : 1)).toFixed(2) + "/s";
     spdEl.classList.toggle("hot", haste || lastStanding());
-    document.getElementById("st-armor").textContent = (Math.round(h.armor * 10) / 10).toString();
-    document.getElementById("st-crit").textContent = Math.round(h.crit * 100) + "%";
-    document.getElementById("st-leech").textContent = Math.round(h.leech * 100) + "%";
-    document.getElementById("st-fortune").textContent = Math.round(h.goldFind * 100) + "%";
-    document.getElementById("st-regen").textContent = h.manaRegen.toFixed(1) + "/s";
+    document.getElementById("st-armor").textContent = hudNum(h.armor, 40);
+    document.getElementById("st-crit").textContent = hudNum((h.crit || 0) * 100, 100) + "%";
+    document.getElementById("st-leech").textContent = hudNum((h.leech || 0) * 100, 80) + "%";
+    document.getElementById("st-fortune").textContent = hudNum((h.goldFind || 0) * 100, 400) + "%";
+    document.getElementById("st-regen").textContent = hudNum(h.manaRegen, 20) + "/s";
     const buffs = [];
     if (rage) buffs.push("Rage " + Math.ceil(h.buffs.rage) + "s");
     if (haste) buffs.push("Haste " + Math.ceil(h.buffs.haste) + "s");
@@ -2591,6 +2700,19 @@
     },
     wolf() {
       return wolfSnapshot();
+    },
+    hudStats() {
+      const h = run.hero;
+      return {
+        hp: (document.getElementById("hp-text") || {}).textContent || "",
+        mp: (document.getElementById("mp-text") || {}).textContent || "",
+        gold: (document.getElementById("gold") || {}).textContent || "",
+        mana: (document.getElementById("mana-stat") || {}).textContent || "",
+        armor: (document.getElementById("st-armor") || {}).textContent || "",
+        buffs: (document.getElementById("st-buffs") || {}).textContent || "",
+        armorRaw: h ? h.armor : null,
+        goldRaw: run.gold,
+      };
     },
     healPreview() {
       const healers = run.enemies.filter((e) => e.def && e.def.heal && e.hp > 0);
