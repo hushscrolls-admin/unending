@@ -43,18 +43,18 @@ const CLASSES = {
     hp: 84,
     dmg: 7,
     armor: 1,
-    atkRate: 0.7,
+    atkRate: 0.76,
     reach: 86,
     range: 400,
     mana: 36,
     maxMana: 110,
-    manaRegen: 3.4,
+    manaRegen: 3.8,
     strikeName: "Fireball",
     strikeCd: 1.55,
     skills: [
-      { id: "cauterize", name: "Cauterize", mana: 25 },
+      { id: "cauterize", name: "Cauterize", mana: 22 },
       { id: "inferno", name: "Inferno", cd: 8 },
-      { id: "nova", name: "Frost Nova", mana: 28, cd: 7 },
+      { id: "nova", name: "Frost Nova", mana: 24, cd: 7 },
     ],
   },
   ranger: {
@@ -77,11 +77,11 @@ const CLASSES = {
     range: 380,
     mana: 22,
     maxMana: 80,
-    manaRegen: 2.4,
+    manaRegen: 2.6,
     strikeName: "Aimed Shot",
     strikeCd: 1.4,
     skills: [
-      { id: "dress", name: "Field Dress", mana: 25 },
+      { id: "dress", name: "Field Dress", mana: 22 },
       { id: "volley", name: "Volley", cd: 7 },
       { id: "sic", name: "Sic 'em", cd: 8 },
     ],
@@ -511,7 +511,7 @@ const PRESTIGE_TREE = [
     synergy: ["warrior"],
     req: [{ id: "blood", lv: 1 }],
     desc: "+1.2 armor each run",
-    cost: (lv) => 2 + lv * 2,
+    cost: (lv) => 1 + lv * 2,
     apply: (h, lv) => {
       h.armor += lv * 1.2;
     },
@@ -526,7 +526,7 @@ const PRESTIGE_TREE = [
     synergy: ["all"],
     req: [{ id: "might", lv: 1 }],
     desc: "+5% attack speed each run",
-    cost: (lv) => 2 + lv * 2,
+    cost: (lv) => 1 + lv * 2,
     apply: (h, lv) => {
       h.atkRate *= Math.pow(1.05, lv);
     },
@@ -541,7 +541,7 @@ const PRESTIGE_TREE = [
     synergy: ["all"],
     req: [{ id: "purse", lv: 1 }],
     desc: "+12% gold find each run",
-    cost: (lv) => 2 + lv * 2,
+    cost: (lv) => 1 + lv * 2,
     apply: (h, lv) => {
       h.goldFind += lv * 0.12;
     },
@@ -554,9 +554,9 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 2,
     synergy: ["all"],
-    req: [{ id: "hide", lv: 1 }],
+    req: [{ id: "blood", lv: 1 }],
     desc: "At fatal or 30% HP, heal 26% (charges = ranks)",
-    cost: (lv) => 4 + lv * 3,
+    cost: (lv) => 3 + lv * 3,
     apply: (h, lv) => {
       h.secondWind = lv;
     },
@@ -571,7 +571,7 @@ const PRESTIGE_TREE = [
     synergy: ["warrior"],
     req: [{ id: "tempo", lv: 1 }],
     desc: "+18% damage to foes below 40% HP",
-    cost: (lv) => 4 + lv * 3,
+    cost: (lv) => 3 + lv * 3,
     apply: (h, lv) => {
       h.execute = lv;
     },
@@ -584,7 +584,7 @@ const PRESTIGE_TREE = [
     row: 2,
     max: 5,
     synergy: ["mage"],
-    req: [{ id: "greed", lv: 1 }],
+    req: [{ id: "purse", lv: 1 }],
     desc: "+0.7 mana regen each run",
     cost: (lv) => 2 + lv * 2,
     apply: (h, lv) => {

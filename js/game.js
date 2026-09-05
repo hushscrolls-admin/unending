@@ -443,7 +443,7 @@
   }
 
   function gloryFor(wave, kills) {
-    const raw = Math.max(0, (wave - 1) * 2 + Math.floor(kills * 0.2));
+    const raw = Math.max(0, (wave - 1) * 2 + Math.floor(kills * 0.2) + Math.min(3, Math.max(0, wave)));
     return Math.floor(raw * (1 + persist.prest.fate * 0.18));
   }
 
@@ -536,7 +536,7 @@
   function hitHero(amount, srcX, crit) {
     const h = run.hero;
     let armor = h.armor;
-    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) armor += 1.2;
+    if (h.klass === "mage" && run.wave > 0 && run.wave <= 7) armor += 2.4;
     const d = dmgIn(amount, armor);
     h.hp -= d;
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
@@ -874,7 +874,7 @@
         dmg,
         crit,
         speed: 380,
-        burn: { kind: "burn", dps: h.dmg * 0.28, dur: 2.4 },
+        burn: { kind: "burn", dps: h.dmg * 0.36, dur: 2.8 },
       });
       sfx(crit ? 480 : 400, 0.06, "triangle", 0.04);
     } else {
@@ -938,9 +938,14 @@
     return true;
   }
 
+  function skillManaCost(slot) {
+    const s = classDef().skills[slot];
+    return (s && s.mana) || 0;
+  }
+
   function mend() {
     const h = run.hero;
-    if (state !== "fight" || !spendMana(25)) return;
+    if (state !== "fight" || !spendMana(skillManaCost(0) || 25)) return;
     const heal = h.maxHp * 0.28;
     const got = healHero(heal);
     h.healFlash = 0.7;
@@ -950,8 +955,8 @@
 
   function cauterize() {
     const h = run.hero;
-    if (state !== "fight" || !spendMana(25)) return;
-    const heal = h.maxHp * 0.24;
+    if (state !== "fight" || !spendMana(skillManaCost(0) || 22)) return;
+    const heal = h.maxHp * 0.32;
     const got = healHero(heal);
     h.cauterizeT = 1.15;
     h.healFlash = 0.85;
@@ -989,7 +994,7 @@
 
   function fieldDress() {
     const h = run.hero;
-    if (state !== "fight" || !spendMana(25)) return;
+    if (state !== "fight" || !spendMana(skillManaCost(0) || 22)) return;
     const heal = h.maxHp * 0.2;
     const got = healHero(heal);
     h.healFlash = 0.7;
@@ -1085,7 +1090,7 @@
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 300) {
         hitEnemy(e, dmg, false);
-        applyCc(e, 2.2);
+        applyCc(e, 2.8);
       }
     }
     fx.rings.push({ x: h.x, t: 0.5, color: "rgba(140,210,255,0.85)", r: 50 });
