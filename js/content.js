@@ -1,3 +1,93 @@
+const CLASSES = {
+  warrior: {
+    id: "warrior",
+    name: "Warrior",
+    tag: "Steel and grit",
+    blurb: "Melee cleave. Charge the back line and stay there.",
+    color: "#c9a227",
+    sprite: "hero",
+    anims: true,
+    flip: false,
+    style: "melee",
+    companion: false,
+    hp: 100,
+    dmg: 8,
+    armor: 0,
+    atkRate: 0.9,
+    reach: 92,
+    range: 92,
+    mana: 20,
+    maxMana: 80,
+    manaRegen: 2.2,
+    strikeName: "Power Strike",
+    strikeCd: 1.35,
+    skills: [
+      { id: "mend", name: "Mend", mana: 25 },
+      { id: "whirl", name: "Whirlwind", cd: 6 },
+      { id: "charge", name: "Charge", toggle: true },
+    ],
+  },
+  mage: {
+    id: "mage",
+    name: "Fire Mage",
+    tag: "Flame and frost",
+    blurb: "Ranged bolts. Burn them down, then freeze the pack.",
+    color: "#ff6a3a",
+    sprite: "heroMage",
+    anims: false,
+    flip: false,
+    hue: 0,
+    style: "ranged",
+    proj: "fire",
+    companion: false,
+    hp: 74,
+    dmg: 7,
+    armor: 0,
+    atkRate: 0.7,
+    reach: 86,
+    range: 400,
+    mana: 36,
+    maxMana: 110,
+    manaRegen: 3.4,
+    strikeName: "Fireball",
+    strikeCd: 1.55,
+    skills: [
+      { id: "cauterize", name: "Cauterize", mana: 25 },
+      { id: "inferno", name: "Inferno", cd: 8 },
+      { id: "nova", name: "Frost Nova", mana: 28, cd: 7 },
+    ],
+  },
+  ranger: {
+    id: "ranger",
+    name: "Ranger",
+    tag: "Bow and wolf",
+    blurb: "Ranged burst. Your wolf holds the road.",
+    color: "#7aaf4a",
+    sprite: "heroRanger",
+    anims: false,
+    flip: true,
+    style: "ranged",
+    proj: "arrow",
+    companion: true,
+    hp: 86,
+    dmg: 9,
+    armor: 0,
+    atkRate: 0.95,
+    reach: 80,
+    range: 380,
+    mana: 22,
+    maxMana: 80,
+    manaRegen: 2.4,
+    strikeName: "Aimed Shot",
+    strikeCd: 1.4,
+    skills: [
+      { id: "dress", name: "Field Dress", mana: 25 },
+      { id: "volley", name: "Volley", cd: 7 },
+      { id: "sic", name: "Sic 'em", cd: 8 },
+    ],
+  },
+};
+
 const ENEMIES = {
   grunt: {
     name: "Raider",
@@ -52,13 +142,13 @@ const ENEMIES = {
     speed: 62,
     atkRate: 0.7,
     reach: 78,
-    keep: 310,
+    keep: 250,
     gold: 13,
     magic: 4,
     color: "#4a6a3a",
     projectile: "arrow",
     projSpeed: 420,
-    atkRange: 420,
+    atkRange: 380,
   },
   mage: {
     name: "Mage",
@@ -69,13 +159,13 @@ const ENEMIES = {
     speed: 50,
     atkRate: 0.42,
     reach: 78,
-    keep: 360,
+    keep: 270,
     gold: 16,
     magic: 8,
     color: "#3a4aaa",
     projectile: "bolt",
     projSpeed: 280,
-    atkRange: 460,
+    atkRange: 420,
   },
   healer: {
     name: "Healer",
@@ -83,16 +173,16 @@ const ENEMIES = {
     hp: 22,
     dmg: 3,
     armor: 0,
-    speed: 52,
+    speed: 58,
     atkRate: 0.55,
     reach: 78,
-    keep: 340,
+    keep: 200,
     gold: 15,
     magic: 7,
     color: "#c9a227",
     heal: 10,
-    healRate: 2.4,
-    atkRange: 400,
+    healRate: 2.6,
+    healRange: 168,
   },
   assassin: {
     name: "Assassin",
@@ -154,14 +244,14 @@ const ENEMIES = {
     speed: 44,
     atkRate: 0.55,
     reach: 90,
-    keep: 280,
+    keep: 240,
     gold: 62,
     magic: 18,
     color: "#8a6a3a",
     projectile: "arrow",
     projSpeed: 460,
     volley: 3,
-    atkRange: 480,
+    atkRange: 420,
   },
   stormcaller: {
     name: "Stormcaller",
@@ -174,14 +264,14 @@ const ENEMIES = {
     speed: 36,
     atkRate: 0.38,
     reach: 90,
-    keep: 330,
+    keep: 260,
     gold: 70,
     magic: 24,
     color: "#5a4ad0",
     projectile: "bolt",
     projSpeed: 300,
     volley: 2,
-    atkRange: 500,
+    atkRange: 440,
   },
   sunfallen: {
     name: "The Sunfallen",
@@ -194,15 +284,16 @@ const ENEMIES = {
     speed: 34,
     atkRate: 0.5,
     reach: 95,
-    keep: 240,
+    keep: 200,
     gold: 80,
     magic: 22,
     color: "#d07030",
     heal: 14,
-    healRate: 2.1,
+    healRate: 2.2,
+    healRange: 180,
     projectile: "bolt",
     projSpeed: 260,
-    atkRange: 420,
+    atkRange: 380,
   },
 };
 
@@ -322,7 +413,7 @@ const PRESTIGE_UPGRADES = [
 ];
 
 function waveCount(n) {
-  return Math.min(7, Math.max(1, Math.ceil(n / 1.5)));
+  return Math.min(5, Math.max(1, Math.ceil(n / 1.7)));
 }
 
 function isBossWave(n) {
@@ -340,7 +431,7 @@ function waveRoster(n) {
   const units = [];
   for (let i = 0; i < count; i++) {
     let type = "grunt";
-    if (n >= 13 && i === count - 1) type = "healer";
+    if (n >= 13 && n % 3 === 1 && i === count - 1) type = "healer";
     else if (n >= 11 && i === count - 1 && count >= 3) type = "mage";
     else if (n >= 7 && i === count - 1) type = "archer";
     else if (n >= 11 && i === count - 2 && count >= 4) type = "archer";

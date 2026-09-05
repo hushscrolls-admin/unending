@@ -26,15 +26,16 @@
         <div class="stat">Wave <span id="wave">1</span></div>
         <div class="stat">Kills <span id="kills">0</span></div>
         <div class="stat glory">Glory <span id="glory">0</span></div>
+        <div class="stat class-stat" id="hud-class">Warrior</div>
       </div>
 
       <aside id="shop" class="hidden">
         <h2>Armory</h2>
-        <div class="hint">Gold from the fallen. Spend it while he fights.</div>
+        <div class="hint" id="shop-hint">Gold from the fallen. Spend it while he fights.</div>
         <div id="abilities">
-          <button id="btn-mend" type="button">Mend (25)</button>
-          <button id="btn-whirl" type="button">Whirlwind (6s)</button>
-          <button id="btn-charge" type="button">Charge</button>
+          <button id="btn-s1" type="button">1</button>
+          <button id="btn-s2" type="button">2</button>
+          <button id="btn-s3" type="button">3</button>
         </div>
         <h2>Stats</h2>
         <div id="char-stats">
@@ -58,9 +59,11 @@
         <h1>UNENDING</h1>
         <p>A lone fighter. An endless road. They will not stop coming.</p>
         <p class="sub">
-          He stands on the left and cuts down whatever walks out of the trees.
+          Stand on the left and cut down whatever walks out of the trees.
           Buy steel with gold. Die, and spend Glory on permanent blood.
         </p>
+        <h2 class="pick-label">Choose your class</h2>
+        <div id="class-pick" class="class-pick"></div>
         <button class="cta" id="btn-start" type="button">Begin the road</button>
       </div>
 
@@ -72,6 +75,8 @@
           Prestige
         </h2>
         <div id="prestige-shop"></div>
+        <h2 class="pick-label" style="margin-top: 14px">Rise as</h2>
+        <div id="class-pick-dead" class="class-pick compact"></div>
         <button class="cta" id="btn-again" type="button" style="margin-top: 16px">
           Rise again
         </button>

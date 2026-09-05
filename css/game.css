@@ -359,3 +359,81 @@ body {
   pointer-events: none;
   text-shadow: 0 2px 0 #000;
 }
+
+.stat.class-stat {
+  color: var(--gold);
+  font-size: 24px;
+}
+
+.overlay h2.pick-label,
+.pick-label {
+  margin: 4px 0 8px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: 400;
+}
+
+.class-pick {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 760px;
+  margin: 0 0 16px;
+}
+
+.class-pick.compact {
+  max-width: 640px;
+  margin-bottom: 4px;
+}
+
+.class-card {
+  width: 220px;
+  text-align: left;
+  background: rgba(12, 16, 28, 0.92);
+  color: var(--ink);
+  border: 2px solid #3a4558;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.class-pick.compact .class-card {
+  width: 170px;
+  padding: 8px 10px;
+}
+
+.class-card b {
+  display: block;
+  font-size: 22px;
+  font-weight: 400;
+  color: #f0f4fa;
+}
+
+.class-card span {
+  display: block;
+  color: var(--gold);
+  font-size: 18px;
+  margin: 2px 0 4px;
+}
+
+.class-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.class-card:hover {
+  background: #1c2740;
+}
+
+.class-card.sel {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.class-card.sel b {
+  color: var(--gold);
+}

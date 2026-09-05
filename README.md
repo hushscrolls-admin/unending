@@ -2,7 +2,7 @@
 
 A 2D sidescrolling idle fighter. One mercenary on the left of the road. Hordes walk out of the trees. Gold buys steel. Death buys Glory.
 
-Inspired by the layout and upgrade-loop feel of *Magic Archery* (character planted left, auto-action, spend while you watch), with melee combat and a prestige restart.
+Pick **Warrior**, **Fire Mage**, or **Ranger** on the title screen (or after a death). Inspired by the layout and upgrade-loop feel of *Magic Archery* (character planted left, auto-action, spend while you watch), with melee or ranged combat and a prestige restart.
 
 ## Play
 
@@ -16,25 +16,31 @@ Open `http://localhost:8765`.
 
 ## Loop
 
-- The fighter holds the left. Melee walks to him. Archers and casters keep their distance.
-- **3** Charge: dash to the back line and stay there fighting. Press again to jump home.
-- Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins.
+- The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
+- Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range, and extra waves wait if the road is already crowded.
 - Kills drop gold, mana, hearts, and short buffs (rage / haste).
 - Spend gold in the Armory during the fight.
-- **Click** the battlefield or press **Space** for a Power Strike.
-- **1** Mend (25 mana). **2** Whirlwind (6s, three hits on both sides).
+- **Click** the battlefield or press **Space** for the class strike.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
-- On death you keep Glory and buy permanent starting bonuses, then rise again. Gold and run upgrades reset.
+- On death you keep Glory and buy permanent starting bonuses, then rise again as any class. Gold and run upgrades reset.
+
+## Classes
+
+| Class | Auto | Strike (Click / Space) | 1 | 2 | 3 |
+|---|---|---|---|---|---|
+| **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash to the back line |
+| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 7s) — freeze the pack |
+| **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (25 mana) — heal you and the wolf (revives if down) | Volley (7s) — five arrows | Sic 'em (8s) — wolf leaps the back line and taunts melee |
+
+The Ranger's wolf is a companion tank. Melee prefers the closer target; Sic 'em forces them onto the wolf for a few seconds. If the wolf falls, Field Dress or Sic 'em brings it back.
 
 ## Controls
 
 | Input | Action |
 |---|---|
-| Click / Space | Power Strike |
-| 1 | Mend |
-| 2 | Whirlwind (cooldown) |
-| 3 | Charge / Return (toggle) |
+| Click / Space | Class strike |
+| 1 / 2 / 3 | Class skills (see table) |
 | P | Pause |
 
 ## Art
