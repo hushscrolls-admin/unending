@@ -222,6 +222,7 @@
     document.getElementById("keys").classList.remove("hidden");
     buildShop();
     syncClassChrome();
+    syncHud();
     sfx(220, 0.12, "square", 0.04);
   }
 
