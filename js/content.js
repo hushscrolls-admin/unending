@@ -306,6 +306,7 @@ const RUN_UPGRADES = [
     desc: "+2 damage",
     icon: "⚔",
     unlockWave: 1,
+    synergy: ["warrior", "ranger"],
     cost: (lv) => (lv === 0 ? 12 : Math.floor(18 * Math.pow(1.38, lv))),
     apply: (hero) => {
       hero.dmg += 2;
@@ -317,6 +318,7 @@ const RUN_UPGRADES = [
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
+    synergy: ["all"],
     cost: (lv) => (lv === 0 ? 13 : Math.floor(20 * Math.pow(1.4, lv))),
     apply: (hero) => {
       hero.atkRate *= 1.08;
@@ -328,6 +330,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
+    synergy: ["all"],
     cost: (lv) => (lv === 0 ? 14 : Math.floor(22 * Math.pow(1.36, lv))),
     apply: (hero) => {
       hero.maxHp += 25;
@@ -340,6 +343,7 @@ const RUN_UPGRADES = [
     desc: "+1.5 armor",
     icon: "🛡",
     unlockWave: 5,
+    synergy: ["warrior"],
     cost: (lv) => Math.floor(24 * Math.pow(1.4, lv)),
     apply: (hero) => {
       hero.armor += 1.5;
@@ -351,6 +355,7 @@ const RUN_UPGRADES = [
     desc: "+12% gold find",
     icon: "●",
     unlockWave: 5,
+    synergy: ["all"],
     cost: (lv) => Math.floor(25 * Math.pow(1.42, lv)),
     apply: (hero) => {
       hero.goldFind += 0.12;
@@ -362,6 +367,7 @@ const RUN_UPGRADES = [
     desc: "+3% lifesteal",
     icon: "◈",
     unlockWave: 9,
+    synergy: ["warrior"],
     cost: (lv) => Math.floor(28 * Math.pow(1.45, lv)),
     apply: (hero) => {
       hero.leech += 0.03;
@@ -373,6 +379,7 @@ const RUN_UPGRADES = [
     desc: "+6% crit chance",
     icon: "✦",
     unlockWave: 9,
+    synergy: ["ranger"],
     cost: (lv) => Math.floor(30 * Math.pow(1.45, lv)),
     apply: (hero) => {
       hero.crit += 0.06;
@@ -384,6 +391,7 @@ const RUN_UPGRADES = [
     desc: "+24 strike / shot range",
     icon: "↦",
     unlockWave: 9,
+    synergy: ["ranger", "mage"],
     cost: (lv) => Math.floor(32 * Math.pow(1.42, lv)),
     apply: (hero) => {
       hero.reach += 24;
@@ -396,6 +404,7 @@ const RUN_UPGRADES = [
     desc: "−8% skill cooldowns",
     icon: "↯",
     unlockWave: 13,
+    synergy: ["mage"],
     cost: (lv) => Math.floor(34 * Math.pow(1.46, lv)),
     apply: (hero) => {
       hero.skillHaste = (hero.skillHaste || 0) + 0.08;
@@ -407,6 +416,7 @@ const RUN_UPGRADES = [
     desc: "Hits apply a short burn",
     icon: "▴",
     unlockWave: 13,
+    synergy: ["mage"],
     cost: (lv) => Math.floor(36 * Math.pow(1.48, lv)),
     apply: (hero) => {
       hero.cinder = (hero.cinder || 0) + 1;
@@ -418,6 +428,7 @@ const RUN_UPGRADES = [
     desc: "+18% class strike damage",
     icon: "✸",
     unlockWave: 13,
+    synergy: ["all"],
     cost: (lv) => Math.floor(36 * Math.pow(1.48, lv)),
     apply: (hero) => {
       hero.strikeMult = (hero.strikeMult || 1) * 1.18;
@@ -429,6 +440,7 @@ const RUN_UPGRADES = [
     desc: "12% chance to repeat an auto",
     icon: "⟳",
     unlockWave: 17,
+    synergy: ["ranger"],
     cost: (lv) => Math.floor(40 * Math.pow(1.5, lv)),
     apply: (hero) => {
       hero.echo = (hero.echo || 0) + 0.12;
@@ -440,6 +452,7 @@ const RUN_UPGRADES = [
     desc: "Wolf +25% HP and +2 dmg, or +20 HP",
     icon: "🐺",
     unlockWave: 17,
+    synergy: ["ranger"],
     cost: (lv) => Math.floor(38 * Math.pow(1.48, lv)),
     apply: (hero) => {
       hero.pack = (hero.pack || 0) + 1;
@@ -455,6 +468,7 @@ const PRESTIGE_TREE = [
     col: 0,
     row: 0,
     max: 8,
+    synergy: ["all"],
     desc: "+20 starting HP each run",
     cost: (lv) => 1 + lv * 2,
     apply: (h, lv) => {
@@ -469,6 +483,7 @@ const PRESTIGE_TREE = [
     col: 1,
     row: 0,
     max: 8,
+    synergy: ["all"],
     desc: "+2 starting damage each run",
     cost: (lv) => 1 + lv * 2,
     apply: (h, lv) => {
@@ -482,6 +497,7 @@ const PRESTIGE_TREE = [
     col: 2,
     row: 0,
     max: 8,
+    synergy: ["all"],
     desc: "+18 starting gold each run",
     cost: (lv) => 1 + lv * 2,
   },
@@ -492,6 +508,7 @@ const PRESTIGE_TREE = [
     col: 0,
     row: 1,
     max: 5,
+    synergy: ["warrior"],
     req: [{ id: "blood", lv: 2 }],
     desc: "+1.2 armor each run",
     cost: (lv) => 2 + lv * 2,
@@ -506,6 +523,7 @@ const PRESTIGE_TREE = [
     col: 1,
     row: 1,
     max: 5,
+    synergy: ["all"],
     req: [{ id: "might", lv: 2 }],
     desc: "+5% attack speed each run",
     cost: (lv) => 2 + lv * 2,
@@ -520,6 +538,7 @@ const PRESTIGE_TREE = [
     col: 2,
     row: 1,
     max: 5,
+    synergy: ["all"],
     req: [{ id: "purse", lv: 2 }],
     desc: "+12% gold find each run",
     cost: (lv) => 2 + lv * 2,
@@ -534,6 +553,7 @@ const PRESTIGE_TREE = [
     col: 0,
     row: 2,
     max: 2,
+    synergy: ["all"],
     req: [{ id: "hide", lv: 2 }],
     desc: "At fatal or 30% HP, heal 26% (charges = ranks)",
     cost: (lv) => 4 + lv * 3,
@@ -548,6 +568,7 @@ const PRESTIGE_TREE = [
     col: 1,
     row: 2,
     max: 3,
+    synergy: ["warrior"],
     req: [{ id: "tempo", lv: 2 }],
     desc: "+18% damage to foes below 40% HP",
     cost: (lv) => 4 + lv * 3,
@@ -562,6 +583,7 @@ const PRESTIGE_TREE = [
     col: 2,
     row: 2,
     max: 5,
+    synergy: ["mage"],
     req: [{ id: "greed", lv: 2 }],
     desc: "+0.7 mana regen each run",
     cost: (lv) => 2 + lv * 2,
@@ -578,6 +600,7 @@ const PRESTIGE_TREE = [
     col: 0,
     row: 3,
     max: 3,
+    synergy: ["warrior"],
     req: [{ id: "secondwind", lv: 1 }],
     desc: "Reflect 10% of melee hits",
     cost: (lv) => 5 + lv * 3,
@@ -592,6 +615,7 @@ const PRESTIGE_TREE = [
     col: 1,
     row: 3,
     max: 2,
+    synergy: ["warrior", "mage"],
     req: [{ id: "execute", lv: 1 }],
     desc: "Wasted damage splashes to the nearest foe",
     cost: (lv) => 5 + lv * 3,
@@ -606,6 +630,7 @@ const PRESTIGE_TREE = [
     col: 2,
     row: 3,
     max: 5,
+    synergy: ["all"],
     req: [{ id: "spark", lv: 2 }],
     desc: "+18% glory on death",
     cost: (lv) => 2 + lv * 3,
@@ -617,6 +642,7 @@ const PRESTIGE_TREE = [
     col: 0,
     row: 4,
     max: 1,
+    synergy: ["warrior"],
     req: [{ id: "thorns", lv: 1 }],
     desc: "Below 28% HP: +25% damage and +20% speed",
     cost: (lv) => 8 + lv * 4,
@@ -631,6 +657,7 @@ const PRESTIGE_TREE = [
     col: 1,
     row: 4,
     max: 2,
+    synergy: ["warrior"],
     req: [{ id: "overkill", lv: 1 }],
     desc: "Kills grant a short Rage (1.6s / rank)",
     cost: (lv) => 6 + lv * 4,
@@ -645,6 +672,7 @@ const PRESTIGE_TREE = [
     col: 2,
     row: 4,
     max: 1,
+    synergy: ["all"],
     req: [{ id: "fate", lv: 1 }],
     desc: "Each run starts with Iron I already forged",
     cost: (lv) => 7 + lv * 4,
@@ -669,6 +697,23 @@ function prestReqText(node) {
       return (p ? p.name : r.id) + " " + r.lv;
     })
     .join(" · ");
+}
+
+const SYNERGY_LABEL = { all: "All", warrior: "Warrior", mage: "Mage", ranger: "Ranger" };
+
+function synergyTags(item) {
+  const tags = item.synergy && item.synergy.length ? item.synergy : ["all"];
+  return tags;
+}
+
+function synergyHtml(item) {
+  return (
+    '<span class="syn">' +
+    synergyTags(item)
+      .map((t) => '<i class="tag ' + t + '">' + (SYNERGY_LABEL[t] || t) + "</i>")
+      .join("") +
+    "</span>"
+  );
 }
 
 function shopUnlockWave(u) {

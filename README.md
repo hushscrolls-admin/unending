@@ -19,8 +19,8 @@ Open `http://localhost:8765`.
 - The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
 - Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range, and extra waves wait if the road is already crowded.
 - Kills drop gold, mana, hearts, and short buffs (rage / haste).
-- Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first Iron / Swift / Vitality buy before Wave 4. Later crates still open at 5 / 9 / 13 / 17.
-- **Click** the battlefield or press **Space** for the class strike.
+- Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first Iron / Swift / Vitality buy before Wave 4. Later crates still open at 5 / 9 / 13 / 17. Armory rows and Blood Tree nodes carry **Warrior / Mage / Ranger / All** tags so you can plan class synergies, not just flat power.
+- **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or the wolf) are low and the heal is ready. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
 - On death you keep Glory and spend it on the Blood Tree (Vital / Might / Fortune). Roots are the old flat bonuses; deeper nodes unlock charges, execute, thorns, splash, Last Stand, Bloodlust, and Heirloom. Then rise again as any class. Gold and run upgrades reset. Old Blood / Might / Purse / Greed / Spark / Fate ranks still apply.

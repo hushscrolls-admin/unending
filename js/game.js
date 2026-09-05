@@ -24,6 +24,7 @@
   let toastT = 0;
   let waveBanner = 0;
   let paused = false;
+  let healCueOn = false;
 
   const persist = loadSave();
   const run = emptyRun();
@@ -168,6 +169,7 @@
       whirl: null,
       inferno: null,
       novaT: 0,
+      cauterizeT: 0,
       buffs: { rage: 0, haste: 0 },
     };
     for (const n of PRESTIGE_TREE) {
@@ -216,6 +218,7 @@
     fx.drops.length = 0;
     fx.gibs.length = 0;
     fx.rings.length = 0;
+    healCueOn = false;
     state = "fight";
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
@@ -716,15 +719,37 @@
     if (state !== "fight" || !spendMana(25)) return;
     const heal = h.maxHp * 0.24;
     h.hp = Math.min(h.maxHp, h.hp + heal);
-    floatText(h.x, groundY() - 200, "+" + fmt(heal), "#ff8a4a");
+    h.cauterizeT = 0.75;
+    h.flash = Math.max(h.flash, 0.22);
+    floatText(h.x, groundY() - 236, "CAUTERIZE", "#ffb060");
+    floatText(h.x, groundY() - 206, "+" + fmt(heal), "#ff8a4a");
+    let ignited = 0;
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 170) {
         hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
         applyDot(e, { kind: "burn", dps: h.dmg * 0.32, dur: 2.8 });
+        e.igniteFlash = 0.55;
+        ignited += 1;
+        floatText(e.x, groundY() - 168, "IGNITE", "#ff6a22");
       }
     }
-    fx.rings.push({ x: h.x, t: 0.35, color: "rgba(255,110,40,0.7)", r: 40 });
-    sfx(360, 0.12, "sawtooth", 0.05);
+    fx.rings.push({ x: h.x, t: 0.55, color: "rgba(255,90,20,0.95)", r: 28, w: 6, grow: 110 });
+    fx.rings.push({ x: h.x, t: 0.7, color: "rgba(255,180,60,0.8)", r: 50, w: 4, grow: 90 });
+    fx.rings.push({ x: h.x, t: 0.4, color: "rgba(255,240,140,0.9)", r: 16, w: 7, grow: 70 });
+    fx.rings.push({
+      x: h.x,
+      t: 0.85,
+      color: "rgba(255,110,30,0.7)",
+      r: 70,
+      w: 3,
+      grow: 50,
+      ellipse: true,
+      fill: "rgba(255,70,16,0.18)",
+    });
+    shake = Math.max(shake, 7);
+    sfx(360, 0.16, "sawtooth", 0.07);
+    sfx(220, 0.1, "square", 0.045);
+    if (ignited === 0) floatText(h.x + 40, groundY() - 180, "no foes in range", "#e8c090");
   }
 
   function fieldDress() {
@@ -1003,6 +1028,7 @@
     h.skillCd[1] = Math.max(0, h.skillCd[1] - dt);
     h.skillCd[2] = Math.max(0, h.skillCd[2] - dt);
     h.novaT = Math.max(0, h.novaT - dt);
+    h.cauterizeT = Math.max(0, (h.cauterizeT || 0) - dt);
     h.buffs.rage = Math.max(0, h.buffs.rage - dt);
     h.buffs.haste = Math.max(0, h.buffs.haste - dt);
     h.mana = Math.min(h.maxMana, h.mana + h.manaRegen * dt);
@@ -1095,6 +1121,7 @@
     for (const e of [...run.enemies]) {
       if (e.hp <= 0) continue;
       e.flash = Math.max(0, e.flash - dt);
+      e.igniteFlash = Math.max(0, (e.igniteFlash || 0) - dt);
       e.animT += dt;
       e.cc = Math.max(0, (e.cc || 0) - dt);
       tickDots(e, dt);
@@ -1340,13 +1367,131 @@
     ctx.drawImage(bg, -pan, 0, sw, H);
   }
 
-  function drawHpBar(x, y, w, hp, max, color) {
-    ctx.fillStyle = "#1118";
-    ctx.fillRect(x - w / 2, y, w, 6);
-    ctx.fillStyle = color;
-    ctx.fillRect(x - w / 2, y, w * Math.max(0, hp / max), 6);
-    ctx.strokeStyle = "#000";
-    ctx.strokeRect(x - w / 2, y, w, 6);
+  function drawHpBar(x, y, w, hp, max, color, opts) {
+    const o = opts || {};
+    const hgt = o.h || 9;
+    const left = x - w / 2;
+    const ratio = Math.max(0, Math.min(1, hp / Math.max(1, max)));
+    const low = ratio <= 0.35;
+    ctx.save();
+    ctx.fillStyle = "rgba(6,4,3,0.8)";
+    ctx.fillRect(left - 2, y - 2, w + 4, hgt + 4);
+    ctx.fillStyle = "#0c0a08";
+    ctx.fillRect(left, y, w, hgt);
+    ctx.fillStyle = low ? "#e04840" : color;
+    ctx.fillRect(left + 1, y + 1, Math.max(0, (w - 2) * ratio), hgt - 2);
+    ctx.strokeStyle = o.urgent ? "#ffe27a" : low ? "#ff8a6a" : "#1a120c";
+    ctx.lineWidth = o.urgent ? 2.2 : 1.4;
+    ctx.strokeRect(left + 0.5, y + 0.5, w - 1, hgt - 1);
+    const nums = Math.max(0, Math.ceil(hp)) + "/" + Math.ceil(max);
+    const label = o.label ? o.label + " " + nums : nums;
+    ctx.font = "bold 12px VT323, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(8,4,2,0.9)";
+    ctx.strokeText(label, x, y + hgt / 2 + 0.5);
+    ctx.fillStyle = "#f4e6c8";
+    ctx.fillText(label, x, y + hgt / 2 + 0.5);
+    ctx.restore();
+  }
+
+  function assignBarLanes(units) {
+    const sorted = units.slice().sort((a, b) => a.x - b.x);
+    const placed = [];
+    for (const u of sorted) {
+      let lane = 0;
+      while (placed.some((p) => p.lane === lane && Math.abs(p.x - u.x) < 56) && lane < 5) {
+        lane += 1;
+      }
+      u.lane = lane;
+      placed.push({ x: u.x, lane });
+    }
+    return units;
+  }
+
+  function healSkillReady() {
+    const h = run.hero;
+    if (!h || state !== "fight") return false;
+    const s = classDef(h.klass).skills[0];
+    if (s.mana && h.mana < s.mana) return false;
+    if (s.cd && (h.skillCd[0] || 0) > 0) return false;
+    return true;
+  }
+
+  function healUrgent() {
+    const h = run.hero;
+    if (!h || !healSkillReady()) return false;
+    if (h.hp / h.maxHp <= 0.35) return true;
+    if (h.klass === "ranger" && run.wolf) {
+      if (run.wolf.hp <= 0) return true;
+      if (run.wolf.hp / run.wolf.maxHp <= 0.35) return true;
+    }
+    return false;
+  }
+
+  function healCueClear() {
+    const h = run.hero;
+    if (!h) return true;
+    if (h.hp / h.maxHp <= 0.45) return false;
+    if (h.klass === "ranger" && run.wolf) {
+      if (run.wolf.hp <= 0) return false;
+      if (run.wolf.hp / run.wolf.maxHp <= 0.45) return false;
+    }
+    return true;
+  }
+
+  function drawWorldBars(gy) {
+    const bars = [];
+    const h = run.hero;
+    if (h && (state === "fight" || state === "dead")) {
+      bars.push({
+        x: h.x,
+        y: gy - 212,
+        w: 100,
+        h: 12,
+        hp: h.hp,
+        max: h.maxHp,
+        color: "#d45454",
+        label: "YOU",
+        urgent: healUrgent(),
+      });
+    }
+    if (run.wolf && run.wolf.hp > 0 && (state === "fight" || state === "dead")) {
+      bars.push({
+        x: run.wolf.x,
+        y: gy - 118,
+        w: 78,
+        h: 10,
+        hp: run.wolf.hp,
+        max: run.wolf.maxHp,
+        color: "#c9a06a",
+        label: "WOLF",
+      });
+    }
+    for (const e of run.enemies) {
+      if (e.hp <= 0) continue;
+      const hgt = 150 * (e.def.scale || 1);
+      bars.push({
+        x: e.x,
+        y: gy - hgt - 22,
+        w: e.def.boss ? 118 : 76,
+        h: e.def.boss ? 11 : 9,
+        hp: e.hp,
+        max: e.maxHp,
+        color: e.def.color,
+        label: e.def.boss ? (e.def.name.split(" ").pop() || "BOSS") : "",
+      });
+    }
+    assignBarLanes(bars);
+    bars.sort((a, b) => a.lane - b.lane);
+    for (const b of bars) {
+      drawHpBar(sx(b.x), b.y - b.lane * 16, b.w, b.hp, b.max, b.color, {
+        h: b.h,
+        label: b.label,
+        urgent: b.urgent,
+      });
+    }
   }
 
   function drawCdRing(x, y, r, frac, color) {
@@ -1455,11 +1600,40 @@
       const c = classDef(h.klass);
       const spr = heroSprite(h);
       drawImg(spr, sx(h.x), gy + 6, 168, {
-        flash: h.flash > 0,
+        flash: h.flash > 0 || h.cauterizeT > 0,
         flip: !!c.flip,
         hue: c.hue,
       });
-      drawHpBar(sx(h.x), gy - 184, 84, h.hp, h.maxHp, "#d45454");
+      if (h.cauterizeT > 0) {
+        const t = h.cauterizeT;
+        const a = Math.min(1, t / 0.75);
+        ctx.save();
+        ctx.globalAlpha = 0.28 + a * 0.4;
+        ctx.fillStyle = "rgba(255,80,16,0.32)";
+        ctx.beginPath();
+        ctx.ellipse(sx(h.x), gy - 6, 96 + (0.75 - t) * 36, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,190,70,0.95)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = "rgba(255,120,40,0.95)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(sx(h.x), gy - 80, 40 + (0.75 - t) * 78, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = "22px VT323, monospace";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffb060";
+        ctx.fillText("CAUTERIZE", sx(h.x), gy - 252);
+        for (let i = 0; i < 7; i++) {
+          const ox = Math.sin(t * 14 + i * 1.1) * 28;
+          const oy = -((0.75 - t) * 70 + i * 8);
+          ctx.fillStyle = i % 2 ? "#ffe27a" : "#ff5a22";
+          ctx.fillRect(sx(h.x) + ox - 2, gy - 70 + oy, 4, 8);
+        }
+        ctx.restore();
+      }
       if (h.buffs.rage > 0) {
         ctx.fillStyle = "rgba(255,80,30,0.18)";
         ctx.beginPath();
@@ -1484,19 +1658,22 @@
         ctx.arc(sx(h.x), gy - 80, 80 + (0.45 - h.novaT) * 180, 0, Math.PI * 2);
         ctx.stroke();
       }
-      const cdx = sx(h.x) - 42;
-      const cdy = gy - 200;
+      const cdx = sx(h.x) - 68;
+      const cdy = gy - 148;
       const cdef = classDef(h.klass);
-      drawCdRing(cdx, cdy, 10, Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), "#e6c15a");
-      ctx.fillStyle = "#e6c15a";
+      ctx.save();
       ctx.font = "12px VT323, monospace";
       ctx.textAlign = "center";
+      drawCdRing(cdx, cdy, 10, Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), "#e6c15a");
+      ctx.fillStyle = "#e6c15a";
       ctx.fillText("S", cdx, cdy + 3);
       for (let i = 0; i < 3; i++) {
-        drawCdRing(cdx + 22 * (i + 1), cdy, 10, skillCdFrac(i), "#6ec4ff");
+        const py = cdy + 24 * (i + 1);
+        drawCdRing(cdx, py, 10, skillCdFrac(i), "#6ec4ff");
         ctx.fillStyle = "#6ec4ff";
-        ctx.fillText(String(i + 1), cdx + 22 * (i + 1), cdy + 3);
+        ctx.fillText(String(i + 1), cdx, py + 3);
       }
+      ctx.restore();
     }
 
     if (run.wolf && (state === "fight" || state === "dead")) {
@@ -1515,9 +1692,6 @@
           ctx.stroke();
         }
         drawImg(img.wolf, sx(w.x), gy + 8 + bob, 92, { flash: w.flash > 0 });
-        drawHpBar(sx(w.x), gy - 108, 58, w.hp, w.maxHp, "#c9a06a");
-        ctx.fillStyle = "#e6c15a";
-        ctx.fillText("WOLF", sx(w.x), gy - 118);
         let tag = w.leap ? "SIC" : w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
         ctx.fillStyle = w.taunt > 0 || w.leap ? "#ffe27a" : "#c9e6a0";
         ctx.fillText(tag, sx(w.x), gy - 4);
@@ -1562,27 +1736,44 @@
       const hgt = 150 * (e.def.scale || 1);
       if (e.def.heal) drawHealVfx(e, gy);
       drawImg(spr, sx(e.x) + lunge, gy + 6 + bob, hgt, {
-        flash: e.flash > 0 || e.cc > 0,
+        flash: e.flash > 0 || e.cc > 0 || e.igniteFlash > 0,
         flip: face > 0,
-        hue: e.cc > 0 ? 180 : 0,
+        hue: e.cc > 0 ? 180 : e.igniteFlash > 0 ? 20 : 0,
       });
-      drawHpBar(
-        sx(e.x),
-        gy - hgt - 18,
-        e.def.boss ? 110 : 70,
-        e.hp,
-        e.maxHp,
-        e.def.color
-      );
+      if (e.igniteFlash > 0) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, e.igniteFlash * 1.6);
+        ctx.strokeStyle = "rgba(255,90,20,0.95)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(sx(e.x), gy - 52, 26 + (0.55 - e.igniteFlash) * 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       drawBurn(e, gy);
     }
 
+    drawWorldBars(gy);
+
     for (const r of fx.rings) {
+      ctx.save();
       ctx.strokeStyle = r.color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = r.w || 3;
+      const grow = r.grow != null ? r.grow : 80;
+      const rad = Math.max(4, r.r + (0.5 - r.t) * grow);
       ctx.beginPath();
-      ctx.arc(sx(r.x), gy - 70, r.r + (0.5 - r.t) * 80, 0, Math.PI * 2);
-      ctx.stroke();
+      if (r.ellipse) {
+        ctx.ellipse(sx(r.x), gy - 8, rad, 16, 0, 0, Math.PI * 2);
+        if (r.fill) {
+          ctx.fillStyle = r.fill;
+          ctx.fill();
+        }
+        ctx.stroke();
+      } else {
+        ctx.arc(sx(r.x), gy - 70, rad, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     for (const b of fx.bolts) {
@@ -1682,6 +1873,8 @@
     if (!h) return;
     document.getElementById("hp-fill").style.width = (100 * h.hp) / h.maxHp + "%";
     document.getElementById("mp-fill").style.width = (100 * h.mana) / h.maxMana + "%";
+    const hpBar = document.querySelector(".bar.hp");
+    if (hpBar) hpBar.classList.toggle("low", h.hp / h.maxHp <= 0.35);
     document.getElementById("hp-text").textContent = `${fmt(h.hp)}/${fmt(h.maxHp)}`;
     document.getElementById("mp-text").textContent = `${fmt(h.mana)}/${fmt(h.maxMana)}`;
     document.getElementById("gold").textContent = fmt(run.gold);
@@ -1724,6 +1917,22 @@
       const frac = skillCdFrac(i);
       btn.style.setProperty("--cd", String(Math.round(frac * 100)));
     }
+    const healBtn = document.getElementById("btn-s1");
+    const urgent = healUrgent();
+    if (healBtn) {
+      healBtn.classList.toggle("urgent", urgent);
+      if (urgent && !healCueOn) {
+        healCueOn = true;
+        const name = classDef(h.klass).skills[0].name;
+        toast(name + " ready");
+        healBtn.classList.remove("ready-flash");
+        void healBtn.offsetWidth;
+        healBtn.classList.add("ready-flash");
+      } else if (!urgent && healCueClear()) {
+        healCueOn = false;
+        healBtn.classList.remove("ready-flash");
+      }
+    }
     for (const u of RUN_UPGRADES) {
       const btn = document.getElementById("buy-" + u.id);
       if (!btn) continue;
@@ -1765,12 +1974,12 @@
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
           run.gold >= 12
-            ? "First steel is in reach — buy Iron, Swift, or Vitality."
+            ? "First steel is in reach — buy Iron, Swift, or Vitality. Tags mark who gains most."
             : "First steel costs 12g. The first raiders pay for it.";
       } else {
         nextEl.textContent = next
-          ? "Next crate opens at wave " + next + "."
-          : "The armory is fully open.";
+          ? "Next crate opens at wave " + next + ". Tags mark who gains most."
+          : "The armory is fully open. Tags mark who gains most.";
       }
     }
     for (const u of RUN_UPGRADES) {
@@ -1781,14 +1990,14 @@
       const row = document.createElement("div");
       row.className = "row" + (open ? "" : " locked");
       if (!open) {
-        row.innerHTML = `<div class="name">${u.icon} ${u.name}</div>
+        row.innerHTML = `<div class="name">${u.icon} ${u.name}${synergyHtml(u)}</div>
           <button type="button" disabled>wave ${need}</button>
           <div class="desc">${u.desc}</div>`;
         box.appendChild(row);
         continue;
       }
       if (open && lv === 0 && !run.boughtAny && run.gold >= u.cost(0)) row.classList.add("ready");
-      row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span></div>
+      row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span>${synergyHtml(u)}</div>
         <button id="buy-${u.id}" type="button">${fmt(u.cost(lv))}</button>
         <div class="desc">${u.desc}</div>`;
       box.appendChild(row);
@@ -1871,7 +2080,7 @@
           const req = prestReqText(u);
           const btnLabel = maxed ? "MAX" : c + " glory";
           step.innerHTML = `<div class="tree-node ${state}">
-            <div class="name">${u.name} <span>${lv}/${u.max}</span></div>
+            <div class="name">${u.name} <span>${lv}/${u.max}</span>${synergyHtml(u)}</div>
             <div class="desc">${u.desc}</div>
             ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
             <button type="button">${btnLabel}</button>

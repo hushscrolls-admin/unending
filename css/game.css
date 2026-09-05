@@ -101,6 +101,15 @@ body {
 .bar.hp > i {
   background: linear-gradient(#e07070, #a83838);
 }
+
+.bar.hp.low {
+  border-color: #d45454;
+  box-shadow: 0 0 0 1px #d45454;
+}
+
+.bar.hp.low > i {
+  background: linear-gradient(#ff9a9a, #c03030);
+}
 .bar.mp > i {
   background: linear-gradient(#7ec8ff, #2f6fbf);
 }
@@ -301,6 +310,10 @@ body {
 .tree-node .name {
   font-size: 20px;
   color: #f0f4fa;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
 }
 
 .tree-node .name span {
@@ -378,6 +391,10 @@ body {
   grid-row: 1;
   font-size: 22px;
   color: #f0f4fa;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
 }
 
 .row .desc {
@@ -450,6 +467,76 @@ body {
 
 #abilities button:hover:not(:disabled) {
   background: #2a3c64;
+}
+
+#abilities button.urgent {
+  color: #c9e6a0;
+  border-color: #8fd18f;
+  animation: urgentPulse 0.85s ease-in-out infinite;
+}
+
+#abilities button.ready-flash {
+  animation: urgentPulse 0.85s ease-in-out infinite, readyFlash 0.7s ease-out 1;
+}
+
+@keyframes urgentPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px #8fd18f, 0 0 8px rgba(143, 209, 143, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 2px #c9e6a0, 0 0 14px rgba(143, 209, 143, 0.65);
+  }
+}
+
+@keyframes readyFlash {
+  0% {
+    background: #3a6040;
+  }
+  100% {
+    background: #1c2740;
+  }
+}
+
+.syn {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.tag {
+  display: inline-block;
+  font-style: normal;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  line-height: 16px;
+  padding: 0 5px;
+  border: 1px solid;
+}
+
+.tag.all {
+  color: #d7c48a;
+  border-color: #8a7a48;
+  background: rgba(230, 193, 90, 0.12);
+}
+
+.tag.warrior {
+  color: #e6c15a;
+  border-color: #c9a227;
+  background: rgba(201, 162, 39, 0.16);
+}
+
+.tag.mage {
+  color: #ffb08a;
+  border-color: #ff6a3a;
+  background: rgba(255, 106, 58, 0.16);
+}
+
+.tag.ranger {
+  color: #b6d88a;
+  border-color: #7aaf4a;
+  background: rgba(122, 175, 74, 0.16);
 }
 
 .overlay {
