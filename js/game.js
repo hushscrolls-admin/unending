@@ -1374,28 +1374,32 @@
     const range = e.def.healRange || 0;
     if (!range) return;
     ctx.save();
-    ctx.fillStyle = "rgba(201,162,39,0.07)";
-    ctx.strokeStyle = "rgba(201,162,39,0.5)";
+    ctx.fillStyle = "rgba(201,162,39,0.1)";
+    ctx.strokeStyle = "rgba(255,210,80,0.7)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(sx(e.x), gy - 6, range, 16, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.font = "16px VT323, monospace";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#e6c15a";
+    ctx.fillText("HEAL RANGE", sx(e.x), gy + 14);
     const t = e.healTarget;
     if (t && t.hp > 0) {
       const pulse = e.healFlash || 0;
-      ctx.strokeStyle = pulse > 0 ? "rgba(255,230,110,0.95)" : "rgba(201,162,39,0.75)";
-      ctx.lineWidth = pulse > 0 ? 3.5 : 2;
-      if (pulse <= 0) ctx.setLineDash([7, 5]);
+      ctx.strokeStyle = pulse > 0 ? "rgba(255,240,130,1)" : "rgba(255,214,80,0.92)";
+      ctx.lineWidth = pulse > 0 ? 5 : 3.5;
       ctx.beginPath();
       ctx.moveTo(sx(e.x), gy - 88);
       ctx.lineTo(sx(t.x), gy - 70);
       ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = pulse > 0 ? "rgba(255,220,80,0.35)" : "rgba(201,162,39,0.18)";
+      ctx.fillStyle = pulse > 0 ? "rgba(255,230,90,0.45)" : "rgba(255,200,60,0.28)";
       ctx.beginPath();
-      ctx.arc(sx(t.x), gy - 50, 22, 0, Math.PI * 2);
+      ctx.arc(sx(t.x), gy - 50, 24, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = "#ffe27a";
+      ctx.fillText("PATIENT", sx(t.x), gy - 58);
     }
     ctx.restore();
   }
