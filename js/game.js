@@ -1682,15 +1682,20 @@
 
   function assignBarLanes(units) {
     const sorted = units.slice().sort((a, b) => a.x - b.x);
-    const placed = [];
+    const clusters = [];
     for (const u of sorted) {
-      let lane = 0;
-      while (placed.some((p) => p.lane === lane && Math.abs(p.x - u.x) < 86) && lane < 6) {
-        lane += 1;
+      let cluster = clusters.find((c) => c.some((m) => Math.abs(m.x - u.x) < 120));
+      if (!cluster) {
+        cluster = [];
+        clusters.push(cluster);
       }
-      u.lane = lane;
-      u.chipSide = lane === 0 ? 0 : lane % 2 === 0 ? 1 : -1;
-      placed.push({ x: u.x, lane });
+      cluster.push(u);
+    }
+    for (const cluster of clusters) {
+      cluster.forEach((u, i) => {
+        u.lane = i;
+        u.chipSide = i === 0 ? 0 : i % 2 === 0 ? 1 : -1;
+      });
     }
     return units;
   }
@@ -1758,14 +1763,14 @@
     assignBarLanes(pack);
     pack.sort((a, b) => a.lane - b.lane);
     for (const b of pack) {
-      drawHpBar(sx(b.x) + b.lane * 16 * (b.chipSide || 1), b.y - b.lane * 28, b.w, b.hp, b.max, b.color, {
+      drawHpBar(sx(b.x) + (b.lane - 1) * 28, b.y - b.lane * 32, b.w, b.hp, b.max, b.color, {
         h: b.h,
         label: b.label,
         chipSide: b.chipSide,
       });
     }
     if (h && state === "fight") {
-      drawHpBar(sx(h.x), gy - 252, 104, h.hp, h.maxHp, "#d45454", {
+      drawHpBar(sx(h.x), gy - 300, 104, h.hp, h.maxHp, "#d45454", {
         h: 13,
         label: "YOU",
         urgent: healUrgent(),
@@ -1871,7 +1876,7 @@
       ctx.restore();
       return;
     }
-    drawStamp("HEAL RANGE", sx(e.x), gy + 42, {
+    drawStamp("HEAL RANGE", sx(e.x), gy + 50, {
       color: "#1a1208",
       bg: "#ffe27a",
       border: "#fff4a8",
@@ -2176,7 +2181,7 @@
         drawWolfTags(gy);
         drawHeroCdPips(gy);
         if (h && h.cauterizeT > 0) {
-          drawStamp("CAUTERIZE", sx(h.x), gy - 274, {
+          drawStamp("CAUTERIZE", sx(h.x), gy - 322, {
             color: "#1a1008",
             bg: "#ff8a3a",
             border: "#ffe27a",
@@ -2185,7 +2190,7 @@
           });
         }
         if (h && h.healFlash > 0 && !(h.cauterizeT > 0)) {
-          drawStamp("HEAL", sx(h.x), gy - 274, {
+          drawStamp("HEAL", sx(h.x), gy - 322, {
             color: "#102010",
             bg: "#8fd18f",
             border: "#d8f0a8",
