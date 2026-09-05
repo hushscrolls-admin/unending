@@ -171,11 +171,22 @@
   }
 
   function fmt(n) {
-    n = Math.floor(n);
+    n = Math.floor(Number(n));
     if (!Number.isFinite(n)) return "0";
     if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + "M";
     if (Math.abs(n) >= 1e4) return (n / 1e3).toFixed(1) + "K";
     return String(n);
+  }
+
+  function hpPair(hp, max) {
+    const cap = VITAL_CAP;
+    let m = Math.floor(Number(max));
+    if (!Number.isFinite(m) || m < 1) m = 1;
+    if (m > cap) m = cap;
+    let n = Math.floor(Number(hp));
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    if (n > m) n = m;
+    return { hp: n, max: m, text: n + "/" + m };
   }
 
   function normalizePrest(prest) {
@@ -317,6 +328,7 @@
       for (let i = 0; i < lv; i++) u.apply(hero);
     }
     hero.hp = Math.min(hero.maxHp, hero.hp);
+    hero.secondWind = Math.max(0, Math.min(2, Math.floor(Number(hero.secondWind) || 0)));
     clampVitals(hero, { fallback: hero.klass ? classDef(hero.klass).hp + prestLv("blood") * 20 : 100, manaFallback: c.maxMana });
     return hero;
   }
@@ -484,17 +496,18 @@
       crit ? "#ffe27a" : "#ff8080"
     );
     sfx(crit ? 200 : 140, 0.08, "square", 0.04);
-    if (h.hp <= h.maxHp * 0.3 && h.secondWind > 0) {
-      h.secondWind -= 1;
-      const heal = h.maxHp * 0.26;
-      if (h.hp <= 0) h.hp = heal;
-      else healHero(heal);
-      floatText(h.x, groundY() - 210, "SECOND WIND", "#8fd18f");
+    const charges = Math.max(0, Math.floor(Number(h.secondWind) || 0));
+    if (charges > 0 && h.hp <= h.maxHp * 0.3) {
+      h.secondWind = charges - 1;
+      healHero(h.maxHp * 0.26);
+      floatText(h.x + 72, groundY() - 230, "SECOND WIND", "#8fd18f");
       sfx(520, 0.14, "sine", 0.05);
     }
     if (h.hp <= 0) {
       h.hp = 0;
       die();
+    } else {
+      syncHud();
     }
   }
 
@@ -1555,8 +1568,8 @@
     ctx.strokeStyle = o.urgent ? "#ffe27a" : low ? "#ff8a6a" : "#1a120c";
     ctx.lineWidth = o.urgent ? 2.2 : 1.4;
     ctx.strokeRect(left + 0.5, y + 0.5, w - 1, hgt - 1);
-    const nums = Math.max(0, Math.ceil(hp)) + "/" + Math.ceil(max);
-    const label = o.label ? o.label + " " + nums : nums;
+    const pair = hpPair(hp, max);
+    const label = o.label ? o.label + " " + pair.text : pair.text;
     ctx.font = "bold 12px VT323, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1615,13 +1628,6 @@
 
   function drawWorldBars(gy) {
     const h = run.hero;
-    if (h && (state === "fight" || state === "dead")) {
-      drawHpBar(sx(h.x), gy - 226, 104, h.hp, h.maxHp, "#d45454", {
-        h: 13,
-        label: "YOU",
-        urgent: healUrgent(),
-      });
-    }
     const pack = [];
     if (run.wolf && run.wolf.hp > 0 && (state === "fight" || state === "dead")) {
       pack.push({
@@ -1655,6 +1661,13 @@
       drawHpBar(sx(b.x) + b.lane * 7, b.y - b.lane * 18, b.w, b.hp, b.max, b.color, {
         h: b.h,
         label: b.label,
+      });
+    }
+    if (h && (state === "fight" || state === "dead")) {
+      drawHpBar(sx(h.x), gy - 226, 104, h.hp, h.maxHp, "#d45454", {
+        h: 13,
+        label: "YOU",
+        urgent: healUrgent(),
       });
     }
   }
@@ -2072,11 +2085,14 @@
       return;
     }
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
-    document.getElementById("hp-fill").style.width = (100 * h.hp) / h.maxHp + "%";
-    document.getElementById("mp-fill").style.width = (100 * h.mana) / h.maxMana + "%";
+    const shown = hpPair(h.hp, h.maxHp);
+    h.hp = shown.hp;
+    h.maxHp = shown.max;
+    document.getElementById("hp-fill").style.width = (100 * shown.hp) / shown.max + "%";
+    document.getElementById("mp-fill").style.width = (100 * h.mana) / Math.max(1, h.maxMana) + "%";
     const hpBar = document.querySelector(".bar.hp");
-    if (hpBar) hpBar.classList.toggle("low", h.hp / h.maxHp <= 0.35);
-    document.getElementById("hp-text").textContent = `${fmt(h.hp)}/${fmt(h.maxHp)}`;
+    if (hpBar) hpBar.classList.toggle("low", shown.hp / shown.max <= 0.35);
+    document.getElementById("hp-text").textContent = shown.text;
     document.getElementById("mp-text").textContent = `${fmt(h.mana)}/${fmt(h.maxMana)}`;
     document.getElementById("gold").textContent = fmt(run.gold);
     document.getElementById("mana-stat").textContent = fmt(h.mana);
@@ -2419,10 +2435,25 @@
       const h = run.hero;
       if (!h) return null;
       clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
-      return { hp: h.hp, maxHp: h.maxHp, mana: h.mana, maxMana: h.maxMana, kills: run.kills };
+      const shown = hpPair(h.hp, h.maxHp);
+      const hud = document.getElementById("hp-text");
+      return {
+        hp: h.hp,
+        maxHp: h.maxHp,
+        hud: hud ? hud.textContent : "",
+        pair: shown.text,
+        secondWind: h.secondWind || 0,
+        inferno: !!h.inferno,
+        jumpDest,
+        kills: run.kills,
+        wave: run.wave,
+      };
     },
     smite() {
       [...run.enemies].forEach(killEnemy);
+    },
+    hurt(n) {
+      if (run.hero && state === "fight") hitHero(n || 10, run.hero.x);
     },
   };
 
