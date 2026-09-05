@@ -25,6 +25,7 @@
   let waveBanner = 0;
   let paused = false;
   let healCueOn = false;
+  let jumpDest = 0;
 
   const persist = loadSave();
   const run = emptyRun();
@@ -305,6 +306,10 @@
     fx.rings.length = 0;
     healCueOn = false;
     state = "fight";
+    if (jumpDest > 0) {
+      run.wave = jumpDest - 1;
+      run.waveTimer = 0.05;
+    }
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
     document.getElementById("hud").classList.remove("hidden");
@@ -613,15 +618,15 @@
       });
     });
     const fresh = shopUnlocksAt(n);
-    if (isBossWave(n)) {
+    const crate = fresh.length && n > 1 ? "  ·  " + fresh.map((u) => u.name).join(" / ") : "";
+    if (jumpDest === n) {
+      toast((isBossWave(n) ? "Jump → BOSS " + defTitle(n) : "Jump → wave " + n) + crate);
+      jumpDest = 0;
+    } else if (isBossWave(n)) {
       toast("BOSS  " + defTitle(n));
       sfx(140, 0.22, "sawtooth", 0.06);
     } else {
-      toast(
-        fresh.length && n > 1
-          ? "Wave " + n + "  ·  " + fresh.map((u) => u.name).join(" / ")
-          : "Wave " + n
-      );
+      toast(crate ? "Wave " + n + crate : "Wave " + n);
       sfx(360, 0.1, "square", 0.04);
     }
     buildShop();
@@ -2313,6 +2318,7 @@
     },
     jump(wave) {
       const dest = Math.max(1, Math.floor(wave || 1));
+      jumpDest = dest;
       run.wave = dest - 1;
       run.enemies = [];
       run.waveTimer = 0.05;
