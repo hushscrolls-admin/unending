@@ -51,6 +51,28 @@
     return CLASSES[validClass(id || persist.klass)];
   }
 
+  function prestLv(id) {
+    return persist.prest[id] || 0;
+  }
+
+  function lastStanding() {
+    const h = run.hero;
+    return !!(h && h.lastStand && h.hp > 0 && h.hp / h.maxHp <= 0.28);
+  }
+
+  function heroDmgMult() {
+    return rageMult() * (lastStanding() ? 1.25 : 1) * (run.hero.strikeMult || 1);
+  }
+
+  function autoDmgMult() {
+    return rageMult() * (lastStanding() ? 1.25 : 1);
+  }
+
+  function cdScale(seconds) {
+    const haste = (run.hero && run.hero.skillHaste) || 0;
+    return seconds * Math.max(0.45, 1 - haste);
+  }
+
   function loadSave() {
     try {
       const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
@@ -102,16 +124,15 @@
   }
 
   function makeHero() {
-    const p = persist.prest;
     const c = classDef();
     const hero = {
       klass: c.id,
       x: HOME_X,
       homeX: HOME_X,
       mode: "home",
-      hp: c.hp + p.blood * 20,
-      maxHp: c.hp + p.blood * 20,
-      dmg: c.dmg + p.might * 2,
+      hp: c.hp,
+      maxHp: c.hp,
+      dmg: c.dmg,
       armor: c.armor,
       atkRate: c.atkRate,
       atkT: 0,
@@ -121,10 +142,22 @@
       walk: 95,
       crit: 0.05,
       leech: 0,
-      goldFind: 1 + p.greed * 0.12,
-      mana: c.mana + p.spark * 5,
-      maxMana: c.maxMana + p.spark * 10,
-      manaRegen: c.manaRegen + p.spark * 0.7,
+      goldFind: 1,
+      mana: c.mana,
+      maxMana: c.maxMana,
+      manaRegen: c.manaRegen,
+      skillHaste: 0,
+      strikeMult: 1,
+      cinder: 0,
+      echo: 0,
+      pack: 0,
+      execute: 0,
+      overkill: 0,
+      thorns: 0,
+      lastStand: false,
+      bloodlust: 0,
+      secondWind: 0,
+      heirloom: false,
       anim: "idle",
       animT: 0,
       flash: 0,
@@ -135,7 +168,12 @@
       novaT: 0,
       buffs: { rage: 0, haste: 0 },
     };
-    run.gold = p.purse * 18;
+    for (const n of PRESTIGE_TREE) {
+      const lv = prestLv(n.id);
+      if (lv > 0 && n.apply) n.apply(hero, lv);
+    }
+    run.gold = prestLv("purse") * 18;
+    if (hero.heirloom) run.levels.iron = Math.max(run.levels.iron || 0, 1);
     for (const u of RUN_UPGRADES) {
       const lv = run.levels[u.id] || 0;
       for (let i = 0; i < lv; i++) u.apply(hero);
@@ -145,13 +183,14 @@
   }
 
   function makeWolf() {
-    const p = persist.prest;
+    const pack = (run.hero && run.hero.pack) || 0;
+    const hp = (60 + prestLv("blood") * 10) * (1 + pack * 0.25);
     return {
       x: HOME_X + 72,
-      hp: 60 + p.blood * 10,
-      maxHp: 60 + p.blood * 10,
-      dmg: 5 + p.might,
-      armor: 3,
+      hp,
+      maxHp: hp,
+      dmg: 5 + prestLv("might") + pack * 2,
+      armor: 3 + prestLv("hide") * 0.8,
       atkRate: 0.9,
       atkT: 0,
       reach: 72,
@@ -280,6 +319,13 @@
       crit ? "#ffe27a" : "#ff8080"
     );
     sfx(crit ? 200 : 140, 0.08, "square", 0.04);
+    if (h.hp <= h.maxHp * 0.3 && h.secondWind > 0) {
+      h.secondWind -= 1;
+      const heal = h.maxHp * 0.26;
+      h.hp = h.hp <= 0 ? heal : Math.min(h.maxHp, h.hp + heal);
+      floatText(h.x, groundY() - 210, "SECOND WIND", "#8fd18f");
+      sfx(520, 0.14, "sine", 0.05);
+    }
     if (h.hp <= 0) {
       h.hp = 0;
       die();
@@ -326,8 +372,12 @@
     const crit = Math.random() < (e.def.crit || 0);
     if (crit) dmg *= 2;
     const t = threatFor(e);
-    if (t === run.hero) hitHero(dmg, e.x, crit);
-    else hitWolf(dmg, crit);
+    if (t === run.hero) {
+      hitHero(dmg, e.x, crit);
+      if (run.hero.thorns && run.hero.hp > 0) {
+        hitEnemy(e, dmg * 0.1 * run.hero.thorns, false);
+      }
+    } else hitWolf(dmg, crit);
   }
 
   function applyDot(e, spec) {
@@ -362,7 +412,12 @@
 
   function hitEnemy(e, amount, crit, fromDot) {
     if (!e || e.hp <= 0) return;
+    const h = run.hero;
+    if (h && h.execute && e.hp < e.maxHp * 0.4) {
+      amount *= 1 + 0.18 * h.execute;
+    }
     const d = dmgIn(amount, e.armor);
+    const over = d - e.hp;
     e.hp -= d;
     e.flash = 0.1;
     floatText(
@@ -371,12 +426,20 @@
       (fromDot ? "burn " : crit ? "CRIT " : "") + fmt(d),
       fromDot ? "#ff8a3a" : crit ? "#ffe27a" : "#fff"
     );
-    const h = run.hero;
     if (h && h.leech > 0 && !fromDot) {
       const heal = d * h.leech;
       h.hp = Math.min(h.maxHp, h.hp + heal);
     }
-    if (e.hp <= 0) killEnemy(e);
+    if (e.hp > 0 && h && h.cinder && !fromDot) {
+      applyDot(e, { kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 });
+    }
+    if (e.hp <= 0) {
+      if (h && h.overkill && over > 0 && !fromDot) {
+        const near = nearest(e.x, (o) => o !== e && o.hp > 0);
+        if (near) hitEnemy(near, over * 0.4 * h.overkill, false, true);
+      }
+      killEnemy(e);
+    }
   }
 
   function killEnemy(e) {
@@ -401,6 +464,9 @@
       });
     }
     sfx(320, 0.07, "triangle", 0.05);
+    if (run.hero.bloodlust) {
+      run.hero.buffs.rage = Math.max(run.hero.buffs.rage, 1.6 * run.hero.bloodlust);
+    }
     const wasBoss = e.def.boss;
     run.enemies = run.enemies.filter((x) => x !== e);
     if (wasBoss && !bossAlive()) {
@@ -447,13 +513,19 @@
         charged: false,
       });
     });
+    const fresh = shopUnlocksAt(n);
     if (isBossWave(n)) {
       toast("BOSS  " + defTitle(n));
       sfx(140, 0.22, "sawtooth", 0.06);
     } else {
-      toast("Wave " + n);
+      toast(
+        fresh.length && n > 1
+          ? "Wave " + n + "  ·  " + fresh.map((u) => u.name).join(" / ")
+          : "Wave " + n
+      );
       sfx(360, 0.1, "square", 0.04);
     }
+    buildShop();
   }
 
   function defTitle(n) {
@@ -516,7 +588,7 @@
     const h = run.hero;
     h.anim = "atk";
     h.animT = 0;
-    let dmg = h.dmg * (mult || 1) * rageMult();
+    let dmg = h.dmg * (mult || 1) * autoDmgMult();
     const crit = Math.random() < h.crit;
     if (crit) dmg *= 2;
     const targets = livingInRange(h.reach + 16, false).sort(
@@ -533,20 +605,21 @@
     sfx(crit ? 520 : 240, 0.06, "square", 0.05);
   }
 
-  function autoAttack() {
+  function autoAttack(fromEcho) {
     const h = run.hero;
     const c = classDef(h.klass);
     h.anim = "atk";
     h.animT = 0;
     if (c.style === "melee") {
       swing(1, { cleave: 0.48 });
+      if (!fromEcho && h.echo && Math.random() < h.echo) autoAttack(true);
       return;
     }
     const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= c.range);
     if (!t) return;
     const dir = t.x >= h.x ? 1 : -1;
     const crit = Math.random() < h.crit;
-    let dmg = h.dmg * rageMult();
+    let dmg = h.dmg * autoDmgMult();
     if (crit) dmg *= 2;
     if (c.proj === "fire") {
       shoot({
@@ -562,24 +635,25 @@
       shoot({ kind: "arrow", dir, dmg, crit, speed: 500 });
       sfx(crit ? 540 : 460, 0.05, "triangle", 0.04);
     }
+    if (!fromEcho && h.echo && Math.random() < h.echo) autoAttack(true);
   }
 
   function powerStrike() {
     const h = run.hero;
     if (state !== "fight" || h.strikeCd > 0) return;
     const c = classDef(h.klass);
-    h.strikeCd = c.strikeCd;
+    h.strikeCd = cdScale(c.strikeCd);
     h.anim = "atk";
     h.animT = 0;
     if (c.id === "warrior") {
-      swing(2.15, { stun: 0.55, knock: 18 });
+      swing(2.15 * (h.strikeMult || 1), { stun: 0.55, knock: 18 });
       shake = 8;
       return;
     }
     const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= c.range + 40);
     const dir = t && t.x < h.x ? -1 : 1;
     const crit = Math.random() < h.crit;
-    let dmg = h.dmg * rageMult();
+    let dmg = h.dmg * heroDmgMult();
     if (c.id === "mage") {
       dmg *= 2.2;
       if (crit) dmg *= 2;
@@ -635,7 +709,7 @@
     floatText(h.x, groundY() - 200, "+" + fmt(heal), "#ff8a4a");
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 170) {
-        hitEnemy(e, h.dmg * 0.45 * rageMult(), false);
+        hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
         applyDot(e, { kind: "burn", dps: h.dmg * 0.32, dur: 2.8 });
       }
     }
@@ -684,7 +758,7 @@
 
   function whirlHit() {
     const h = run.hero;
-    const dmg = h.dmg * 0.85 * rageMult();
+    const dmg = h.dmg * 0.85 * autoDmgMult();
     const targets = run.enemies.filter((e) => Math.abs(e.x - h.x) < WHIRL_RANGE);
     for (const e of targets) hitEnemy(e, dmg, false);
     shake = 7;
@@ -695,7 +769,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0 || h.whirl) return;
-    h.skillCd[1] = spec.cd || 6;
+    h.skillCd[1] = cdScale(spec.cd || 6);
     h.whirl = { t: 0, next: 0, left: 3 };
     h.anim = "atk";
     h.animT = 0;
@@ -705,7 +779,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0) return;
-    h.skillCd[1] = spec.cd;
+    h.skillCd[1] = cdScale(spec.cd);
     h.inferno = { t: 0, next: 0, left: 3, x: h.x + 150 };
     h.anim = "atk";
     h.animT = 0;
@@ -715,7 +789,7 @@
   function infernoPulse() {
     const h = run.hero;
     const x = h.inferno.x;
-    const dmg = h.dmg * 0.95 * rageMult();
+    const dmg = h.dmg * 0.95 * autoDmgMult();
     for (const e of [...run.enemies]) {
       if (e.x > h.x + 20 && e.x < x + 160) {
         hitEnemy(e, dmg, false);
@@ -732,9 +806,9 @@
     const spec = classDef(h.klass).skills[2];
     if (state !== "fight" || h.skillCd[2] > 0 || h.mana < spec.mana) return;
     h.mana -= spec.mana;
-    h.skillCd[2] = spec.cd;
+    h.skillCd[2] = cdScale(spec.cd);
     h.novaT = 0.45;
-    const dmg = h.dmg * 0.55 * rageMult();
+    const dmg = h.dmg * 0.55 * autoDmgMult();
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 300) {
         hitEnemy(e, dmg, false);
@@ -750,7 +824,7 @@
     const h = run.hero;
     const c = classDef(h.klass);
     if (state !== "fight" || h.skillCd[1] > 0) return;
-    h.skillCd[1] = c.skills[1].cd;
+    h.skillCd[1] = cdScale(c.skills[1].cd);
     h.anim = "atk";
     h.animT = 0;
     const targets = [...run.enemies]
@@ -762,7 +836,7 @@
         shoot({
           kind: "arrow",
           dir: 1,
-          dmg: h.dmg * 0.7 * rageMult(),
+          dmg: h.dmg * 0.7 * autoDmgMult(),
           speed: 520,
           y: groundY() - 70 - i * 16,
         });
@@ -772,7 +846,7 @@
         const t = targets[i % targets.length];
         const dir = t.x >= h.x ? 1 : -1;
         const crit = Math.random() < h.crit * 0.6;
-        let dmg = h.dmg * 0.74 * rageMult();
+        let dmg = h.dmg * 0.74 * autoDmgMult();
         if (crit) dmg *= 2;
         shoot({
           kind: "arrow",
@@ -792,7 +866,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[2];
     if (state !== "fight" || h.skillCd[2] > 0) return;
-    h.skillCd[2] = spec.cd;
+    h.skillCd[2] = cdScale(spec.cd);
     if (!run.wolf || run.wolf.hp <= 0) {
       run.wolf = makeWolf();
       run.wolf.x = h.x + 50;
@@ -946,7 +1020,7 @@
       for (const e of [...run.enemies]) {
         if (!e.charged && Math.abs(e.x - h.x) < 42) {
           e.charged = true;
-          hitEnemy(e, h.dmg * 0.8 * rageMult(), false);
+          hitEnemy(e, h.dmg * 0.8 * autoDmgMult(), false);
         }
       }
       if (h.x >= FORWARD_X) {
@@ -993,7 +1067,7 @@
           ? melee.length
           : run.enemies.some((e) => Math.abs(e.x - h.x) <= c.range);
       if (ready) {
-        const rate = h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1);
+        const rate = h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1) * (lastStanding() ? 1.2 : 1);
         h.atkT -= dt * rate;
         if (h.atkT <= 0) {
           h.atkT = 1;
@@ -1474,10 +1548,10 @@
     const haste = h.buffs.haste > 0;
     const dmgEl = document.getElementById("st-dmg");
     const spdEl = document.getElementById("st-spd");
-    dmgEl.textContent = fmt(h.dmg * (rage ? 1.35 : 1));
-    dmgEl.classList.toggle("hot", rage);
-    spdEl.textContent = (h.atkRate * (haste ? 1.35 : 1)).toFixed(2) + "/s";
-    spdEl.classList.toggle("hot", haste);
+    dmgEl.textContent = fmt(h.dmg * (rage ? 1.35 : 1) * (lastStanding() ? 1.25 : 1));
+    dmgEl.classList.toggle("hot", rage || lastStanding());
+    spdEl.textContent = (h.atkRate * (haste ? 1.35 : 1) * (lastStanding() ? 1.2 : 1)).toFixed(2) + "/s";
+    spdEl.classList.toggle("hot", haste || lastStanding());
     document.getElementById("st-armor").textContent = (Math.round(h.armor * 10) / 10).toString();
     document.getElementById("st-crit").textContent = Math.round(h.crit * 100) + "%";
     document.getElementById("st-leech").textContent = Math.round(h.leech * 100) + "%";
@@ -1487,6 +1561,8 @@
     if (rage) buffs.push("Rage " + Math.ceil(h.buffs.rage) + "s");
     if (haste) buffs.push("Haste " + Math.ceil(h.buffs.haste) + "s");
     if (wolfAlive() && run.wolf.taunt > 0) buffs.push("Wolf taunt");
+    if (lastStanding()) buffs.push("Last Stand");
+    if (h.secondWind > 0) buffs.push("Wind " + h.secondWind);
     const buffEl = document.getElementById("st-buffs");
     buffEl.textContent = buffs.length ? buffs.join(" · ") : "—";
     buffEl.classList.toggle("hot", buffs.length > 0);
@@ -1527,11 +1603,30 @@
 
   function buildShop() {
     const box = document.getElementById("upgrades");
+    if (!box) return;
     box.innerHTML = "";
+    const wave = Math.max(1, run.wave || 1);
+    const next = nextShopUnlockWave(wave);
+    const nextEl = document.getElementById("shop-next");
+    if (nextEl) {
+      nextEl.textContent = next
+        ? "Next crate opens at wave " + next + "."
+        : "The armory is fully open.";
+    }
     for (const u of RUN_UPGRADES) {
+      const need = shopUnlockWave(u);
+      const open = wave >= need;
+      if (!open && need !== next) continue;
       const lv = run.levels[u.id] || 0;
       const row = document.createElement("div");
-      row.className = "row";
+      row.className = "row" + (open ? "" : " locked");
+      if (!open) {
+        row.innerHTML = `<div class="name">${u.icon} ${u.name}</div>
+          <button type="button" disabled>wave ${need}</button>
+          <div class="desc">${u.desc}</div>`;
+        box.appendChild(row);
+        continue;
+      }
       row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span></div>
         <button id="buy-${u.id}" type="button">${fmt(u.cost(lv))}</button>
         <div class="desc">${u.desc}</div>`;
@@ -1541,41 +1636,87 @@
     syncClassChrome();
   }
 
+  function applyPack(hero) {
+    if (run.wolf && run.wolf.hp > 0) {
+      run.wolf.maxHp += 16;
+      run.wolf.hp += 16;
+      run.wolf.dmg += 2;
+    } else if (hero.klass !== "ranger") {
+      hero.maxHp += 20;
+      hero.hp = Math.min(hero.maxHp, hero.hp + 20);
+    }
+  }
+
   function buyRun(id) {
     const u = RUN_UPGRADES.find((x) => x.id === id);
     const lv = run.levels[id] || 0;
     const c = u.cost(lv);
     if (run.gold < c || state !== "fight") return;
+    if (run.wave < shopUnlockWave(u)) return;
     run.gold -= c;
     run.levels[id] = lv + 1;
     u.apply(run.hero);
+    if (u.id === "pack") applyPack(run.hero);
     buildShop();
     sfx(560, 0.08, "square", 0.05);
   }
 
+  function buyPrestige(id) {
+    const u = PRESTIGE_TREE.find((n) => n.id === id);
+    if (!u) return false;
+    const lv = persist.prest[u.id] || 0;
+    if (lv >= (u.max || 8)) return false;
+    if (!prestReqMet(u, persist.prest) && lv === 0) return false;
+    const c = u.cost(lv);
+    if (persist.glory < c) return false;
+    persist.glory -= c;
+    persist.prest[u.id] = lv + 1;
+    save();
+    const bank = document.getElementById("glory-bank");
+    if (bank) bank.textContent = fmt(persist.glory);
+    document.getElementById("glory").textContent = fmt(persist.glory);
+    buildPrestige();
+    sfx(500, 0.1, "sine", 0.05);
+    return true;
+  }
+
   function buildPrestige() {
     const box = document.getElementById("prestige-shop");
+    if (!box) return;
+    box.className = "tree";
     box.innerHTML = "";
-    for (const u of PRESTIGE_UPGRADES) {
-      const lv = persist.prest[u.id] || 0;
-      const c = u.cost(lv);
-      const row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = `<div class="name">${u.name} <span style="color:#8ea0b5">${lv}</span></div>
-        <button type="button">${c} glory</button>
-        <div class="desc">${u.desc}</div>`;
-      box.appendChild(row);
-      row.querySelector("button").onclick = () => {
-        if (persist.glory < c) return;
-        persist.glory -= c;
-        persist.prest[u.id] = lv + 1;
-        save();
-        document.getElementById("glory").textContent = fmt(persist.glory);
-        buildPrestige();
-        sfx(500, 0.1, "sine", 0.05);
-      };
-      row.querySelector("button").disabled = persist.glory < c;
-    }
+    const bank = document.getElementById("glory-bank");
+    if (bank) bank.textContent = fmt(persist.glory);
+    const cols = [[], [], []];
+    for (const n of PRESTIGE_TREE) cols[n.col].push(n);
+    const titles = ["Vital", "Might", "Fortune"];
+    cols.forEach((list, i) => {
+      const col = document.createElement("div");
+      col.className = "tree-col";
+      col.innerHTML = `<h3>${titles[i]}</h3>`;
+      list
+        .sort((a, b) => a.row - b.row)
+        .forEach((u) => {
+          const lv = persist.prest[u.id] || 0;
+          const open = prestReqMet(u, persist.prest);
+          const maxed = lv >= (u.max || 8);
+          const c = u.cost(lv);
+          const node = document.createElement("div");
+          node.className =
+            "tree-node" + (lv > 0 ? " owned" : open ? " open" : " locked");
+          const req = prestReqText(u);
+          const btnLabel = maxed ? "MAX" : c + " glory";
+          node.innerHTML = `<div class="name">${u.name} <span>${lv}/${u.max}</span></div>
+            <div class="desc">${u.desc}</div>
+            ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
+            <button type="button">${btnLabel}</button>`;
+          const btn = node.querySelector("button");
+          btn.disabled = maxed || !open || persist.glory < c;
+          btn.onclick = () => buyPrestige(u.id);
+          col.appendChild(node);
+        });
+      box.appendChild(col);
+    });
   }
 
   // --- loop / resize ---
@@ -1674,6 +1815,15 @@
     startRun,
     die,
     pickClass,
+    buyPrestige,
+    glory(n) {
+      persist.glory += n || 0;
+      save();
+      const bank = document.getElementById("glory-bank");
+      if (bank) bank.textContent = fmt(persist.glory);
+      document.getElementById("glory").textContent = fmt(persist.glory);
+      if (state === "dead") buildPrestige();
+    },
     kill() {
       if (run.hero) {
         run.hero.hp = 0;

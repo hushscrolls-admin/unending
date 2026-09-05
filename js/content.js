@@ -305,6 +305,7 @@ const RUN_UPGRADES = [
     name: "Iron",
     desc: "+2 damage",
     icon: "⚔",
+    unlockWave: 1,
     cost: (lv) => Math.floor(18 * Math.pow(1.38, lv)),
     apply: (hero) => {
       hero.dmg += 2;
@@ -315,6 +316,7 @@ const RUN_UPGRADES = [
     name: "Swift",
     desc: "+8% attack speed",
     icon: "»",
+    unlockWave: 1,
     cost: (lv) => Math.floor(20 * Math.pow(1.4, lv)),
     apply: (hero) => {
       hero.atkRate *= 1.08;
@@ -325,6 +327,7 @@ const RUN_UPGRADES = [
     name: "Vitality",
     desc: "+25 max HP, heal 25",
     icon: "♥",
+    unlockWave: 1,
     cost: (lv) => Math.floor(22 * Math.pow(1.36, lv)),
     apply: (hero) => {
       hero.maxHp += 25;
@@ -336,6 +339,7 @@ const RUN_UPGRADES = [
     name: "Guard",
     desc: "+1.5 armor",
     icon: "🛡",
+    unlockWave: 5,
     cost: (lv) => Math.floor(24 * Math.pow(1.4, lv)),
     apply: (hero) => {
       hero.armor += 1.5;
@@ -346,6 +350,7 @@ const RUN_UPGRADES = [
     name: "Fortune",
     desc: "+12% gold find",
     icon: "●",
+    unlockWave: 5,
     cost: (lv) => Math.floor(25 * Math.pow(1.42, lv)),
     apply: (hero) => {
       hero.goldFind += 0.12;
@@ -356,6 +361,7 @@ const RUN_UPGRADES = [
     name: "Leech",
     desc: "+3% lifesteal",
     icon: "◈",
+    unlockWave: 9,
     cost: (lv) => Math.floor(28 * Math.pow(1.45, lv)),
     apply: (hero) => {
       hero.leech += 0.03;
@@ -366,51 +372,321 @@ const RUN_UPGRADES = [
     name: "Edge",
     desc: "+6% crit chance",
     icon: "✦",
+    unlockWave: 9,
     cost: (lv) => Math.floor(30 * Math.pow(1.45, lv)),
     apply: (hero) => {
       hero.crit += 0.06;
     },
   },
+  {
+    id: "reach",
+    name: "Reach",
+    desc: "+24 strike / shot range",
+    icon: "↦",
+    unlockWave: 9,
+    cost: (lv) => Math.floor(32 * Math.pow(1.42, lv)),
+    apply: (hero) => {
+      hero.reach += 24;
+      hero.range += 24;
+    },
+  },
+  {
+    id: "tempest",
+    name: "Tempest",
+    desc: "−8% skill cooldowns",
+    icon: "↯",
+    unlockWave: 13,
+    cost: (lv) => Math.floor(34 * Math.pow(1.46, lv)),
+    apply: (hero) => {
+      hero.skillHaste = (hero.skillHaste || 0) + 0.08;
+    },
+  },
+  {
+    id: "cinder",
+    name: "Cinder",
+    desc: "Hits apply a short burn",
+    icon: "▴",
+    unlockWave: 13,
+    cost: (lv) => Math.floor(36 * Math.pow(1.48, lv)),
+    apply: (hero) => {
+      hero.cinder = (hero.cinder || 0) + 1;
+    },
+  },
+  {
+    id: "sharpen",
+    name: "Sharpen",
+    desc: "+18% class strike damage",
+    icon: "✸",
+    unlockWave: 13,
+    cost: (lv) => Math.floor(36 * Math.pow(1.48, lv)),
+    apply: (hero) => {
+      hero.strikeMult = (hero.strikeMult || 1) * 1.18;
+    },
+  },
+  {
+    id: "echo",
+    name: "Echo",
+    desc: "12% chance to repeat an auto",
+    icon: "⟳",
+    unlockWave: 17,
+    cost: (lv) => Math.floor(40 * Math.pow(1.5, lv)),
+    apply: (hero) => {
+      hero.echo = (hero.echo || 0) + 0.12;
+    },
+  },
+  {
+    id: "pack",
+    name: "Pack",
+    desc: "Wolf +25% HP and +2 dmg, or +20 HP",
+    icon: "🐺",
+    unlockWave: 17,
+    cost: (lv) => Math.floor(38 * Math.pow(1.48, lv)),
+    apply: (hero) => {
+      hero.pack = (hero.pack || 0) + 1;
+    },
+  },
 ];
 
-const PRESTIGE_UPGRADES = [
+const PRESTIGE_TREE = [
   {
     id: "blood",
     name: "Blood",
+    branch: "Vital",
+    col: 0,
+    row: 0,
+    max: 8,
     desc: "+20 starting HP each run",
     cost: (lv) => 1 + lv * 2,
+    apply: (h, lv) => {
+      h.maxHp += lv * 20;
+      h.hp += lv * 20;
+    },
   },
   {
     id: "might",
     name: "Might",
+    branch: "Might",
+    col: 1,
+    row: 0,
+    max: 8,
     desc: "+2 starting damage each run",
     cost: (lv) => 1 + lv * 2,
+    apply: (h, lv) => {
+      h.dmg += lv * 2;
+    },
   },
   {
     id: "purse",
     name: "Purse",
+    branch: "Fortune",
+    col: 2,
+    row: 0,
+    max: 8,
     desc: "+18 starting gold each run",
     cost: (lv) => 1 + lv * 2,
   },
   {
-    id: "greed",
-    name: "Greed",
-    desc: "+12% gold find each run",
+    id: "hide",
+    name: "Hide",
+    branch: "Vital",
+    col: 0,
+    row: 1,
+    max: 5,
+    req: [{ id: "blood", lv: 2 }],
+    desc: "+1.2 armor each run",
     cost: (lv) => 2 + lv * 2,
+    apply: (h, lv) => {
+      h.armor += lv * 1.2;
+    },
   },
   {
-    id: "fate",
-    name: "Fate",
-    desc: "+18% glory on death",
-    cost: (lv) => 2 + lv * 3,
+    id: "tempo",
+    name: "Tempo",
+    branch: "Might",
+    col: 1,
+    row: 1,
+    max: 5,
+    req: [{ id: "might", lv: 2 }],
+    desc: "+5% attack speed each run",
+    cost: (lv) => 2 + lv * 2,
+    apply: (h, lv) => {
+      h.atkRate *= Math.pow(1.05, lv);
+    },
+  },
+  {
+    id: "greed",
+    name: "Greed",
+    branch: "Fortune",
+    col: 2,
+    row: 1,
+    max: 5,
+    req: [{ id: "purse", lv: 2 }],
+    desc: "+12% gold find each run",
+    cost: (lv) => 2 + lv * 2,
+    apply: (h, lv) => {
+      h.goldFind += lv * 0.12;
+    },
+  },
+  {
+    id: "secondwind",
+    name: "Second Wind",
+    branch: "Vital",
+    col: 0,
+    row: 2,
+    max: 2,
+    req: [{ id: "hide", lv: 2 }],
+    desc: "At fatal or 30% HP, heal 26% (charges = ranks)",
+    cost: (lv) => 4 + lv * 3,
+    apply: (h, lv) => {
+      h.secondWind = lv;
+    },
+  },
+  {
+    id: "execute",
+    name: "Execute",
+    branch: "Might",
+    col: 1,
+    row: 2,
+    max: 3,
+    req: [{ id: "tempo", lv: 2 }],
+    desc: "+18% damage to foes below 40% HP",
+    cost: (lv) => 4 + lv * 3,
+    apply: (h, lv) => {
+      h.execute = lv;
+    },
   },
   {
     id: "spark",
     name: "Spark",
+    branch: "Fortune",
+    col: 2,
+    row: 2,
+    max: 5,
+    req: [{ id: "greed", lv: 2 }],
     desc: "+0.7 mana regen each run",
     cost: (lv) => 2 + lv * 2,
+    apply: (h, lv) => {
+      h.mana += lv * 5;
+      h.maxMana += lv * 10;
+      h.manaRegen += lv * 0.7;
+    },
+  },
+  {
+    id: "thorns",
+    name: "Thorns",
+    branch: "Vital",
+    col: 0,
+    row: 3,
+    max: 3,
+    req: [{ id: "secondwind", lv: 1 }],
+    desc: "Reflect 10% of melee hits",
+    cost: (lv) => 5 + lv * 3,
+    apply: (h, lv) => {
+      h.thorns = lv;
+    },
+  },
+  {
+    id: "overkill",
+    name: "Overkill",
+    branch: "Might",
+    col: 1,
+    row: 3,
+    max: 2,
+    req: [{ id: "execute", lv: 1 }],
+    desc: "Wasted damage splashes to the nearest foe",
+    cost: (lv) => 5 + lv * 3,
+    apply: (h, lv) => {
+      h.overkill = lv;
+    },
+  },
+  {
+    id: "fate",
+    name: "Fate",
+    branch: "Fortune",
+    col: 2,
+    row: 3,
+    max: 5,
+    req: [{ id: "spark", lv: 2 }],
+    desc: "+18% glory on death",
+    cost: (lv) => 2 + lv * 3,
+  },
+  {
+    id: "laststand",
+    name: "Last Stand",
+    branch: "Vital",
+    col: 0,
+    row: 4,
+    max: 1,
+    req: [{ id: "thorns", lv: 1 }],
+    desc: "Below 28% HP: +25% damage and +20% speed",
+    cost: (lv) => 8 + lv * 4,
+    apply: (h, lv) => {
+      if (lv > 0) h.lastStand = true;
+    },
+  },
+  {
+    id: "bloodlust",
+    name: "Bloodlust",
+    branch: "Might",
+    col: 1,
+    row: 4,
+    max: 2,
+    req: [{ id: "overkill", lv: 1 }],
+    desc: "Kills grant a short Rage (1.6s / rank)",
+    cost: (lv) => 6 + lv * 4,
+    apply: (h, lv) => {
+      h.bloodlust = lv;
+    },
+  },
+  {
+    id: "heirloom",
+    name: "Heirloom",
+    branch: "Fortune",
+    col: 2,
+    row: 4,
+    max: 1,
+    req: [{ id: "fate", lv: 1 }],
+    desc: "Each run starts with Iron I already forged",
+    cost: (lv) => 7 + lv * 4,
+    apply: (h, lv) => {
+      if (lv > 0) h.heirloom = true;
+    },
   },
 ];
+
+const PRESTIGE_UPGRADES = PRESTIGE_TREE;
+
+function prestReqMet(node, prest) {
+  if ((prest[node.id] || 0) > 0) return true;
+  return (node.req || []).every((r) => (prest[r.id] || 0) >= r.lv);
+}
+
+function prestReqText(node) {
+  if (!node.req || !node.req.length) return "";
+  return node.req
+    .map((r) => {
+      const p = PRESTIGE_TREE.find((n) => n.id === r.id);
+      return (p ? p.name : r.id) + " " + r.lv;
+    })
+    .join(" · ");
+}
+
+function shopUnlockWave(u) {
+  return u.unlockWave || 1;
+}
+
+function nextShopUnlockWave(wave) {
+  let best = 0;
+  for (const u of RUN_UPGRADES) {
+    const w = shopUnlockWave(u);
+    if (w > wave && (!best || w < best)) best = w;
+  }
+  return best;
+}
+
+function shopUnlocksAt(wave) {
+  return RUN_UPGRADES.filter((u) => shopUnlockWave(u) === wave);
+}
 
 function waveCount(n) {
   return Math.min(5, Math.max(1, Math.ceil(n / 1.7)));

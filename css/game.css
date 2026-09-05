@@ -195,6 +195,93 @@ body {
   text-align: left;
 }
 
+#prestige-shop.tree {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 10px 12px;
+  width: min(920px, 96vw);
+}
+
+.tree-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tree-col h3 {
+  margin: 0 0 2px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  color: #d9a0ff;
+  font-weight: 400;
+}
+
+.tree-node {
+  padding: 8px 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #243044;
+  text-align: left;
+}
+
+.tree-node .name {
+  font-size: 20px;
+  color: #f0f4fa;
+}
+
+.tree-node .name span {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.tree-node .desc {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.2;
+  margin: 2px 0 6px;
+}
+
+.tree-node .req {
+  font-size: 14px;
+  color: #c07080;
+  margin-bottom: 6px;
+}
+
+.tree-node button {
+  font-family: inherit;
+  font-size: 16px;
+  background: var(--btn);
+  color: var(--ink);
+  border: 1px solid #556;
+  padding: 4px 8px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.tree-node button:hover:not(:disabled) {
+  background: var(--btn-hi);
+}
+
+.tree-node button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tree-node.open {
+  border-color: #c9a227;
+}
+
+.tree-node.owned {
+  border-color: #8a6ab0;
+}
+
+.tree-node.locked {
+  opacity: 0.48;
+}
+
+.row.locked {
+  opacity: 0.45;
+}
+
 .row {
   display: grid;
   grid-template-columns: 1fr auto;

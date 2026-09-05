@@ -19,11 +19,11 @@ Open `http://localhost:8765`.
 - The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
 - Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range, and extra waves wait if the road is already crowded.
 - Kills drop gold, mana, hearts, and short buffs (rage / haste).
-- Spend gold in the Armory during the fight.
+- Spend gold in the Armory during the fight. Wave 1 only stocks Iron / Swift / Vitality. Guard and Fortune open at 5, leech / edge / reach at 9, Tempest / Cinder / Sharpen at 13, Echo / Pack at 17.
 - **Click** the battlefield or press **Space** for the class strike.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
-- On death you keep Glory and buy permanent starting bonuses, then rise again as any class. Gold and run upgrades reset.
+- On death you keep Glory and spend it on the Blood Tree (Vital / Might / Fortune). Roots are the old flat bonuses; deeper nodes unlock charges, execute, thorns, splash, Last Stand, Bloodlust, and Heirloom. Then rise again as any class. Gold and run upgrades reset. Old Blood / Might / Purse / Greed / Spark / Fate ranks still apply.
 
 ## Classes
 
@@ -34,6 +34,16 @@ Open `http://localhost:8765`.
 | **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (25 mana) — heal you and the wolf (revives if down) | Volley (7s) — five arrows | Sic 'em (8s) — wolf leaps the back line and taunts melee |
 
 The Ranger's wolf is a companion tank. Melee prefers the closer target; Sic 'em forces them onto the wolf for a few seconds. If the wolf falls, Field Dress or Sic 'em brings it back.
+
+## Blood Tree
+
+Three branches. Old saves keep Blood / Might / Purse / Greed / Spark / Fate ranks.
+
+| Branch | Path |
+|---|---|
+| **Vital** | Blood → Hide → Second Wind → Thorns → Last Stand |
+| **Might** | Might → Tempo → Execute → Overkill → Bloodlust |
+| **Fortune** | Purse → Greed → Spark → Fate → Heirloom |
 
 ## Controls
 
