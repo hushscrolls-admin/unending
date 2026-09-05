@@ -333,15 +333,43 @@
     return hero;
   }
 
-  function makeWolf() {
+  function wolfBaseStats() {
     const pack = (run.hero && run.hero.pack) || 0;
-    const hp = (60 + prestLv("blood") * 10) * (1 + pack * 0.25);
+    const wave = Math.max(1, run.wave || 1);
+    const scale = 1 + Math.min(1.25, (wave - 1) * 0.095);
+    const hp = Math.round((88 + prestLv("blood") * 12) * scale * (1 + pack * 0.25));
     return {
-      x: HOME_X + 72,
       hp,
       maxHp: hp,
-      dmg: 5 + prestLv("might") + pack * 2,
-      armor: 3 + prestLv("hide") * 0.8,
+      dmg: 6 + prestLv("might") + pack * 2 + Math.min(3, (wave - 1) * 0.18),
+      armor: 4.5 + prestLv("hide") * 0.8 + Math.min(5.5, (wave - 1) * 0.38) + pack * 0.5,
+      regen: 1.8 + Math.min(2.8, (wave - 1) * 0.16),
+    };
+  }
+
+  function syncWolfVitals(keepRatio) {
+    const w = run.wolf;
+    if (!w) return w;
+    const next = wolfBaseStats();
+    const ratio = keepRatio && w.maxHp > 0 ? Math.max(0, w.hp) / w.maxHp : 1;
+    w.maxHp = next.maxHp;
+    w.hp = w.hp <= 0 && keepRatio ? 0 : Math.round(next.maxHp * ratio);
+    if (w.hp > 0) w.hp = Math.max(1, Math.min(w.maxHp, w.hp));
+    w.armor = next.armor;
+    w.dmg = next.dmg;
+    w.regen = next.regen;
+    return w;
+  }
+
+  function makeWolf() {
+    const stats = wolfBaseStats();
+    return {
+      x: HOME_X + 72,
+      hp: stats.hp,
+      maxHp: stats.maxHp,
+      dmg: stats.dmg,
+      armor: stats.armor,
+      regen: stats.regen,
       atkRate: 0.9,
       atkT: 0,
       reach: 72,
@@ -352,6 +380,22 @@
       deadT: 0,
       leap: null,
       taunt: 0,
+    };
+  }
+
+  function wolfSnapshot() {
+    const w = run.wolf;
+    if (!w) return null;
+    const base = wolfBaseStats();
+    return {
+      hp: Math.round(w.hp),
+      maxHp: Math.round(w.maxHp),
+      armor: Math.round(w.armor * 10) / 10,
+      dmg: Math.round(w.dmg * 10) / 10,
+      regen: Math.round((w.regen || 0) * 10) / 10,
+      down: w.hp <= 0,
+      wave: run.wave,
+      expect: base,
     };
   }
 
@@ -518,7 +562,7 @@
   function hitWolf(amount, crit) {
     const w = run.wolf;
     if (!w || w.hp <= 0) return;
-    const d = dmgIn(amount, w.armor);
+    const d = dmgIn(amount, w.armor + (w.taunt > 0 ? 4 : 0));
     w.hp -= d;
     w.flash = 0.12;
     floatText(
@@ -607,6 +651,9 @@
     );
     if (h && h.leech > 0 && !fromDot) {
       healHero(d * h.leech);
+      if (wolfAlive()) {
+        run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + d * h.leech);
+      }
     }
     if (e.hp > 0 && h && h.cinder && !fromDot) {
       applyDot(e, { kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 });
@@ -667,6 +714,7 @@
 
   function spawnWave() {
     const n = run.wave;
+    syncWolfVitals(true);
     const roster = waveRoster(n);
     const sc = waveScale(n);
     const h = run.hero;
@@ -934,11 +982,11 @@
       if (run.wolf.hp <= 0) {
         const fresh = makeWolf();
         fresh.x = h.x + 60;
-        fresh.hp = fresh.maxHp * 0.45;
+        fresh.hp = Math.round(fresh.maxHp * 0.55);
         run.wolf = fresh;
         floatText(fresh.x, groundY() - 150, "UP", "#c9e6a0");
       } else {
-        const wh = run.wolf.maxHp * 0.42;
+        const wh = run.wolf.maxHp * 0.5;
         run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + wh);
         floatText(run.wolf.x, groundY() - 150, "+" + fmt(wh), "#8fd18f");
       }
@@ -1144,6 +1192,7 @@
       w.deadT = Math.max(0, w.deadT - dt);
       return;
     }
+    if (w.regen) w.hp = Math.min(w.maxHp, w.hp + w.regen * dt);
     if (w.leap) {
       w.leap.t += dt;
       const u = Math.min(1, w.leap.t / 0.28);
@@ -1154,6 +1203,7 @@
           if (Math.abs(e.x - w.x) < 70) {
             hitEnemy(e, w.dmg * 1.5, false);
             applyCc(e, 0.35);
+            w.hp = Math.min(w.maxHp, w.hp + w.dmg * 0.16);
           }
         }
       }
@@ -1174,6 +1224,8 @@
         w.anim = "atk";
         w.animT = 0;
         hitEnemy(prey, w.dmg, false);
+        const sip = Math.max(0, w.dmg * 0.16);
+        w.hp = Math.min(w.maxHp, w.hp + sip);
         sfx(210, 0.05, "square", 0.03);
       }
     } else {
@@ -1371,7 +1423,8 @@
             );
             if (!hurt && e.hp < e.maxHp - 1) hurt = e;
             if (hurt) {
-              const amt = allyHealAmount(e.def, run.wave);
+              const healers = run.enemies.filter((o) => o.def.heal && o.hp > 0).length;
+              const amt = allyHealAmount(e.def, run.wave, healers);
               hurt.hp = Math.min(hurt.maxHp, hurt.hp + amt);
               clampVitals(hurt, { fallback: hurt.maxHp, cap: 4000 });
               e.healTarget = hurt;
@@ -2301,9 +2354,7 @@
 
   function applyPack(hero) {
     if (run.wolf && run.wolf.hp > 0) {
-      run.wolf.maxHp += 16;
-      run.wolf.hp += 16;
-      run.wolf.dmg += 2;
+      syncWolfVitals(true);
     } else if (hero.klass !== "ranger") {
       hero.maxHp += 20;
       hero.hp = Math.min(hero.maxHp, hero.hp + 20);
@@ -2527,6 +2578,21 @@
     },
     tree() {
       return snapshotPersist();
+    },
+    wolf() {
+      return wolfSnapshot();
+    },
+    healPreview() {
+      const healers = run.enemies.filter((e) => e.def && e.def.heal && e.hp > 0);
+      const def = (healers[0] && healers[0].def) || ENEMIES.healer;
+      const amt = allyHealAmount(def, run.wave, healers.length || 1);
+      return {
+        wave: run.wave,
+        healers: healers.length,
+        amount: Math.round(amt * 10) / 10,
+        rate: def.healRate,
+        perSec: Math.round((amt / Math.max(0.1, def.healRate)) * 10) / 10,
+      };
     },
     checkVitals() {
       const h = run.hero;

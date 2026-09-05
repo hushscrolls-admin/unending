@@ -180,8 +180,8 @@ const ENEMIES = {
     gold: 15,
     magic: 7,
     color: "#c9a227",
-    heal: 7,
-    healRate: 3.2,
+    heal: 6,
+    healRate: 3.7,
     healRange: 168,
   },
   assassin: {
@@ -288,8 +288,8 @@ const ENEMIES = {
     gold: 80,
     magic: 22,
     color: "#d07030",
-    heal: 9,
-    healRate: 2.9,
+    heal: 7,
+    healRate: 3.4,
     healRange: 180,
     projectile: "bolt",
     projSpeed: 260,
@@ -773,7 +773,10 @@ function waveScale(n) {
   };
 }
 
-function allyHealAmount(def, wave) {
+function allyHealAmount(def, wave, healerCount) {
   const n = Math.max(1, wave || 1);
-  return (def.heal || 0) * (1 + (n - 1) * 0.055);
+  const raw = (def.heal || 0) * (1 + (n - 1) * 0.028);
+  const others = Math.max(0, (healerCount || 1) - 1);
+  const pile = 1 / (1 + 0.45 * others);
+  return raw * pile;
 }
