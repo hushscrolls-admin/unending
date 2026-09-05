@@ -535,7 +535,9 @@
 
   function hitHero(amount, srcX, crit) {
     const h = run.hero;
-    const d = dmgIn(amount, h.armor);
+    let armor = h.armor;
+    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) armor += 1.2;
+    const d = dmgIn(amount, armor);
     h.hp -= d;
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
     h.flash = 0.12;
@@ -1665,14 +1667,16 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const tw = Math.ceil(ctx.measureText(label).width) + 10;
-    const ty = y - 12;
+    const side = o.chipSide || 0;
+    const cx = side ? x + side * (w / 2 + tw / 2 + 7) : x;
+    const cy = side ? y + hgt / 2 : y - 12;
     ctx.fillStyle = "rgba(6, 4, 2, 0.94)";
     ctx.strokeStyle = o.urgent ? "#ffe27a" : "#4a3820";
     ctx.lineWidth = 1.6;
-    ctx.fillRect(Math.round(x - tw / 2), Math.round(ty - 8), tw, 16);
-    ctx.strokeRect(Math.round(x - tw / 2) + 0.5, Math.round(ty - 8) + 0.5, tw - 1, 15);
+    ctx.fillRect(Math.round(cx - tw / 2), Math.round(cy - 8), tw, 16);
+    ctx.strokeRect(Math.round(cx - tw / 2) + 0.5, Math.round(cy - 8) + 0.5, tw - 1, 15);
     ctx.fillStyle = "#f4e6c8";
-    ctx.fillText(label, x, ty + 1);
+    ctx.fillText(label, cx, cy + 1);
     ctx.restore();
   }
 
@@ -1681,10 +1685,11 @@
     const placed = [];
     for (const u of sorted) {
       let lane = 0;
-      while (placed.some((p) => p.lane === lane && Math.abs(p.x - u.x) < 56) && lane < 5) {
+      while (placed.some((p) => p.lane === lane && Math.abs(p.x - u.x) < 86) && lane < 6) {
         lane += 1;
       }
       u.lane = lane;
+      u.chipSide = lane === 0 ? 0 : lane % 2 === 0 ? 1 : -1;
       placed.push({ x: u.x, lane });
     }
     return units;
@@ -1724,10 +1729,10 @@
   function drawWorldBars(gy) {
     const h = run.hero;
     const pack = [];
-    if (run.wolf && run.wolf.hp > 0 && (state === "fight" || state === "dead")) {
+    if (run.wolf && run.wolf.hp > 0 && state === "fight") {
       pack.push({
         x: run.wolf.x,
-        y: gy - 122,
+        y: gy - 98,
         w: 80,
         h: 10,
         hp: run.wolf.hp,
@@ -1741,7 +1746,7 @@
       const hgt = 150 * (e.def.scale || 1);
       pack.push({
         x: e.x,
-        y: gy - hgt - 22,
+        y: gy - hgt + 8,
         w: e.def.boss ? 118 : 76,
         h: e.def.boss ? 11 : 9,
         hp: e.hp,
@@ -1753,13 +1758,14 @@
     assignBarLanes(pack);
     pack.sort((a, b) => a.lane - b.lane);
     for (const b of pack) {
-      drawHpBar(sx(b.x) + b.lane * 7, b.y - b.lane * 18, b.w, b.hp, b.max, b.color, {
+      drawHpBar(sx(b.x) + b.lane * 16 * (b.chipSide || 1), b.y - b.lane * 28, b.w, b.hp, b.max, b.color, {
         h: b.h,
         label: b.label,
+        chipSide: b.chipSide,
       });
     }
-    if (h && (state === "fight" || state === "dead")) {
-      drawHpBar(sx(h.x), gy - 226, 104, h.hp, h.maxHp, "#d45454", {
+    if (h && state === "fight") {
+      drawHpBar(sx(h.x), gy - 252, 104, h.hp, h.maxHp, "#d45454", {
         h: 13,
         label: "YOU",
         urgent: healUrgent(),
@@ -1865,12 +1871,33 @@
       ctx.restore();
       return;
     }
-    drawStamp("HEAL RANGE", sx(e.x), gy + 36, { color: "#ffe27a", border: "#c9a227" });
-    if (t && t.hp > 0) {
-      drawStamp("PATIENT", sx(t.x), gy - 78, {
+    drawStamp("HEAL RANGE", sx(e.x), gy + 42, {
+      color: "#1a1208",
+      bg: "#ffe27a",
+      border: "#fff4a8",
+      font: "bold 16px VT323, monospace",
+      h: 20,
+    });
+  }
+
+  function drawPatientStamps(gy) {
+    const seen = [];
+    for (const e of run.enemies) {
+      if (!e.def.heal) continue;
+      const t = e.healTarget;
+      if (!t || t.hp <= 0) continue;
+      if (seen.some((p) => p === t)) continue;
+      seen.push(t);
+      const self = t === e;
+      const hot = (e.healFlash || 0) > 0.05;
+      const py = self || (t.igniteFlash || 0) > 0.25 ? gy - 58 : gy + 20;
+      drawStamp("PATIENT", sx(t.x), py, {
         color: "#1a1208",
-        bg: "#ffe27a",
-        border: "#fff4a8",
+        bg: hot ? "#fff4a8" : "#ffe27a",
+        border: "#fffef0",
+        font: "bold 20px VT323, monospace",
+        h: 24,
+        pad: 9,
       });
     }
   }
@@ -1954,7 +1981,7 @@
       ctx.fillRect(sx(e.x) + ox - 2, gy - 36 + oy, 4, 7);
     }
     ctx.restore();
-    drawStamp("BURN " + Math.ceil(burn.t) + "s", sx(e.x), gy - 86, {
+    drawStamp("BURN " + Math.ceil(burn.t) + "s", sx(e.x), gy - 128, {
       color: "#fff0d8",
       bg: "#5a180c",
       border: "#ff8a3a",
@@ -2140,43 +2167,46 @@
       if (e.def.heal) drawHealVfx(e, gy, false);
     }
 
-    clipPlay(() => {
-      drawWorldBars(gy);
-      for (const e of run.enemies) {
-        if (e.def.heal) drawHealVfx(e, gy, true);
-      }
-      drawWolfTags(gy);
-      drawHeroCdPips(gy);
-      if (h && h.cauterizeT > 0) {
-        drawStamp("CAUTERIZE", sx(h.x), gy - 248, {
-          color: "#1a1008",
-          bg: "#ff8a3a",
-          border: "#ffe27a",
-          font: "bold 22px VT323, monospace",
-          h: 24,
-        });
-      }
-      if (h && h.healFlash > 0 && !(h.cauterizeT > 0)) {
-        drawStamp("HEAL", sx(h.x), gy - 248, {
-          color: "#102010",
-          bg: "#8fd18f",
-          border: "#d8f0a8",
-          font: "bold 20px VT323, monospace",
-          h: 22,
-        });
-      }
-      for (const e of run.enemies) {
-        if ((e.igniteFlash || 0) > 0.25) {
-          drawStamp("IGNITE", sx(e.x), gy - 96, {
-            color: "#fff4e0",
-            bg: "#7a1808",
-            border: "#ff8a3a",
-            font: "bold 18px VT323, monospace",
-            h: 20,
+    if (state === "fight") {
+      clipPlay(() => {
+        drawWorldBars(gy);
+        for (const e of run.enemies) {
+          if (e.def.heal) drawHealVfx(e, gy, true);
+        }
+        drawWolfTags(gy);
+        drawHeroCdPips(gy);
+        if (h && h.cauterizeT > 0) {
+          drawStamp("CAUTERIZE", sx(h.x), gy - 274, {
+            color: "#1a1008",
+            bg: "#ff8a3a",
+            border: "#ffe27a",
+            font: "bold 22px VT323, monospace",
+            h: 24,
           });
         }
-      }
-    });
+        if (h && h.healFlash > 0 && !(h.cauterizeT > 0)) {
+          drawStamp("HEAL", sx(h.x), gy - 274, {
+            color: "#102010",
+            bg: "#8fd18f",
+            border: "#d8f0a8",
+            font: "bold 20px VT323, monospace",
+            h: 22,
+          });
+        }
+        for (const e of run.enemies) {
+          if ((e.igniteFlash || 0) > 0.25) {
+            drawStamp("IGNITE", sx(e.x), gy - 110, {
+              color: "#fff4e0",
+              bg: "#7a1808",
+              border: "#ff8a3a",
+              font: "bold 18px VT323, monospace",
+              h: 20,
+            });
+          }
+        }
+        drawPatientStamps(gy);
+      });
+    }
 
     for (const r of fx.rings) {
       ctx.save();

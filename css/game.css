@@ -578,7 +578,7 @@ body {
 .overlay {
   position: absolute;
   inset: 0;
-  background: rgba(4, 6, 12, 0.72);
+  background: rgba(4, 6, 12, 0.9);
   display: flex;
   flex-direction: column;
   align-items: center;
