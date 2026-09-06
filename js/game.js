@@ -10,7 +10,9 @@
   const CHARGE_SPEED = 560;
   const RETURN_SPEED = 500;
   const SHOP_W = 332;
-  const LIVE_CAP = 8;
+  const LIVE_CAP = 7;
+  const DROP_PICK_R = 160;
+  const DROP_MAGNET_AGE = 0.32;
   const VITAL_CAP = 900;
   const HEAL_GOLD = "#ffe27a";
   const HEAL_GOLD_HOT = "#fff4a8";
@@ -673,7 +675,8 @@
       vy: -80 - Math.random() * 40,
       vx: (Math.random() - 0.5) * 60,
       value: value || 0,
-      life: 6,
+      life: 8,
+      age: 0,
     });
   }
 
@@ -1277,8 +1280,8 @@
   }
 
   function nextWaveDelay(wave) {
-    const early = wave < 5 ? 2.6 : wave < 9 ? 1.4 : 0;
-    return 6.0 + wave * 0.4 + early;
+    const early = wave < 6 ? 3.2 : wave < 10 ? 1.8 : 0.6;
+    return 6.6 + wave * 0.42 + early;
   }
 
   function charge() {
@@ -1812,16 +1815,44 @@
 
     for (const d of fx.drops) {
       d.life -= dt;
-      d.vy += 420 * dt;
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
+      d.age = (d.age || 0) + dt;
       const gy = groundY() - 28;
-      if (d.y > gy) {
-        d.y = gy;
-        d.vy *= -0.25;
-        d.vx *= 0.6;
+      if (d.age < DROP_MAGNET_AGE) {
+        d.vy += 420 * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        if (d.y > gy) {
+          d.y = gy;
+          d.vy *= -0.25;
+          d.vx *= 0.6;
+        }
+      } else {
+        let tx = h.x;
+        let ty = groundY() - 72;
+        if (run.wolf && run.wolf.hp > 0) {
+          const wd = Math.abs(d.x - run.wolf.x);
+          const hd = Math.abs(d.x - h.x);
+          if (wd + 24 < hd) {
+            tx = run.wolf.x;
+            ty = groundY() - 48;
+          }
+        }
+        const dx = tx - d.x;
+        const dy = ty - d.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const spd = 320 + Math.min(460, (d.age - DROP_MAGNET_AGE) * 220);
+        d.x += (dx / dist) * spd * dt;
+        d.y += (dy / dist) * spd * dt;
+        d.vx = 0;
+        d.vy = 0;
       }
-      if (Math.abs(d.x - h.x) < 50 && Math.abs(d.y - (groundY() - 60)) < 80) {
+      const nearHero = Math.abs(d.x - h.x) < DROP_PICK_R && Math.abs(d.y - (groundY() - 64)) < 110;
+      const nearWolf =
+        run.wolf &&
+        run.wolf.hp > 0 &&
+        Math.abs(d.x - run.wolf.x) < 80 &&
+        Math.abs(d.y - (groundY() - 48)) < 80;
+      if (nearHero || nearWolf) {
         pickup(d);
         d.life = 0;
       }
@@ -3094,6 +3125,12 @@
       run.gold += gold || 0;
       if (run.hero && mana) run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + mana);
       buildShop();
+    },
+    spawnDrop(kind, x) {
+      const k = kind || "heart";
+      const px = x != null ? x : (run.hero ? run.hero.x + 280 : 360);
+      drop(k, px, groundY() - 80);
+      return { kind: k, x: px, pickR: DROP_PICK_R, magnetAge: DROP_MAGNET_AGE };
     },
     jump(wave) {
       const dest = Math.max(1, Math.floor(wave || 1));

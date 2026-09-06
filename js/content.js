@@ -2227,7 +2227,7 @@ function heirloomUpgrade(klass) {
 }
 
 function waveCount(n) {
-  return Math.min(5, Math.max(1, Math.ceil((n + 1) / 2.2)));
+  return Math.min(5, Math.max(1, Math.ceil((n + 1) / 2.45)));
 }
 
 function isBossWave(n) {
@@ -2245,12 +2245,12 @@ function waveRoster(n) {
   const units = [];
   for (let i = 0; i < count; i++) {
     let type = "grunt";
-    if (n >= 14 && n % 3 === 1 && i === count - 1) type = "healer";
-    else if (n >= 12 && i === count - 1 && count >= 3) type = "mage";
-    else if (n >= 8 && i === count - 1) type = "archer";
-    else if (n >= 12 && i === count - 2 && count >= 4) type = "archer";
-    else if (n >= 9 && i % 4 === 3) type = "assassin";
-    else if (n >= 6 && i % 3 === 2) type = "berserk";
+    if (n >= 15 && n % 3 === 1 && i === count - 1) type = "healer";
+    else if (n >= 13 && i === count - 1 && count >= 3) type = "mage";
+    else if (n >= 9 && i === count - 1) type = "archer";
+    else if (n >= 13 && i === count - 2 && count >= 4) type = "archer";
+    else if (n >= 11 && i % 4 === 3) type = "assassin";
+    else if (n >= 7 && i % 3 === 2) type = "berserk";
     else if (n >= 3 && i % 2 === 1) type = "shield";
     units.push(type);
   }
@@ -2264,8 +2264,8 @@ function waveScale(n) {
   const mid = Math.max(0, Math.min(w - STAGE_LEN, STAGE_LEN));
   const late = Math.max(0, w - STAGE_LEN * 2);
   return {
-    hp: Math.pow(1.108, early) * Math.pow(1.125, mid) * Math.pow(1.14, late),
-    dmg: Math.pow(1.058, early) * Math.pow(1.07, mid) * Math.pow(1.08, late),
+    hp: Math.pow(1.085, early) * Math.pow(1.10, mid) * Math.pow(1.12, late),
+    dmg: Math.pow(1.045, early) * Math.pow(1.055, mid) * Math.pow(1.065, late),
     gold: 1 + (w - 1) * 0.1,
   };
 }
