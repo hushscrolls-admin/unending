@@ -144,6 +144,37 @@ body {
   backdrop-filter: blur(8px);
 }
 
+#shop.nudge {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold), 0 0 28px rgba(230, 193, 90, 0.55);
+  animation: shop-nudge-pulse 0.85s ease-in-out infinite;
+}
+
+#shop.nudge #shop-title {
+  color: #fff4a8;
+  animation: shop-title-flash 0.7s ease-in-out infinite;
+}
+
+@keyframes shop-nudge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--gold), 0 0 18px rgba(230, 193, 90, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 4px #fff4a8, 0 0 32px rgba(255, 244, 168, 0.65);
+  }
+}
+
+@keyframes shop-title-flash {
+  0%,
+  100% {
+    color: #fff4a8;
+  }
+  50% {
+    color: #ffe27a;
+  }
+}
+
 #shop h2 {
   margin: 0;
   font-family: "Press Start 2P", monospace;
@@ -448,7 +479,26 @@ body {
 
 .row.ready {
   border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold);
+  box-shadow: 0 0 0 2px var(--gold);
+  animation: first-buy-pulse 0.9s ease-in-out infinite;
+}
+
+.row.ready button {
+  background: var(--gold);
+  color: #1a1208;
+  font-weight: 700;
+  min-width: 96px;
+  box-shadow: 0 0 12px rgba(230, 193, 90, 0.6);
+}
+
+@keyframes first-buy-pulse {
+  0%,
+  100% {
+    background: rgba(230, 193, 90, 0.12);
+  }
+  50% {
+    background: rgba(230, 193, 90, 0.32);
+  }
 }
 
 .row {
