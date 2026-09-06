@@ -54,6 +54,9 @@
       enemies: [],
       boughtAny: false,
       shopNudge: false,
+      firstBuyHold: 28,
+      shopFreeze: 0,
+      shopNudgeAt: 0,
       placed: {},
       gateOpen: false,
       biomeFlash: 0,
@@ -602,6 +605,8 @@
         persist.refundNote = 0;
         save();
       }
+      armShopFreeze();
+      nudgeFirstBuy(true);
     }
     sfx(220, 0.12, "square", 0.04);
   }
@@ -700,15 +705,17 @@
   }
 
   function hitHero(amount, srcX, crit) {
+    if (firstBuyPending()) return;
     const h = run.hero;
     let armor = h.armor + (h.mendArmorT > 0 ? 1.4 * (h.mendArmor || 0) : 0);
     if (h.lowHpArmor && h.hp / h.maxHp <= 0.45) armor += 1.6 * h.lowHpArmor;
     if (h.klass === "mage" && run.wave > 0) {
-      if (run.wave <= 5) armor += 5.8;
-      else if (run.wave <= 8) armor += 2.4;
+      if (run.wave <= 5) armor += 6.4;
+      else if (run.wave <= 8) armor += 3.2;
     }
     let d = dmgIn(amount, armor);
-    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) d *= 0.78;
+    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) d *= 0.74;
+    else if (h.klass === "mage" && run.wave > 0 && run.wave <= 8) d *= 0.88;
     if (h.cauterizeWard > 0) d *= 0.78;
     if (h.waveHits > 0 && h.waveWard) {
       d *= Math.max(0.4, 1 - 0.16 * h.waveWard);
@@ -773,6 +780,7 @@
   }
 
   function hitWolf(amount, crit) {
+    if (firstBuyPending()) return;
     const w = run.wolf;
     if (!w || w.hp <= 0) return;
     const armor = w.armor + (w.taunt > 0 ? 1.4 : 0);
@@ -916,11 +924,7 @@
     const gold = Math.floor(e.gold * goldMult);
     run.gold += gold;
     floatText(e.x, groundY() - 190, "+" + gold + "g", "#e6c15a");
-    if (!run.boughtAny && !run.shopNudge && run.gold >= 10) {
-      run.shopNudge = true;
-      toast("Armory ready");
-      buildShop();
-    }
+    if (!run.boughtAny && run.gold >= firstCrateCost()) nudgeFirstBuy(false);
     if (e.magic) run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + e.magic);
     const r = Math.random();
     const heartP = 0.12 + ((h && h.heartFind) || 0);
@@ -1063,7 +1067,12 @@
         run.wolf.taunt = Math.max(run.wolf.taunt || 0, 1.1 * h.howl);
       }
     }
+    if (firstBuyPending()) {
+      armShopFreeze();
+      run.shopNudgeAt = 0;
+    }
     buildShop();
+    if (firstBuyPending()) nudgeFirstBuy(true);
   }
 
   function openGate() {
@@ -1094,6 +1103,7 @@
   }
 
   function tryAggro(e) {
+    if (firstBuyPending()) return;
     if (e.aggro || e.hp <= 0) return;
     if (!inAggroView(e.x)) return;
     e.aggro = true;
@@ -1114,6 +1124,7 @@
   function shouldMarch() {
     const h = run.hero;
     if (!h) return false;
+    if (firstBuyPending()) return false;
     if (h.mode === "charge" || h.mode === "return") return false;
     if (h.whirl) return false;
     const boss = run.enemies.find((e) => e.def.boss && e.hp > 0);
@@ -1275,7 +1286,7 @@
 
   function powerStrike() {
     const h = run.hero;
-    if (state !== "fight" || h.strikeCd > 0) return;
+    if (state !== "fight" || firstBuyPending() || h.strikeCd > 0) return;
     const c = classDef(h.klass);
     h.strikeCd = cdScale(c.strikeCd);
     h.anim = "atk";
@@ -1580,7 +1591,7 @@
   }
 
   function useSkill(slot) {
-    if (state !== "fight") return;
+    if (state !== "fight" || firstBuyPending()) return;
     const c = classDef(run.hero.klass);
     const id = c.skills[slot].id;
     if (id === "mend") mend();
@@ -1672,7 +1683,7 @@
         if (ban) ban.classList.remove("show");
       }
     }
-    if (state !== "fight" || paused) {
+    if (state !== "fight" || paused || tickShopFreeze(dt)) {
       shake = 0;
       updateFx(dt);
       syncHud();
@@ -1701,6 +1712,18 @@
     followCamera(dt);
     maybeAdvanceStage();
     for (const e of run.enemies) tryAggro(e);
+    if (firstBuyPending()) {
+      if ((run.firstBuyHold || 0) > 0) {
+        run.firstBuyHold -= dt;
+        run.waveTimer = Math.max(run.waveTimer, 3.2);
+      }
+      if ((run.shopNudgeAt || 0) <= 0) {
+        nudgeFirstBuy(true);
+        run.shopNudgeAt = 6;
+      } else {
+        run.shopNudgeAt -= dt;
+      }
+    }
 
     const melee = livingInRange(h.reach + 16, false);
 
@@ -2997,8 +3020,7 @@
       hud.textContent = c.name;
       hud.style.color = c.color;
     }
-    const hint = document.getElementById("shop-hint");
-    if (hint) hint.textContent = c.blurb + " Spend gold while they fight.";
+    syncFirstBuyCopy(c);
     const keys = document.getElementById("keys");
     if (keys) {
       keys.textContent =
@@ -3116,7 +3138,8 @@
       if (!btn) continue;
       const lv = run.levels[u.id] || 0;
       const cost = u.cost(lv);
-      btn.textContent = fmt(cost);
+      const first = lv === 0 && !run.boughtAny && run.gold >= cost && shopUnlockWave(u) === 1;
+      btn.textContent = first ? "BUY " + fmt(cost) : fmt(cost);
       btn.disabled = run.gold < cost;
     }
   }
@@ -3141,6 +3164,79 @@
     syncClassChrome();
   }
 
+  function starterShop() {
+    return shopList(activeKlass())
+      .filter((u) => shopUnlockWave(u) === 1)
+      .sort((a, b) => a.cost(0) - b.cost(0));
+  }
+
+  function firstCrateCost() {
+    const s = starterShop()[0];
+    return s ? s.cost(0) : 8;
+  }
+
+  function firstBuyPending() {
+    return state === "fight" && !run.boughtAny && run.gold >= firstCrateCost() && Math.max(1, run.wave || 1) < 4;
+  }
+
+  function firstBuyLabel() {
+    return starterShop()
+      .map((u) => u.name + " " + u.cost(0) + "g")
+      .join(" · ");
+  }
+
+  function armShopFreeze() {
+    if (run.boughtAny || run.gold < firstCrateCost()) return;
+    if (state !== "fight") return;
+    if (Math.max(1, run.wave || 1) >= 4) return;
+    run.shopFreeze = 1;
+    if (!(run.shopNudgeAt > 0)) run.shopNudgeAt = 6;
+  }
+
+  function tickShopFreeze(dt) {
+    if (!firstBuyPending()) {
+      run.shopFreeze = 0;
+      return false;
+    }
+    run.shopFreeze = 1;
+    run.waveTimer = Math.max(run.waveTimer, 3.2);
+    if ((run.shopNudgeAt || 0) <= 0) {
+      nudgeFirstBuy(true);
+      run.shopNudgeAt = 6;
+    } else {
+      run.shopNudgeAt -= dt;
+    }
+    return true;
+  }
+
+  function syncFirstBuyCopy(cls) {
+    const c = cls || classDef(run.hero ? run.hero.klass : persist.klass);
+    const pending = !run.boughtAny && run.gold >= firstCrateCost() && state === "fight";
+    const title = document.getElementById("shop-title");
+    if (title) title.textContent = pending ? "BUY NOW" : "Armory";
+    const hint = document.getElementById("shop-hint");
+    if (hint) {
+      hint.textContent = pending
+        ? "You have " + fmt(run.gold) + "g. First steel is " + firstCrateCost() + "g — click BUY before Wave 4."
+        : c.blurb + " Spend gold while they fight.";
+    }
+  }
+
+  function nudgeFirstBuy(force) {
+    if (run.boughtAny) return;
+    if (run.gold < firstCrateCost()) return;
+    const shop = document.getElementById("shop");
+    if (shop) shop.classList.add("nudge");
+    syncFirstBuyCopy();
+    if (force || !run.shopNudge) {
+      run.shopNudge = true;
+      const label = firstBuyLabel();
+      toast("BUY NOW  " + label, 3.8);
+      showJumpBanner("BUY NOW — " + label + ". Fight waits.");
+    }
+    buildShop();
+  }
+
   function buildShop() {
     const box = document.getElementById("upgrades");
     if (!box) return;
@@ -3149,18 +3245,13 @@
     const klass = activeKlass();
     const pool = shopList(klass);
     const next = nextShopUnlockWave(wave, klass);
-    const starters = pool.filter((u) => shopUnlockWave(u) === 1).map((u) => u.name);
     const nextEl = document.getElementById("shop-next");
     if (nextEl) {
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
-          run.gold >= 8
-            ? "First steel is in reach — buy " +
-              (starters.length <= 2
-                ? starters.join(" or ")
-                : starters.slice(0, -1).join(", ") + ", or " + starters[starters.length - 1]) +
-              "."
-            : "First steel costs 8g. The first raiders pay for it.";
+          run.gold >= firstCrateCost()
+            ? "BUY NOW — " + firstBuyLabel() + ". Combat pauses until you click BUY."
+            : "First steel costs " + firstCrateCost() + "g.";
       } else {
         nextEl.textContent = next
           ? "Next crate opens at wave " + next + "."
@@ -3181,9 +3272,11 @@
         box.appendChild(row);
         continue;
       }
-      if (open && lv === 0 && !run.boughtAny && run.gold >= u.cost(0)) row.classList.add("ready");
+      const first = open && lv === 0 && !run.boughtAny && run.gold >= u.cost(0);
+      if (first) row.classList.add("ready");
+      const price = first ? "BUY " + fmt(u.cost(lv)) : fmt(u.cost(lv));
       row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span></div>
-        <button id="buy-${u.id}" type="button">${fmt(u.cost(lv))}</button>
+        <button id="buy-${u.id}" type="button">${price}</button>
         <div class="desc">${u.desc}</div>`;
       box.appendChild(row);
       row.querySelector("button").onclick = () => buyRun(u.id);
@@ -3208,10 +3301,17 @@
     const lv = run.levels[id] || 0;
     const c = u.cost(lv);
     if (run.gold < c || state !== "fight") return;
-    if (run.wave < shopUnlockWave(u)) return;
+    if (Math.max(1, run.wave || 1) < shopUnlockWave(u)) return;
     run.gold -= c;
     run.levels[id] = lv + 1;
     run.boughtAny = true;
+    run.firstBuyHold = 0;
+    run.shopFreeze = 0;
+    run.shopNudgeAt = 0;
+    const shopEl = document.getElementById("shop");
+    if (shopEl) shopEl.classList.remove("nudge");
+    const title = document.getElementById("shop-title");
+    if (title) title.textContent = "Armory";
     u.apply(run.hero);
     if (u.id === "r_pack" || u.id === "pack") applyPack(run.hero);
     buildShop();
@@ -3513,6 +3613,10 @@
         biomes: BIOMES.map((b) => b.name),
         stageLen: STAGE_LEN,
         scale: [1, 8, 10, 16, 20].map((n) => ({ wave: n, ...waveScale(n) })),
+        startGold: START_GOLD,
+        firstCrate: firstCrateCost(),
+        firstBuyPending: firstBuyPending(),
+        shopFreeze: Math.max(0, run.shopFreeze || 0),
       };
     },
     road() {
