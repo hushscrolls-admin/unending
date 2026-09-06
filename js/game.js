@@ -6,7 +6,7 @@
   const HOME_X = 80;
   const GROUND = 0.78;
   const WHIRL_RANGE = 220;
-  const FORWARD_X = HOME_X + 280;
+  const CHARGE_SPAN = 280;
   const CHARGE_SPEED = 560;
   const RETURN_SPEED = 500;
   const SHOP_W = 332;
@@ -39,20 +39,24 @@
 
   const persist = loadSave();
   const run = emptyRun();
-  const fx = { floats: [], bolts: [], drops: [], gibs: [], rings: [] };
+  const fx = { floats: [], bolts: [], drops: [], gibs: [], rings: [], weather: [] };
 
   function emptyRun() {
     return {
-      wave: 0,
+      wave: 1,
+      stage: 1,
       kills: 0,
       gold: 0,
-      waveTimer: 0.45,
+      waveTimer: 0,
       spawning: false,
       hero: null,
       wolf: null,
       enemies: [],
       boughtAny: false,
       shopNudge: false,
+      placed: {},
+      gateOpen: false,
+      biomeFlash: 0,
       levels: Object.fromEntries(RUN_UPGRADES.map((u) => [u.id, 0])),
     };
   }
@@ -324,7 +328,9 @@
       klass: c.id,
       x: HOME_X,
       homeX: HOME_X,
-      mode: "home",
+      mode: "march",
+      chargeTo: HOME_X + CHARGE_SPAN,
+      returnTo: HOME_X,
       hp: c.hp,
       maxHp: c.hp,
       dmg: c.dmg,
@@ -334,7 +340,7 @@
       reach: c.reach,
       range: c.range,
       style: c.style,
-      walk: 95,
+      walk: ROAD.heroWalk,
       crit: 0.05,
       leech: 0,
       goldFind: 1,
@@ -556,18 +562,26 @@
     Object.assign(run, emptyRun());
     run.hero = makeHero();
     run.wolf = classDef().companion ? makeWolf() : null;
-    camera = HOME_X - PLAYER_SCREEN_X;
     fx.floats.length = 0;
     fx.bolts.length = 0;
     fx.drops.length = 0;
     fx.gibs.length = 0;
     fx.rings.length = 0;
+    fx.weather.length = 0;
     healCueOn = false;
     state = "fight";
-    if (jumpDest > 0) {
-      run.wave = jumpDest - 1;
-      run.waveTimer = 0.05;
-      syncWolfVitals(false);
+    const jumped = jumpDest > 0;
+    if (jumped) {
+      jumpToWave(jumpDest, { grant: true });
+    } else {
+      placeStage(1);
+      run.wave = 1;
+      run.stage = 1;
+      run.hero.x = stageOriginX(1);
+      run.hero.mode = "march";
+      if (run.wolf) run.wolf.x = run.hero.x + 72;
+      followCamera(0);
+      toast(biomeForStage(1).name);
     }
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
@@ -578,8 +592,8 @@
     syncClassChrome();
     syncHud();
     syncTreeHeld();
-    if (jumpDest > 0) {
-      showJumpBanner("Jumped to wave " + jumpDest);
+    if (jumped) {
+      /* jumpToWave already banners */
     } else {
       const held = treeHeldText();
       if (held.indexOf("held:") >= 0) toast(held, 2.2);
@@ -611,7 +625,7 @@
     document.getElementById("keys").classList.add("hidden");
     document.getElementById("hud").classList.add("hidden");
     document.getElementById("dead-summary").textContent =
-      `Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
+      `${biomeForStage(run.stage).name}  ·  Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
     document.getElementById("dead-glory").textContent = fmt(g);
     buildPrestige();
     buildClassPick();
@@ -862,6 +876,7 @@
       amount *= 1 + 0.28 * (h.iceLance || 0);
       h.iceLanceHits -= 1;
     }
+    e.aggro = true;
     const d = dmgIn(amount, e.armor);
     const over = d - e.hp;
     e.hp -= d;
@@ -944,7 +959,7 @@
     const wasBoss = e.def.boss;
     run.enemies = run.enemies.filter((x) => x !== e);
     if (wasBoss && !bossAlive()) {
-      run.waveTimer = nextWaveDelay(run.wave);
+      openGate();
     }
   }
 
@@ -956,41 +971,78 @@
     return camera + W - SHOP_W;
   }
 
-  function spawnWave() {
-    const n = run.wave;
-    syncWolfVitals(true);
-    const roster = waveRoster(n);
-    const sc = waveScale(n);
-    const h = run.hero;
-    const far = Math.min(playRight() + 20, (h ? h.x : HOME_X) + 390);
-    roster.forEach((type, i) => {
-      const def = ENEMIES[type];
-      run.enemies.push({
-        type,
-        def,
-        x: far + i * 28,
-        hp: def.hp * sc.hp,
-        maxHp: def.hp * sc.hp,
-        dmg: def.dmg * sc.dmg,
-        armor: def.armor,
-        gold: def.gold * sc.gold,
-        magic: def.magic,
-        atkT: 0.2 + Math.random() * 0.4,
-        healT: 0.5,
-        anim: "walk",
-        animT: Math.random(),
-        flash: 0,
-        enraged: false,
-        facing: -1,
-        stepped: false,
-        dots: [],
-        cc: 0,
-        slow: 0,
-        charged: false,
-        healTarget: null,
-        healFlash: 0,
-      });
+  function viewLeft() {
+    return camera - 28;
+  }
+
+  function onScreen(x) {
+    return x > viewLeft() && x < camera + playClipW() + 36;
+  }
+
+  function inAggroView(x) {
+    const wake = camera + Math.min(playClipW() * 0.64, 540);
+    return x > camera + 36 && x < wake;
+  }
+
+  function followCamera(dt) {
+    const target = (run.hero ? run.hero.x : HOME_X) - PLAYER_SCREEN_X;
+    if (!dt) {
+      camera = target;
+      return;
+    }
+    camera += (target - camera) * Math.min(1, dt * 7);
+  }
+
+  function makeFoe(type, wave, x) {
+    const def = ENEMIES[type];
+    const sc = waveScale(wave);
+    return {
+      type,
+      def,
+      wave,
+      aggro: false,
+      x,
+      hp: def.hp * sc.hp,
+      maxHp: def.hp * sc.hp,
+      dmg: def.dmg * sc.dmg,
+      armor: def.armor,
+      gold: def.gold * sc.gold,
+      magic: def.magic,
+      atkT: 0.2 + Math.random() * 0.4,
+      healT: 0.5,
+      anim: "idle",
+      animT: Math.random(),
+      flash: 0,
+      enraged: false,
+      facing: -1,
+      stepped: false,
+      dots: [],
+      cc: 0,
+      slow: 0,
+      charged: false,
+      healTarget: null,
+      healFlash: 0,
+    };
+  }
+
+  function placePack(wave) {
+    const stage = stageIndex(wave);
+    const base = packWorldX(stage, wave);
+    waveRoster(wave).forEach((type, i) => {
+      run.enemies.push(makeFoe(type, wave, base + i * ROAD.packSpread));
     });
+  }
+
+  function placeStage(stage) {
+    const s = Math.max(1, stage);
+    if (run.placed[s]) return;
+    run.placed[s] = true;
+    syncWolfVitals(true);
+    for (let i = 1; i <= STAGE_LEN; i++) placePack((s - 1) * STAGE_LEN + i);
+  }
+
+  function announceWave(n) {
+    const h = run.hero;
     const fresh = shopUnlocksAt(n, activeKlass());
     const crate = fresh.length && n > 1 ? "  ·  " + fresh.map((u) => u.name).join(" / ") : "";
     if (jumpDest === n) {
@@ -1012,6 +1064,96 @@
       }
     }
     buildShop();
+  }
+
+  function openGate() {
+    run.gateOpen = true;
+    const next = (run.stage || 1) + 1;
+    placeStage(next);
+    toast("The road opens — " + biomeForStage(next).name);
+    sfx(180, 0.2, "triangle", 0.05);
+  }
+
+  function stageAtHero() {
+    const h = run.hero;
+    if (!h) return 1;
+    return Math.max(1, Math.floor((h.x - HOME_X + 8) / stageSpan()) + 1);
+  }
+
+  function maybeAdvanceStage() {
+    const next = stageAtHero();
+    if (next > (run.stage || 1) && run.gateOpen) {
+      run.stage = next;
+      run.gateOpen = false;
+      run.biomeFlash = 1.15;
+      run.wave = Math.max(run.wave, (next - 1) * STAGE_LEN + 1);
+      toast(biomeForStage(next).name);
+      sfx(240, 0.16, "sine", 0.05);
+      buildShop();
+    }
+  }
+
+  function tryAggro(e) {
+    if (e.aggro || e.hp <= 0) return;
+    if (!inAggroView(e.x)) return;
+    e.aggro = true;
+    if (e.wave > run.wave) {
+      run.wave = e.wave;
+      announceWave(e.wave);
+    }
+  }
+
+  function fightBlocking() {
+    const h = run.hero;
+    if (!h) return false;
+    const c = classDef(h.klass);
+    const stop = c.style === "melee" ? ROAD.stopMelee : ROAD.stopRanged;
+    return run.enemies.some((e) => e.aggro && e.hp > 0 && e.x - h.x < stop && e.x > h.x - 100);
+  }
+
+  function shouldMarch() {
+    const h = run.hero;
+    if (!h) return false;
+    if (h.mode === "charge" || h.mode === "return") return false;
+    if (h.whirl) return false;
+    const boss = run.enemies.find((e) => e.def.boss && e.hp > 0);
+    if (boss && h.x >= boss.x - ROAD.stopMelee) return false;
+    return !fightBlocking();
+  }
+
+  function jumpToWave(dest, opts) {
+    const n = Math.max(1, Math.floor(dest || 1));
+    const stage = stageIndex(n);
+    run.enemies = [];
+    run.placed = {};
+    run.gateOpen = false;
+    placeStage(stage);
+    run.enemies = run.enemies.filter((e) => e.wave >= n);
+    run.wave = n;
+    run.stage = stage;
+    if (run.hero) {
+      run.hero.x = packWorldX(stage, n) - 240;
+      run.hero.mode = "march";
+      run.hero.homeX = run.hero.x;
+    }
+    if (run.wolf) run.wolf.x = (run.hero ? run.hero.x : HOME_X) + 70;
+    if (opts && opts.grant && run.hero) {
+      let earned = 0;
+      for (let w = 1; w < n; w++) {
+        const sc = waveScale(w);
+        for (const type of waveRoster(w)) earned += (ENEMIES[type].gold || 0) * sc.gold;
+      }
+      run.gold = Math.max(run.gold, START_GOLD + (run.hero.startGold || 0) + Math.floor(earned));
+    }
+    followCamera(0);
+    syncWolfVitals(false);
+    announceWave(n);
+    jumpDest = 0;
+  }
+
+  function spawnWave() {
+    placePack(run.wave);
+    announceWave(run.wave);
   }
 
   function defTitle(n) {
@@ -1292,13 +1434,17 @@
     const h = run.hero;
     if (state !== "fight") return;
     for (const e of run.enemies) e.charged = false;
-    if (h.mode === "home" || h.mode === "return") {
-      h.mode = "charge";
-      sfx(300, 0.1, "square", 0.05);
-    } else {
+    if (h.mode === "charge") {
       h.mode = "return";
+      h.returnTo = Math.max(stageOriginX(run.stage || 1), h.x - 200);
       sfx(240, 0.08, "square", 0.04);
+      return;
     }
+    const pack = run.enemies.filter((e) => e.aggro && e.hp > 0);
+    const far = pack.length ? Math.max(...pack.map((e) => e.x)) + 36 : h.x + CHARGE_SPAN;
+    h.chargeTo = Math.min(far, h.x + CHARGE_SPAN + 40);
+    h.mode = "charge";
+    sfx(300, 0.1, "square", 0.05);
   }
 
   function whirlHit() {
@@ -1486,7 +1632,7 @@
     }
     if (w.regen) w.hp = Math.min(w.maxHp, w.hp + w.regen * dt);
     w.leap = null;
-    const prey = nearest(w.x);
+    const prey = nearest(w.x, (e) => e.aggro && e.hp > 0);
     const guard = h.x + 70;
     if (prey && Math.abs(prey.x - w.x) > w.reach) {
       const dest = prey.x > w.x ? prey.x - w.reach + 8 : prey.x + w.reach - 8;
@@ -1551,20 +1697,10 @@
     h.buffs.haste = Math.max(0, h.buffs.haste - dt);
     h.mana = Math.min(h.maxMana, h.mana + h.manaRegen * dt);
     shake = Math.max(0, shake - dt * 18);
-    camera = HOME_X - PLAYER_SCREEN_X;
-
-    if (!bossAlive()) {
-      if (run.enemies.length >= liveCap()) {
-        run.waveTimer = Math.max(run.waveTimer, 1.8);
-      } else {
-        run.waveTimer -= dt;
-        if (run.waveTimer <= 0) {
-          run.wave += 1;
-          spawnWave();
-          run.waveTimer = isBossWave(run.wave) ? 1e9 : nextWaveDelay(run.wave);
-        }
-      }
-    }
+    run.biomeFlash = Math.max(0, (run.biomeFlash || 0) - dt);
+    followCamera(dt);
+    maybeAdvanceStage();
+    for (const e of run.enemies) tryAggro(e);
 
     const melee = livingInRange(h.reach + 16, false);
 
@@ -1575,20 +1711,21 @@
       for (const e of [...run.enemies]) {
         if (!e.charged && Math.abs(e.x - h.x) < 42) {
           e.charged = true;
+          e.aggro = true;
           hitEnemy(e, h.dmg * 0.8 * autoDmgMult(), false);
         }
       }
-      if (h.x >= FORWARD_X) {
-        h.x = FORWARD_X;
-        h.mode = "forward";
+      if (h.x >= (h.chargeTo || h.x)) {
+        h.x = h.chargeTo;
+        h.mode = "march";
       }
     } else if (h.mode === "return") {
       h.x -= RETURN_SPEED * dt;
-      h.anim = "idle";
+      h.anim = "walk";
       h.animT += dt;
-      if (h.x <= h.homeX) {
-        h.x = h.homeX;
-        h.mode = "home";
+      if (h.x <= (h.returnTo || h.x)) {
+        h.x = h.returnTo;
+        h.mode = "march";
       }
     }
 
@@ -1613,14 +1750,11 @@
       if (h.inferno.left <= 0 && h.inferno.t >= 0.7) h.inferno = null;
     } else if (h.mode === "charge" || h.mode === "return") {
       /* dashing */
-    } else if (h.anim === "atk") {
-      h.animT += dt;
-      if (h.animT >= 0.34) h.anim = "idle";
     } else {
       const ready =
         c.style === "melee"
           ? melee.length
-          : run.enemies.some((e) => Math.abs(e.x - h.x) <= combatRange());
+          : run.enemies.some((e) => e.aggro && Math.abs(e.x - h.x) <= combatRange());
       if (ready) {
         const rate = h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1) * (lastStanding() ? 1.2 : 1);
         h.atkT -= dt * rate;
@@ -1628,9 +1762,22 @@
           h.atkT = 1;
           autoAttack();
         }
-      } else {
-        h.anim = "idle";
+      }
+      const swinging = h.anim === "atk" && h.animT < 0.34;
+      if (swinging) {
         h.animT += dt;
+        if (h.animT >= 0.34) h.anim = shouldMarch() ? "walk" : "idle";
+      }
+      if (shouldMarch() && !(c.style === "melee" && swinging)) {
+        const spd = (h.walk || ROAD.heroWalk) * (h.buffs.haste > 0 ? 1.25 : 1);
+        h.x += spd * dt;
+        if (!swinging) {
+          h.anim = "walk";
+          h.animT += dt;
+        }
+      } else if (!swinging) {
+        if (h.anim !== "atk") h.anim = ready ? h.anim : "idle";
+        if (h.anim === "idle") h.animT += dt;
       }
     }
 
@@ -1643,6 +1790,10 @@
       e.animT += dt;
       e.cc = Math.max(0, (e.cc || 0) - dt);
       e.slow = Math.max(0, (e.slow || 0) - dt);
+      if (!e.aggro) {
+        e.anim = "idle";
+        continue;
+      }
       tickDots(e, dt);
       if (e.hp <= 0) continue;
       if (e.cc > 0) {
@@ -1655,7 +1806,7 @@
         e.defSpeed = (e.defSpeed || e.def.speed) * 1.25;
         floatText(e.x, groundY() - 170, "ENRAGE", "#ff4a3a");
       }
-      if (e.def.shadowstep && !e.stepped && e.x <= FORWARD_X && e.x >= HOME_X) {
+      if (e.def.shadowstep && !e.stepped && Math.abs(e.x - h.x) < 220) {
         e.x = h.x - 56;
         e.stepped = true;
         e.facing = 1;
@@ -1851,6 +2002,7 @@
     }
     fx.drops = fx.drops.filter((d) => d.life > 0);
 
+    updateWeather(dt);
     updateFx(dt);
     syncHud();
   }
@@ -1870,6 +2022,30 @@
     fx.gibs = fx.gibs.filter((g) => g.t > 0);
     for (const r of fx.rings) r.t -= dt;
     fx.rings = fx.rings.filter((r) => r.t > 0);
+  }
+
+  function updateWeather(dt) {
+    const biome = biomeForStage(run.stage || 1);
+    const kind = biome.particle;
+    if (fx.weather.length < 30) {
+      fx.weather.push({
+        kind,
+        x: camera + Math.random() * (W + 80) - 40,
+        y: Math.random() * H * 0.72,
+        vx: kind === "snow" ? -18 - Math.random() * 22 : kind === "ember" ? -10 + Math.random() * 30 : -30 + Math.random() * 20,
+        vy: kind === "ember" ? -20 - Math.random() * 40 : 22 + Math.random() * 36,
+        s: 2 + Math.random() * 3,
+      });
+    }
+    for (const p of fx.weather) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.y > H * 0.82 || p.x < camera - 60 || p.x > camera + W + 60) {
+        p.x = camera + Math.random() * W;
+        p.y = -8;
+        p.kind = kind;
+      }
+    }
   }
 
   // --- render ---
@@ -1930,20 +2106,140 @@
   }
 
   function drawBg() {
+    const biome = biomeForStage(run.stage || 1);
     const bg = img.bg;
     if (!bg) {
-      ctx.fillStyle = "#122";
+      ctx.fillStyle = biome.skyTop;
       ctx.fillRect(0, 0, W, H);
-      return;
+    } else {
+      const scale = H / bg.height;
+      const sw = bg.width * scale;
+      const maxPan = Math.max(0, sw - W);
+      const trip = maxPan * 2 || 1;
+      let t = (camera * 0.22) % trip;
+      if (t < 0) t += trip;
+      const pan = t > maxPan ? trip - t : t;
+      ctx.save();
+      ctx.filter =
+        "hue-rotate(" +
+        biome.hue +
+        "deg) saturate(" +
+        biome.sat +
+        ") brightness(" +
+        biome.bright +
+        ")";
+      ctx.drawImage(bg, -pan, 0, sw, H);
+      ctx.restore();
     }
-    const scale = H / bg.height;
-    const sw = bg.width * scale;
-    const maxPan = Math.max(0, sw - W);
-    const trip = maxPan * 2 || 1;
-    let t = (camera * 0.22) % trip;
-    if (t < 0) t += trip;
-    const pan = t > maxPan ? trip - t : t;
-    ctx.drawImage(bg, -pan, 0, sw, H);
+    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.42);
+    sky.addColorStop(0, biome.skyTop);
+    sky.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = sky;
+    ctx.globalAlpha = 0.55;
+    ctx.fillRect(0, 0, W, H * 0.42);
+    ctx.globalAlpha = 1;
+    const gy = groundY();
+    if (biome.wash) {
+      ctx.fillStyle = biome.wash;
+      ctx.fillRect(0, 0, W, H);
+    }
+    ctx.fillStyle = biome.ground;
+    ctx.fillRect(0, gy + 4, W, H - gy);
+    ctx.fillStyle = biome.fog;
+    ctx.fillRect(0, gy - 86, W, 94);
+    drawSilhouettes(biome, gy);
+    drawWeather();
+    if ((run.biomeFlash || 0) > 0) {
+      ctx.fillStyle = "rgba(8,6,4," + run.biomeFlash * 0.55 + ")";
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function drawSilhouettes(biome, gy) {
+    const span = 220;
+    const start = Math.floor(camera / span) - 1;
+    ctx.save();
+    ctx.fillStyle = biome.accent;
+    ctx.globalAlpha = 0.55;
+    for (let i = 0; i < 8; i++) {
+      const wx = (start + i) * span + 40;
+      const x = sx(wx);
+      const hgt = 90 + ((start + i) % 5) * 16;
+      if (biome.id === "duskwood") {
+        ctx.beginPath();
+        ctx.moveTo(x, gy);
+        ctx.lineTo(x + 18, gy - hgt);
+        ctx.lineTo(x + 36, gy);
+        ctx.fill();
+      } else if (biome.id === "ember") {
+        ctx.fillRect(x + 8, gy - hgt * 0.45, 22, hgt * 0.45);
+        ctx.beginPath();
+        ctx.moveTo(x, gy - hgt * 0.45);
+        ctx.lineTo(x + 19, gy - hgt);
+        ctx.lineTo(x + 38, gy - hgt * 0.45);
+        ctx.fill();
+      } else if (biome.id === "rime") {
+        ctx.beginPath();
+        ctx.moveTo(x + 16, gy);
+        ctx.lineTo(x + 6, gy - hgt);
+        ctx.lineTo(x + 26, gy - hgt * 0.7);
+        ctx.lineTo(x + 36, gy);
+        ctx.fill();
+      } else if (biome.id === "storm") {
+        ctx.fillRect(x + 10, gy - hgt * 0.35, 28, hgt * 0.35);
+        ctx.fillRect(x + 18, gy - hgt, 8, hgt);
+      } else {
+        ctx.fillRect(x + 4, gy - hgt * 0.6, 34, hgt * 0.6);
+        ctx.fillRect(x + 12, gy - hgt, 18, hgt * 0.4);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawGates(gy) {
+    const maxStage = Math.max(run.stage || 1, ...Object.keys(run.placed || {}).map(Number), 1);
+    for (let s = 1; s <= maxStage; s++) {
+      const gx = gateWorldX(s);
+      const x = sx(gx);
+      if (x < -80 || x > W + 80) continue;
+      const next = biomeForStage(s + 1);
+      ctx.save();
+      ctx.fillStyle = next.accent;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(x - 14, gy - 168, 12, 168);
+      ctx.fillRect(x + 10, gy - 168, 12, 168);
+      ctx.fillRect(x - 22, gy - 180, 52, 16);
+      ctx.fillStyle = next.dust;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(x - 40, 0, 80, gy);
+      ctx.restore();
+      drawStamp(next.name, x, gy - 196, {
+        color: "#1a1208",
+        bg: next.dust,
+        border: next.accent,
+        font: "bold 16px VT323, monospace",
+        h: 20,
+      });
+    }
+  }
+
+  function drawWeather() {
+    const biome = biomeForStage(run.stage || 1);
+    ctx.save();
+    for (const p of fx.weather) {
+      ctx.fillStyle = biome.dust;
+      ctx.globalAlpha = 0.55;
+      if (p.kind === "ember") {
+        ctx.fillRect(sx(p.x), p.y, 3, 5);
+      } else if (p.kind === "snow") {
+        ctx.beginPath();
+        ctx.arc(sx(p.x), p.y, p.s * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(sx(p.x), p.y, p.s, 2);
+      }
+    }
+    ctx.restore();
   }
 
   function drawHpBar(x, y, w, hp, max, color, opts) {
@@ -2334,6 +2630,7 @@
         const i = Math.min(img.heroAtk.length - 1, Math.floor(h.animT / 0.08));
         return img.heroAtk[i];
       }
+      if (h.anim === "walk" && img.heroIdle.length) return frameOf(img.heroIdle, h.animT, 9);
       if (img.heroIdle.length) return frameOf(img.heroIdle, h.animT, 6);
       return img.hero;
     }
@@ -2356,11 +2653,13 @@
 
     const gy = groundY();
     const h = run.hero;
+    drawGates(gy);
 
     if (h && (state === "fight" || state === "dead")) {
       const c = classDef(h.klass);
       const spr = heroSprite(h);
-      drawImg(spr, sx(h.x), gy + 6, 168, {
+      const bob = h.anim === "walk" ? Math.sin(h.animT * 14) * 3 : 0;
+      drawImg(spr, sx(h.x), gy + 6 + bob, 168, {
         flash: h.flash > 0 || h.cauterizeT > 0,
         flip: !!c.flip,
         hue: c.hue,
@@ -2487,11 +2786,23 @@
       const face = e.facing || -1;
       const lunge = e.anim === "atk" && e.animT < 0.2 ? 14 * face : 0;
       const hgt = 150 * (e.def.scale || 1);
+      ctx.save();
+      if (!e.aggro) ctx.globalAlpha = 0.72;
       drawImg(spr, sx(e.x) + lunge, gy + 6 + bob, hgt, {
         flash: e.flash > 0 || e.cc > 0 || e.igniteFlash > 0,
         flip: face > 0,
         hue: e.cc > 0 ? 180 : e.igniteFlash > 0 ? 20 : 0,
       });
+      ctx.restore();
+      if (!e.aggro && onScreen(e.x)) {
+        drawStamp("WAIT", sx(e.x), gy + 20, {
+          color: "#d8e0c8",
+          bg: "rgba(8,10,8,0.72)",
+          border: "#6a7a58",
+          font: "bold 14px VT323, monospace",
+          h: 16,
+        });
+      }
       if (e.igniteFlash > 0) {
         ctx.save();
         ctx.globalAlpha = Math.min(1, e.igniteFlash * 1.2);
@@ -2653,7 +2964,7 @@
     const c = classDef(h ? h.klass : persist.klass);
     const s = c.skills[slot];
     if (s.toggle) {
-      if (h && !(h.mode === "home" || h.mode === "return")) return "Return";
+      if (h && h.mode === "charge") return "Return";
       return s.name;
     }
     if (s.id === "sic" && h && run.wolf && run.wolf.hp <= 0 && !(h.skillCd[slot] > 0)) {
@@ -2758,6 +3069,12 @@
     document.getElementById("gold").textContent = fmt(run.gold);
     document.getElementById("mana-stat").textContent = fmt(h.mana);
     document.getElementById("wave").textContent = String(Math.max(1, run.wave));
+    const stageEl = document.getElementById("hud-stage");
+    if (stageEl) {
+      const biome = biomeForStage(run.stage || 1);
+      stageEl.textContent = biome.name;
+      stageEl.style.color = biome.dust;
+    }
     document.getElementById("kills").textContent = fmt(run.kills);
     document.getElementById("glory").textContent = fmt(persist.glory);
     const rage = h.buffs.rage > 0;
@@ -3139,17 +3456,17 @@
       const dest = Math.max(1, Math.floor(wave || 1));
       jumpDest = dest;
       if (state === "fight") {
-        run.wave = dest - 1;
-        run.enemies = [];
-        run.waveTimer = 0.05;
-        syncWolfVitals(false);
+        jumpToWave(dest, { grant: true });
+      } else {
+        showJumpBanner("Jump queued: wave " + dest + " — Rise to start there");
       }
-      const msg =
-        state === "fight"
-          ? "Jumped to wave " + dest
-          : "Jump queued: wave " + dest + " — Rise to start there";
-      showJumpBanner(msg);
-      return { wave: dest, queued: state !== "fight", persist: snapshotPersist() };
+      return {
+        wave: dest,
+        stage: stageIndex(dest),
+        biome: biomeForStage(stageIndex(dest)).name,
+        queued: state !== "fight",
+        persist: snapshotPersist(),
+      };
     },
     tree() {
       return snapshotPersist();
@@ -3192,6 +3509,33 @@
           mage: shopList("mage").map((u) => u.name),
           ranger: shopList("ranger").map((u) => u.name),
         },
+        road: ROAD,
+        biomes: BIOMES.map((b) => b.name),
+        stageLen: STAGE_LEN,
+        scale: [1, 8, 10, 16, 20].map((n) => ({ wave: n, ...waveScale(n) })),
+      };
+    },
+    road() {
+      const h = run.hero;
+      return {
+        stage: run.stage,
+        biome: biomeForStage(run.stage || 1).name,
+        wave: run.wave,
+        heroX: h ? Math.round(h.x) : 0,
+        camera: Math.round(camera),
+        marching: !!(h && shouldMarch()),
+        mode: h ? h.mode : "",
+        gateOpen: !!run.gateOpen,
+        idle: run.enemies.filter((e) => !e.aggro && e.hp > 0).length,
+        aggro: run.enemies.filter((e) => e.aggro && e.hp > 0).length,
+        packs: run.enemies.map((e) => ({
+          type: e.type,
+          wave: e.wave,
+          x: Math.round(e.x),
+          aggro: !!e.aggro,
+          hp: Math.round(e.hp),
+        })),
+        drops: fx.drops.map((d) => d.kind),
       };
     },
     wolf() {
@@ -3242,6 +3586,13 @@
     },
     smite() {
       [...run.enemies].forEach(killEnemy);
+    },
+    nudge(px) {
+      if (!run.hero) return null;
+      run.hero.x += px || 200;
+      followCamera(0);
+      for (const e of run.enemies) tryAggro(e);
+      return window.unending.road();
     },
     hurt(n) {
       if (run.hero && state === "fight") hitHero(n || 10, run.hero.x);
