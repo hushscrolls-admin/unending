@@ -45,8 +45,10 @@ assert(minCd >= NOVA.cdMin, "Tempest / tree haste cannot breach the Nova CD floo
 assert(CLASSES.mage.hp < CLASSES.warrior.hp, "Mage stays glassier than Warrior");
 assert(CLASSES.mage.skills[2].cdMin === NOVA.cdMin, "skill spec carries the Nova CD floor");
 
-const firstIron = goldCost(18, 1.38, 0, 10);
-assert(firstIron <= 10, "opening crate should be a first-wave buy from the 14g start");
+const firstIron = goldCost(18, 1.38, 0, 8);
+const firstWard = goldCost(22, 1.36, 0, 9);
+assert(firstIron <= 8, "opening crate should be an 8g buy from the 24g start");
+assert(firstIron + firstWard <= 24, "24g must buy damage + Ward/Vital before wave 1");
 
 assert(CLASSES.mage.range < RANGE.spawnGap, "Mage base range must sit short of the spawn line");
 assert(CLASSES.ranger.range < RANGE.spawnGap, "Ranger base range must sit short of the spawn line");

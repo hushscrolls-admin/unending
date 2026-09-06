@@ -368,7 +368,7 @@ const RUN_UPGRADES = [
     icon: "⚔",
     unlockWave: 1,
     heirloom: true,
-    cost: (lv) => goldCost(18, 1.38, lv, 10),
+    cost: (lv) => goldCost(18, 1.38, lv, 8),
     apply: bumpDmg(2),
   },
   {
@@ -378,7 +378,7 @@ const RUN_UPGRADES = [
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => goldCost(20, 1.4, lv, 11),
+    cost: (lv) => goldCost(20, 1.4, lv, 8),
     apply: bumpSpeed(1.08),
   },
   {
@@ -388,7 +388,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => goldCost(22, 1.36, lv, 12),
+    cost: (lv) => goldCost(22, 1.36, lv, 9),
     apply: bumpVital(25),
   },
   {
@@ -521,7 +521,7 @@ const RUN_UPGRADES = [
     icon: "✶",
     unlockWave: 1,
     heirloom: true,
-    cost: (lv) => goldCost(18, 1.38, lv, 10),
+    cost: (lv) => goldCost(18, 1.38, lv, 8),
     apply: bumpDmg(2),
   },
   {
@@ -531,7 +531,7 @@ const RUN_UPGRADES = [
     desc: "+8% cast speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => goldCost(20, 1.4, lv, 11),
+    cost: (lv) => goldCost(20, 1.4, lv, 8),
     apply: bumpSpeed(1.08),
   },
   {
@@ -541,7 +541,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => goldCost(22, 1.36, lv, 12),
+    cost: (lv) => goldCost(22, 1.36, lv, 9),
     apply: bumpVital(25),
   },
   {
@@ -677,7 +677,7 @@ const RUN_UPGRADES = [
     icon: "⚔",
     unlockWave: 1,
     heirloom: true,
-    cost: (lv) => goldCost(18, 1.38, lv, 10),
+    cost: (lv) => goldCost(18, 1.38, lv, 8),
     apply: bumpDmg(2),
   },
   {
@@ -687,7 +687,7 @@ const RUN_UPGRADES = [
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => goldCost(20, 1.4, lv, 11),
+    cost: (lv) => goldCost(20, 1.4, lv, 8),
     apply: bumpSpeed(1.08),
   },
   {
@@ -697,7 +697,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => goldCost(22, 1.36, lv, 12),
+    cost: (lv) => goldCost(22, 1.36, lv, 9),
     apply: bumpVital(25),
   },
   {
@@ -2226,7 +2226,7 @@ function heirloomUpgrade(klass) {
 }
 
 function waveCount(n) {
-  return Math.min(5, Math.max(1, Math.ceil((n + 1) / 2.9)));
+  return Math.min(5, Math.max(1, Math.ceil((n + 1) / 3.5)));
 }
 
 function isBossWave(n) {
@@ -2249,8 +2249,8 @@ function waveRoster(n) {
     else if (n >= 9 && i === count - 1) type = "archer";
     else if (n >= 13 && i === count - 2 && count >= 4) type = "archer";
     else if (n >= 11 && i % 4 === 3) type = "assassin";
-    else if (n >= 8 && i % 3 === 2) type = "berserk";
-    else if (n >= 5 && i % 2 === 1) type = "shield";
+    else if (n >= 9 && i % 3 === 2) type = "berserk";
+    else if (n >= 7 && i % 2 === 1) type = "shield";
     units.push(type);
   }
   if (n === 1) return ["grunt"];
@@ -2264,8 +2264,8 @@ function waveScale(n) {
   const mid = Math.max(0, Math.min(w - STAGE_LEN, STAGE_LEN));
   const late = Math.max(0, w - STAGE_LEN * 2);
   return {
-    hp: Math.pow(1.042, open) * Math.pow(1.075, rise) * Math.pow(1.105, mid) * Math.pow(1.12, late),
-    dmg: Math.pow(1.02, open) * Math.pow(1.038, rise) * Math.pow(1.055, mid) * Math.pow(1.065, late),
+    hp: Math.pow(1.025, open) * Math.pow(1.075, rise) * Math.pow(1.105, mid) * Math.pow(1.12, late),
+    dmg: Math.pow(1.012, open) * Math.pow(1.038, rise) * Math.pow(1.055, mid) * Math.pow(1.065, late),
     gold: 1 + (w - 1) * 0.1,
   };
 }

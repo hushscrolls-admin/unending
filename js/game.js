@@ -10,7 +10,7 @@
   const CHARGE_SPEED = 560;
   const RETURN_SPEED = 500;
   const SHOP_W = 332;
-  const LIVE_CAP = 6;
+  const START_GOLD = 24;
   const DROP_PICK_R = 160;
   const DROP_MAGNET_AGE = 0.32;
   const VITAL_CAP = 900;
@@ -442,7 +442,7 @@
       const lv = prestLv(n.id, hero.klass);
       if (lv > 0 && n.apply) n.apply(hero, lv);
     }
-    run.gold = 14 + (hero.startGold || 0);
+    run.gold = START_GOLD + (hero.startGold || 0);
     if (hero.heirloom) {
       const first = heirloomUpgrade(hero.klass);
       if (first) run.levels[first.id] = Math.max(run.levels[first.id] || 0, 1);
@@ -690,10 +690,11 @@
     let armor = h.armor + (h.mendArmorT > 0 ? 1.4 * (h.mendArmor || 0) : 0);
     if (h.lowHpArmor && h.hp / h.maxHp <= 0.45) armor += 1.6 * h.lowHpArmor;
     if (h.klass === "mage" && run.wave > 0) {
-      if (run.wave <= 4) armor += 2.4;
-      else if (run.wave <= 7) armor += 1.2;
+      if (run.wave <= 5) armor += 5.8;
+      else if (run.wave <= 8) armor += 2.4;
     }
     let d = dmgIn(amount, armor);
+    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) d *= 0.78;
     if (h.cauterizeWard > 0) d *= 0.78;
     if (h.waveHits > 0 && h.waveWard) {
       d *= Math.max(0.4, 1 - 0.16 * h.waveWard);
@@ -1276,8 +1277,15 @@
   }
 
   function nextWaveDelay(wave) {
-    const early = wave < 6 ? 4.2 : wave < 10 ? 2.2 : 0.6;
-    return 7.0 + wave * 0.45 + early;
+    const early = wave < 6 ? 6.8 : wave < 10 ? 3.0 : 0.6;
+    return 8.2 + wave * 0.5 + early;
+  }
+
+  function liveCap() {
+    const n = run.wave || 0;
+    if (n < 6) return 3;
+    if (n < 10) return 4;
+    return 6;
   }
 
   function charge() {
@@ -1546,7 +1554,7 @@
     camera = HOME_X - PLAYER_SCREEN_X;
 
     if (!bossAlive()) {
-      if (run.enemies.length >= LIVE_CAP) {
+      if (run.enemies.length >= liveCap()) {
         run.waveTimer = Math.max(run.waveTimer, 1.8);
       } else {
         run.waveTimer -= dt;
@@ -2829,13 +2837,13 @@
     if (nextEl) {
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
-          run.gold >= 10
+          run.gold >= 8
             ? "First steel is in reach — buy " +
               (starters.length <= 2
                 ? starters.join(" or ")
                 : starters.slice(0, -1).join(", ") + ", or " + starters[starters.length - 1]) +
               "."
-            : "First steel costs 10g. The first raiders pay for it.";
+            : "First steel costs 8g. The first raiders pay for it.";
       } else {
         nextEl.textContent = next
           ? "Next crate opens at wave " + next + "."
