@@ -705,6 +705,7 @@
   }
 
   function hitHero(amount, srcX, crit) {
+    if (firstBuyPending()) return;
     const h = run.hero;
     let armor = h.armor + (h.mendArmorT > 0 ? 1.4 * (h.mendArmor || 0) : 0);
     if (h.lowHpArmor && h.hp / h.maxHp <= 0.45) armor += 1.6 * h.lowHpArmor;
@@ -779,6 +780,7 @@
   }
 
   function hitWolf(amount, crit) {
+    if (firstBuyPending()) return;
     const w = run.wolf;
     if (!w || w.hp <= 0) return;
     const armor = w.armor + (w.taunt > 0 ? 1.4 : 0);
@@ -1101,6 +1103,7 @@
   }
 
   function tryAggro(e) {
+    if (firstBuyPending()) return;
     if (e.aggro || e.hp <= 0) return;
     if (!inAggroView(e.x)) return;
     e.aggro = true;
@@ -1121,6 +1124,7 @@
   function shouldMarch() {
     const h = run.hero;
     if (!h) return false;
+    if (firstBuyPending()) return false;
     if (h.mode === "charge" || h.mode === "return") return false;
     if (h.whirl) return false;
     const boss = run.enemies.find((e) => e.def.boss && e.hp > 0);
@@ -1282,7 +1286,7 @@
 
   function powerStrike() {
     const h = run.hero;
-    if (state !== "fight" || h.strikeCd > 0) return;
+    if (state !== "fight" || firstBuyPending() || h.strikeCd > 0) return;
     const c = classDef(h.klass);
     h.strikeCd = cdScale(c.strikeCd);
     h.anim = "atk";
@@ -1587,7 +1591,7 @@
   }
 
   function useSkill(slot) {
-    if (state !== "fight") return;
+    if (state !== "fight" || firstBuyPending()) return;
     const c = classDef(run.hero.klass);
     const id = c.skills[slot].id;
     if (id === "mend") mend();
@@ -3185,7 +3189,8 @@
     if (run.boughtAny || run.gold < firstCrateCost()) return;
     if (state !== "fight") return;
     if (Math.max(1, run.wave || 1) >= 4) return;
-    run.shopFreeze = 4.8;
+    run.shopFreeze = 1;
+    if (!(run.shopNudgeAt > 0)) run.shopNudgeAt = 6;
   }
 
   function tickShopFreeze(dt) {
@@ -3193,9 +3198,14 @@
       run.shopFreeze = 0;
       return false;
     }
-    if ((run.shopFreeze || 0) <= 0) return false;
-    run.shopFreeze -= dt;
+    run.shopFreeze = 1;
     run.waveTimer = Math.max(run.waveTimer, 3.2);
+    if ((run.shopNudgeAt || 0) <= 0) {
+      nudgeFirstBuy(true);
+      run.shopNudgeAt = 6;
+    } else {
+      run.shopNudgeAt -= dt;
+    }
     return true;
   }
 
