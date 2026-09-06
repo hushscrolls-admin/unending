@@ -91,9 +91,18 @@
     return rageMult() * (lastStanding() ? 1.25 : 1);
   }
 
-  function cdScale(seconds) {
+  function cdScale(seconds, minCd) {
     const haste = (run.hero && run.hero.skillHaste) || 0;
-    return seconds * Math.max(0.45, 1 - haste);
+    const scaled = seconds * Math.max(0.45, 1 - haste);
+    if (minCd != null) return Math.max(minCd, scaled);
+    return scaled;
+  }
+
+  function skillCdScaled(slot) {
+    const h = run.hero;
+    const s = classDef(h && h.klass).skills[slot];
+    if (!s || !s.cd) return 0;
+    return cdScale(s.cd, s.cdMin);
   }
 
   function readDisk() {
@@ -353,7 +362,7 @@
       const lv = prestLv(n.id, hero.klass);
       if (lv > 0 && n.apply) n.apply(hero, lv);
     }
-    run.gold = 12 + (hero.startGold || 0);
+    run.gold = 14 + (hero.startGold || 0);
     if (hero.heirloom) {
       const first = heirloomUpgrade(hero.klass);
       if (first) run.levels[first.id] = Math.max(run.levels[first.id] || 0, 1);
@@ -582,8 +591,8 @@
     const h = run.hero;
     let armor = h.armor;
     if (h.klass === "mage" && run.wave > 0) {
-      if (run.wave <= 4) armor += 3.2;
-      else if (run.wave <= 7) armor += 1.8;
+      if (run.wave <= 4) armor += 2.4;
+      else if (run.wave <= 7) armor += 1.2;
     }
     let d = dmgIn(amount, armor);
     if (h.cauterizeWard > 0) d *= 0.78;
@@ -749,7 +758,7 @@
     const gold = Math.floor(e.gold * run.hero.goldFind);
     run.gold += gold;
     floatText(e.x, groundY() - 190, "+" + gold + "g", "#e6c15a");
-    if (!run.boughtAny && !run.shopNudge && run.gold >= 12) {
+    if (!run.boughtAny && !run.shopNudge && run.gold >= 10) {
       run.shopNudge = true;
       toast("Armory ready");
       buildShop();
@@ -947,7 +956,7 @@
         dmg,
         crit,
         speed: 380,
-        burn: ampBurn({ kind: "burn", dps: h.dmg * 0.36, dur: 2.8 }),
+        burn: ampBurn({ kind: "burn", dps: h.dmg * 0.42, dur: 3.0 }),
       });
       sfx(crit ? 480 : 400, 0.06, "triangle", 0.04);
     } else {
@@ -1096,8 +1105,8 @@
   }
 
   function nextWaveDelay(wave) {
-    const early = wave < 4 ? 1.8 : 0;
-    return 5.5 + wave * 0.45 + early;
+    const early = wave < 5 ? 2.6 : wave < 9 ? 1.4 : 0;
+    return 6.0 + wave * 0.4 + early;
   }
 
   function charge() {
@@ -1164,17 +1173,18 @@
     const spec = classDef(h.klass).skills[2];
     if (state !== "fight" || h.skillCd[2] > 0 || h.mana < spec.mana) return;
     h.mana -= spec.mana;
-    h.skillCd[2] = cdScale(spec.cd);
+    h.skillCd[2] = skillCdScaled(2);
     h.novaT = 0.45;
     const dmg = h.dmg * 0.55 * autoDmgMult();
-    const reach = 300 + (h.novaReach || 0);
+    const reach = novaReachFor(h.novaReach);
+    const hold = novaFreezeFor(h.novaHold);
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < reach) {
         hitEnemy(e, dmg, false);
-        applyCc(e, 2.8 + (h.novaHold || 0));
+        applyCc(e, hold);
       }
     }
-    fx.rings.push({ x: h.x, t: 0.5, color: "rgba(140,210,255,0.85)", r: 50 });
+    fx.rings.push({ x: h.x, t: 0.45, color: "rgba(140,210,255,0.85)", r: 36, w: 5, grow: reach - 36 });
     shake = 5;
     sfx(620, 0.16, "sine", 0.05);
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
@@ -1920,7 +1930,7 @@
     const h = run.hero;
     const s = classDef(h.klass).skills[slot];
     if (!s.cd) return 0;
-    return Math.min(1, (Number(h.skillCd[slot]) || 0) / Math.max(0.01, cdScale(s.cd)));
+    return Math.min(1, (Number(h.skillCd[slot]) || 0) / Math.max(0.01, skillCdScaled(slot)));
   }
 
   function drawHealVfx(e, gy, labels) {
@@ -2214,10 +2224,12 @@
         ctx.fillRect(sx(h.x + 30), gy - 20, 280, 18);
       }
       if (h.novaT > 0) {
+        const reach = novaReachFor(h.novaReach);
+        const u = (0.45 - h.novaT) / 0.45;
         ctx.strokeStyle = "rgba(140,210,255,0.8)";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(sx(h.x), gy - 80, 80 + (0.45 - h.novaT) * 180, 0, Math.PI * 2);
+        ctx.arc(sx(h.x), gy - 80, 40 + u * (reach - 40), 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -2606,13 +2618,13 @@
     if (nextEl) {
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
-          run.gold >= 12
+          run.gold >= 10
             ? "First steel is in reach — buy " +
               (starters.length <= 2
                 ? starters.join(" or ")
                 : starters.slice(0, -1).join(", ") + ", or " + starters[starters.length - 1]) +
               "."
-            : "First steel costs 12g. The first raiders pay for it.";
+            : "First steel costs 10g. The first raiders pay for it.";
       } else {
         nextEl.textContent = next
           ? "Next crate opens at wave " + next + "."
@@ -2913,10 +2925,18 @@
       }));
     },
     content() {
+      const h = run.hero;
       return {
         mageFlip: classDef("mage").flip,
         warriorFlip: classDef("warrior").flip,
         rangerFlip: classDef("ranger").flip,
+        nova: {
+          reach: novaReachFor(h && h.novaReach),
+          freeze: novaFreezeFor(h && h.novaHold),
+          cd: novaCdFor(h && h.skillHaste),
+          cdMin: NOVA.cdMin,
+          spawnGap: 390,
+        },
         trees: Object.fromEntries(
           Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
         ),

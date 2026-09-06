@@ -1,3 +1,21 @@
+// Stage = 10 waves. Bosses land on 10 / 20 / 30 / 40 / 50
+// (Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen).
+// Scott reach bars (design, not spreadsheet DPS):
+//   0 prestiges → Stage 1 waves 6–8
+//   1 prestige  → 1st boss (wave 10)
+//   2 prestiges → mid Stage 2 (waves 14–16)
+//   3 prestiges → 2nd boss (wave 20)
+const STAGE_LEN = 10;
+
+const NOVA = {
+  reach: 172,
+  reachCap: 220,
+  freeze: 1.35,
+  cd: 9,
+  cdMin: 7,
+  mana: 28,
+};
+
 const CLASSES = {
   warrior: {
     id: "warrior",
@@ -54,7 +72,7 @@ const CLASSES = {
     skills: [
       { id: "cauterize", name: "Cauterize", mana: 22 },
       { id: "inferno", name: "Inferno", cd: 8 },
-      { id: "nova", name: "Frost Nova", mana: 24, cd: 6 },
+      { id: "nova", name: "Frost Nova", mana: NOVA.mana, cd: NOVA.cd, cdMin: NOVA.cdMin },
     ],
   },
   ranger: {
@@ -109,7 +127,7 @@ const ENEMIES = {
     sprite: "shield",
     hp: 46,
     dmg: 4,
-    armor: 7,
+    armor: 5.5,
     speed: 48,
     atkRate: 0.7,
     reach: 86,
@@ -122,10 +140,10 @@ const ENEMIES = {
     name: "Berserker",
     sprite: "berserk",
     hp: 26,
-    dmg: 11,
+    dmg: 8,
     armor: 0,
     speed: 95,
-    atkRate: 1.15,
+    atkRate: 1.05,
     reach: 80,
     keep: 80,
     gold: 14,
@@ -154,7 +172,7 @@ const ENEMIES = {
     name: "Mage",
     sprite: "mage",
     hp: 18,
-    dmg: 14,
+    dmg: 11,
     armor: 0,
     speed: 50,
     atkRate: 0.42,
@@ -206,7 +224,7 @@ const ENEMIES = {
     boss: true,
     scale: 1.55,
     hp: 90,
-    dmg: 14,
+    dmg: 12,
     armor: 2,
     speed: 38,
     atkRate: 0.55,
@@ -332,7 +350,7 @@ const RUN_UPGRADES = [
     icon: "⚔",
     unlockWave: 1,
     heirloom: true,
-    cost: (lv) => goldCost(18, 1.38, lv, 12),
+    cost: (lv) => goldCost(18, 1.38, lv, 10),
     apply: bumpDmg(2),
   },
   {
@@ -342,7 +360,7 @@ const RUN_UPGRADES = [
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => goldCost(20, 1.4, lv, 13),
+    cost: (lv) => goldCost(20, 1.4, lv, 11),
     apply: bumpSpeed(1.08),
   },
   {
@@ -352,7 +370,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => goldCost(22, 1.36, lv, 14),
+    cost: (lv) => goldCost(22, 1.36, lv, 12),
     apply: bumpVital(25),
   },
   {
@@ -485,7 +503,7 @@ const RUN_UPGRADES = [
     icon: "✶",
     unlockWave: 1,
     heirloom: true,
-    cost: (lv) => goldCost(18, 1.38, lv, 12),
+    cost: (lv) => goldCost(18, 1.38, lv, 10),
     apply: bumpDmg(2),
   },
   {
@@ -495,7 +513,7 @@ const RUN_UPGRADES = [
     desc: "+8% cast speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => goldCost(20, 1.4, lv, 13),
+    cost: (lv) => goldCost(20, 1.4, lv, 11),
     apply: bumpSpeed(1.08),
   },
   {
@@ -505,7 +523,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => goldCost(22, 1.36, lv, 14),
+    cost: (lv) => goldCost(22, 1.36, lv, 12),
     apply: bumpVital(25),
   },
   {
@@ -641,7 +659,7 @@ const RUN_UPGRADES = [
     icon: "⚔",
     unlockWave: 1,
     heirloom: true,
-    cost: (lv) => goldCost(18, 1.38, lv, 12),
+    cost: (lv) => goldCost(18, 1.38, lv, 10),
     apply: bumpDmg(2),
   },
   {
@@ -651,7 +669,7 @@ const RUN_UPGRADES = [
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
-    cost: (lv) => goldCost(20, 1.4, lv, 13),
+    cost: (lv) => goldCost(20, 1.4, lv, 11),
     apply: bumpSpeed(1.08),
   },
   {
@@ -661,7 +679,7 @@ const RUN_UPGRADES = [
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    cost: (lv) => goldCost(22, 1.36, lv, 14),
+    cost: (lv) => goldCost(22, 1.36, lv, 12),
     apply: bumpVital(25),
   },
   {
@@ -823,12 +841,12 @@ const PRESTIGE_TREES = {
         row: 0,
         root: true,
         max: 3,
-        desc: "+16 starting HP and +1 damage each run",
+        desc: "+18 starting HP and +1 damage each run",
         apply: (h, lv) => {
-          h.maxHp += lv * 16;
-          h.hp += lv * 16;
+          h.maxHp += lv * 18;
+          h.hp += lv * 18;
           h.dmg += lv;
-          h.prestHp = (h.prestHp || 0) + lv * 16;
+          h.prestHp = (h.prestHp || 0) + lv * 18;
         },
       }),
       node({
@@ -996,14 +1014,14 @@ const PRESTIGE_TREES = {
         row: 0,
         root: true,
         max: 3,
-        desc: "+10 starting HP, +8 max mana, +0.35 mana regen",
+        desc: "+12 starting HP, +8 max mana, +0.35 mana regen",
         apply: (h, lv) => {
-          h.maxHp += lv * 10;
-          h.hp += lv * 10;
+          h.maxHp += lv * 12;
+          h.hp += lv * 12;
           h.maxMana += lv * 8;
           h.mana += lv * 5;
           h.manaRegen += lv * 0.35;
-          h.prestHp = (h.prestHp || 0) + lv * 10;
+          h.prestHp = (h.prestHp || 0) + lv * 12;
         },
       }),
       node({
@@ -1075,10 +1093,10 @@ const PRESTIGE_TREES = {
         col: 1,
         row: 2,
         req: ["chill"],
-        desc: "Frost Nova +40 range and +0.35s freeze",
+        desc: "Frost Nova +14 range and +0.12s freeze",
         apply: (h, lv) => {
-          h.novaReach = (h.novaReach || 0) + lv * 40;
-          h.novaHold = (h.novaHold || 0) + lv * 0.35;
+          h.novaReach = (h.novaReach || 0) + lv * 14;
+          h.novaHold = (h.novaHold || 0) + lv * 0.12;
         },
       }),
       node({
@@ -1102,10 +1120,10 @@ const PRESTIGE_TREES = {
         row: 4,
         max: 1,
         req: ["shatter"],
-        desc: "Frost Nova +0.8s freeze and +1 Shatter",
+        desc: "Frost Nova +0.28s freeze and +1 Shatter",
         apply: (h, lv) => {
           if (lv > 0) {
-            h.novaHold = (h.novaHold || 0) + 0.8;
+            h.novaHold = (h.novaHold || 0) + 0.28;
             h.shatter = (h.shatter || 0) + 1;
           }
         },
@@ -1177,13 +1195,13 @@ const PRESTIGE_TREES = {
         row: 0,
         root: true,
         max: 3,
-        desc: "+10 starting HP, +1 damage, wolf +10 HP",
+        desc: "+12 starting HP, +1 damage, wolf +12 HP",
         apply: (h, lv) => {
-          h.maxHp += lv * 10;
-          h.hp += lv * 10;
+          h.maxHp += lv * 12;
+          h.hp += lv * 12;
           h.dmg += lv;
-          h.wolfHp = (h.wolfHp || 0) + lv * 10;
-          h.prestHp = (h.prestHp || 0) + lv * 10;
+          h.wolfHp = (h.wolfHp || 0) + lv * 12;
+          h.prestHp = (h.prestHp || 0) + lv * 12;
         },
       }),
       node({
@@ -1482,7 +1500,7 @@ function heirloomUpgrade(klass) {
 }
 
 function waveCount(n) {
-  return Math.min(5, Math.max(1, Math.ceil(n / 1.7)));
+  return Math.min(5, Math.max(1, Math.ceil((n + 1) / 2.2)));
 }
 
 function isBossWave(n) {
@@ -1500,12 +1518,12 @@ function waveRoster(n) {
   const units = [];
   for (let i = 0; i < count; i++) {
     let type = "grunt";
-    if (n >= 13 && n % 3 === 1 && i === count - 1) type = "healer";
-    else if (n >= 11 && i === count - 1 && count >= 3) type = "mage";
-    else if (n >= 7 && i === count - 1) type = "archer";
-    else if (n >= 11 && i === count - 2 && count >= 4) type = "archer";
-    else if (n >= 8 && i % 4 === 3) type = "assassin";
-    else if (n >= 5 && i % 3 === 2) type = "berserk";
+    if (n >= 14 && n % 3 === 1 && i === count - 1) type = "healer";
+    else if (n >= 12 && i === count - 1 && count >= 3) type = "mage";
+    else if (n >= 8 && i === count - 1) type = "archer";
+    else if (n >= 12 && i === count - 2 && count >= 4) type = "archer";
+    else if (n >= 9 && i % 4 === 3) type = "assassin";
+    else if (n >= 6 && i % 3 === 2) type = "berserk";
     else if (n >= 3 && i % 2 === 1) type = "shield";
     units.push(type);
   }
@@ -1514,11 +1532,28 @@ function waveRoster(n) {
 }
 
 function waveScale(n) {
+  const w = Math.max(1, n);
+  const early = Math.min(w - 1, STAGE_LEN - 1);
+  const mid = Math.max(0, Math.min(w - STAGE_LEN, STAGE_LEN));
+  const late = Math.max(0, w - STAGE_LEN * 2);
   return {
-    hp: Math.pow(1.17, n - 1),
-    dmg: Math.pow(1.09, n - 1),
-    gold: 1 + (n - 1) * 0.08,
+    hp: Math.pow(1.108, early) * Math.pow(1.125, mid) * Math.pow(1.14, late),
+    dmg: Math.pow(1.058, early) * Math.pow(1.07, mid) * Math.pow(1.08, late),
+    gold: 1 + (w - 1) * 0.1,
   };
+}
+
+function novaReachFor(extra) {
+  return Math.min(NOVA.reachCap, NOVA.reach + Math.max(0, extra || 0));
+}
+
+function novaFreezeFor(extra) {
+  return NOVA.freeze + Math.max(0, extra || 0);
+}
+
+function novaCdFor(haste) {
+  const scaled = NOVA.cd * Math.max(0.45, 1 - Math.max(0, haste || 0));
+  return Math.max(NOVA.cdMin, scaled);
 }
 
 function allyHealAmount(def, wave, healerCount) {
@@ -1527,4 +1562,26 @@ function allyHealAmount(def, wave, healerCount) {
   const others = Math.max(0, (healerCount || 1) - 1);
   const pile = 1 / (1 + 0.45 * others);
   return raw * pile;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    CLASSES,
+    ENEMIES,
+    BOSS_ORDER,
+    STAGE_LEN,
+    NOVA,
+    RUN_UPGRADES,
+    PRESTIGE_TREES,
+    goldCost,
+    waveCount,
+    isBossWave,
+    bossTypeFor,
+    waveRoster,
+    waveScale,
+    novaReachFor,
+    novaFreezeFor,
+    novaCdFor,
+    allyHealAmount,
+  };
 }
