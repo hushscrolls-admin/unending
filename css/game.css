@@ -264,7 +264,7 @@ body {
   gap: 0;
   background: rgba(10, 8, 20, 0.35);
   border: 1px solid #2a2038;
-  padding: 8px 8px 12px;
+  padding: 6px 6px 8px;
 }
 
 .tree-col h3 {
@@ -294,7 +294,7 @@ body {
 
 .tree-step {
   position: relative;
-  margin: 0 0 10px;
+  margin: 0 0 6px;
 }
 
 .tree-step::before {
@@ -348,14 +348,14 @@ body {
 }
 
 .tree-node {
-  padding: 7px 8px 8px;
+  padding: 5px 7px 6px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid #243044;
   text-align: left;
 }
 
 .tree-node .name {
-  font-size: 20px;
+  font-size: 18px;
   color: #f0f4fa;
   display: flex;
   flex-wrap: wrap;
@@ -365,14 +365,14 @@ body {
 
 .tree-node .name span {
   color: var(--muted);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .tree-node .desc {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--muted);
-  line-height: 1.2;
-  margin: 2px 0 6px;
+  line-height: 1.15;
+  margin: 1px 0 4px;
 }
 
 .tree-node .req {
@@ -383,11 +383,11 @@ body {
 
 .tree-node button {
   font-family: inherit;
-  font-size: 16px;
+  font-size: 15px;
   background: var(--btn);
   color: var(--ink);
   border: 1px solid #556;
-  padding: 4px 8px;
+  padding: 3px 8px;
   cursor: pointer;
   width: 100%;
 }
@@ -658,12 +658,19 @@ body {
 
 #dead {
   justify-content: flex-start;
-  padding-top: 28px;
+  padding-top: 16px;
   overflow: auto;
 }
 
 #dead h1 {
   color: var(--hp);
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+#dead .sub {
+  margin: 4px 0 10px;
+  font-size: 20px;
 }
 
 #toast {

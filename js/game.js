@@ -2023,13 +2023,13 @@
       { lab: "3", frac: skillCdFrac(2), color: "#7ad0ff" },
     ];
     const r = 13;
-    const gap = 10;
-    const padX = 14;
-    const padY = 8;
+    const gap = 12;
+    const padX = 16;
+    const padY = 9;
     const panelW = padX * 2 + slots.length * (r * 2) + (slots.length - 1) * gap;
-    const panelH = 46;
+    const panelH = 50;
     const x0 = 14;
-    const y0 = 88;
+    const y0 = H - 84;
     ctx.save();
     ctx.fillStyle = "rgba(6, 8, 14, 0.78)";
     ctx.strokeStyle = accent;
@@ -2911,6 +2911,21 @@
         wave: shopUnlockWave(u),
         lv: run.levels[u.id] || 0,
       }));
+    },
+    content() {
+      return {
+        mageFlip: classDef("mage").flip,
+        warriorFlip: classDef("warrior").flip,
+        rangerFlip: classDef("ranger").flip,
+        trees: Object.fromEntries(
+          Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
+        ),
+        shops: {
+          warrior: shopList("warrior").map((u) => u.name),
+          mage: shopList("mage").map((u) => u.name),
+          ranger: shopList("ranger").map((u) => u.name),
+        },
+      };
     },
     wolf() {
       return wolfSnapshot();

@@ -73,7 +73,7 @@ Old overnight Blood Tree ranks are **refunded as Glory**, then the old shared tr
 | 1 / 2 / 3 | Class skills (see table) |
 | P | Pause |
 
-The S / 1 / 2 / 3 cooldown strip sits under the top HUD on the left, away from the fighter.
+The S / 1 / 2 / 3 cooldown strip sits above the control hint on the bottom left, away from the fighter.
 
 ## Art
 
