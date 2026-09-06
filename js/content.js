@@ -97,7 +97,7 @@ const CLASSES = {
     id: "ranger",
     name: "Ranger",
     tag: "Bow and wolf",
-    blurb: "Ranged burst. Your wolf holds the road.",
+    blurb: "Ranged burst. Your wolf holds the road — until it falls.",
     color: "#7aaf4a",
     sprite: "heroRanger",
     anims: false,
@@ -119,7 +119,7 @@ const CLASSES = {
     skills: [
       { id: "dress", name: "Field Dress", mana: 22 },
       { id: "volley", name: "Volley", cd: 7 },
-      { id: "sic", name: "Sic 'em", cd: 8 },
+      { id: "sic", name: "Sic 'em", cd: 12 },
     ],
   },
 };
@@ -1859,10 +1859,9 @@ const PRESTIGE_TREES = {
         row: 3,
         max: 2,
         req: ["pelt"],
-        desc: "Sic 'em taunt +0.8s and leap +20% damage",
+        desc: "Sic 'em revive returns the wolf with +10% HP per rank",
         apply: (h, lv) => {
-          h.sicHold = (h.sicHold || 0) + lv * 0.8;
-          h.sicDmg = (h.sicDmg || 0) + lv * 0.2;
+          h.sicRevive = (h.sicRevive || 0) + lv * 0.1;
         },
       }),
       node({
@@ -1940,7 +1939,7 @@ const PRESTIGE_TREES = {
         row: 7,
         max: 1,
         req: ["packbond"],
-        desc: "Sic 'em also heals you for 14% of max HP",
+        desc: "Sic 'em revive also heals you for 14% of max HP",
         apply: (h, lv) => {
           if (lv > 0) h.sicHeal = 0.14;
         },

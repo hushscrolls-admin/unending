@@ -52,6 +52,10 @@ assert(CLASSES.mage.range < RANGE.spawnGap, "Mage base range must sit short of t
 assert(CLASSES.ranger.range < RANGE.spawnGap, "Ranger base range must sit short of the spawn line");
 assert(CLASSES.mage.range > 240, "Mage base range should still hit W8 archers (~250 keep)");
 assert(CLASSES.ranger.range >= 250, "Ranger base range should still contest W8 archers");
+assert(CLASSES.ranger.skills[2].id === "sic", "Ranger 3 stays Sic 'em");
+assert(CLASSES.ranger.skills[2].cd >= 12, "Sic 'em revive CD should leave a real down window");
+const sicMaster = PRESTIGE_TREES.ranger.nodes.find((n) => n.id === "sicmaster");
+assert(sicMaster && /revive/i.test(sicMaster.desc), "Sic Master should buff revive HP, not leap/taunt");
 assert(clampCombatRange(900, 728) <= 728 - RANGE.roadPad, "combat range must clamp inside the road");
 assert(clampCombatRange(CLASSES.mage.range + 24 * 8, 728) > CLASSES.mage.range, "range upgrades must still grow on the road");
 

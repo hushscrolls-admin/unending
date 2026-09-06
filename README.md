@@ -20,7 +20,7 @@ Open `http://localhost:8765`.
 - Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range with a modest drip (not a full-pack reset), and extra waves wait if the road is already crowded.
 - Kills grant gold immediately (it is not a walk-over). Hearts, mana, and short buffs (rage / haste) pop on the road, then magnet to the fighter — or to the wolf if it is closer — so Mage and Ranger collect them without walking. Warrior still picks them up by charging through, but is no longer the only class that benefits.
 - Spend gold in the Armory during the fight. A run starts with 14g, so the opening crate (10 / 11 / 12g) is a first-wave buy. The first raider still pays for a second pad before Wave 4. Later crates still open at 5 / 9 / 13 / 17. **Each class has its own Armory pool** — Warrior steel, Mage fire/mana, Ranger bow/wolf. There are no shared/tagged cross-class rows.
-- **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or the wolf) are low and the heal is ready. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
+- **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or a living wolf) are low and the heal is ready. Ranger **Sic 'em** flashes when the wolf is DOWN. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
 - On death you keep Glory and spend it on **that class's prestige tree**. Then rise again as any class. Gold and run upgrades reset. Glory is shared; ranks are per class.
@@ -31,9 +31,9 @@ Open `http://localhost:8765`.
 |---|---|---|---|---|---|
 | **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash to the back line |
 | **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 9s, 7s floor) — pack-scale freeze, not a full-map lock. Glassier than Warrior (84 HP, 1 armor) with a short early-wave ward. Faces the road (toward enemies). |
-| **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (25 mana) — heal you and the wolf (revives if down) | Volley (7s) — five arrows | Sic 'em (8s) — wolf leaps the back line and taunts melee |
+| **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (22 mana) — heal you and a living wolf | Volley (7s) — five arrows | Sic 'em (12s) — revive the wolf when it is DOWN |
 
-The Ranger's wolf is a companion tank. Melee prefers the closer target; Sic 'em forces them onto the wolf for a few seconds. If the wolf falls, Field Dress or Sic 'em brings it back.
+The Ranger's wolf is a mortal companion tank. Melee and incoming shots can drop it. Field Dress patches you and a living wolf. **Sic 'em** is the revive — it does not leap or taunt. While the wolf is down you are glassier until 3 brings it back.
 
 Class kits stay distinct. Armory and prestige only add flavor on top of those skills.
 

@@ -370,6 +370,7 @@
       wolfStride: 0,
       sicHold: 0,
       sicDmg: 0,
+      sicRevive: 0,
       strikePierce: 0,
       waveWard: 0,
       mendArmor: 0,
@@ -479,15 +480,15 @@
     const h = run.hero;
     const pack = (h && h.pack) || 0;
     const wave = wolfWave();
-    const scale = 1 + Math.min(2.8, (wave - 1) * 0.22);
+    const scale = 1 + Math.min(1.6, (wave - 1) * 0.12);
     const dire = (h && h.dire) || 0;
-    const hp = Math.round((96 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22) * (1 + dire * 0.12));
+    const hp = Math.round((72 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22) * (1 + dire * 0.12));
     return {
       hp,
       maxHp: hp,
       dmg: 6 + ((h && h.dmg) || 9) * 0.08 + pack * 2 + dire * 1.5 + Math.min(3, (wave - 1) * 0.18),
-      armor: 5.5 + ((h && h.wolfArmor) || 0) + Math.min(9, (wave - 1) * 0.72) + pack * 0.6,
-      regen: 2.2 + ((h && h.wolfRegen) || 0) + Math.min(4.5, (wave - 1) * 0.32),
+      armor: 1.8 + ((h && h.wolfArmor) || 0) + Math.min(3.2, (wave - 1) * 0.22) + pack * 0.4,
+      regen: 0.4 + ((h && h.wolfRegen) || 0) + Math.min(1.0, (wave - 1) * 0.06),
     };
   }
 
@@ -495,10 +496,14 @@
     const w = run.wolf;
     if (!w) return w;
     const next = wolfBaseStats();
-    const ratio = keepRatio && w.maxHp > 0 ? Math.max(0, w.hp) / w.maxHp : 1;
     w.maxHp = next.maxHp;
-    w.hp = w.hp <= 0 && keepRatio ? 0 : Math.round(next.maxHp * ratio);
-    if (w.hp > 0) w.hp = Math.max(1, Math.min(w.maxHp, w.hp));
+    if (w.hp <= 0 && keepRatio) {
+      w.hp = 0;
+    } else if (keepRatio) {
+      w.hp = Math.max(0, Math.min(w.maxHp, w.hp));
+    } else {
+      w.hp = next.maxHp;
+    }
     w.armor = next.armor;
     w.dmg = next.dmg;
     w.regen = next.regen;
@@ -755,10 +760,9 @@
   function hitWolf(amount, crit) {
     const w = run.wolf;
     if (!w || w.hp <= 0) return;
-    const armor = w.armor + (w.taunt > 0 ? 8 : 0);
+    const armor = w.armor + (w.taunt > 0 ? 1.4 : 0);
     let d = dmgIn(amount, armor);
-    if (w.taunt > 0) d *= 0.72;
-    d = Math.min(d, Math.max(6, w.maxHp * 0.13));
+    if (w.taunt > 0) d *= 0.9;
     w.hp -= d;
     w.flash = 0.12;
     floatText(
@@ -1263,18 +1267,10 @@
     h.healFlash = 0.7;
     if (h.dressWard) h.dressWardT = 1.6 * h.dressWard;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
-    if (run.wolf) {
-      if (run.wolf.hp <= 0) {
-        const fresh = makeWolf();
-        fresh.x = h.x + 60;
-        fresh.hp = Math.round(fresh.maxHp * 0.6);
-        run.wolf = fresh;
-        floatText(fresh.x, groundY() - 150, "UP", "#c9e6a0");
-      } else {
-        const wh = run.wolf.maxHp * 0.55;
-        run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + wh);
-        floatText(run.wolf.x, groundY() - 150, "+" + fmt(wh), "#8fd18f");
-      }
+    if (run.wolf && run.wolf.hp > 0) {
+      const wh = run.wolf.maxHp * 0.32;
+      run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + wh);
+      floatText(run.wolf.x, groundY() - 150, "+" + fmt(wh), "#8fd18f");
     }
     sfx(500, 0.12, "sine", 0.05);
   }
@@ -1410,21 +1406,22 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[2];
     if (state !== "fight" || h.skillCd[2] > 0) return;
-    h.skillCd[2] = cdScale(spec.cd);
-    if (!run.wolf || run.wolf.hp <= 0) {
-      run.wolf = makeWolf();
-      run.wolf.x = h.x + 50;
-      floatText(run.wolf.x, groundY() - 150, "WOLF", "#c9e6a0");
+    if (wolfAlive()) {
+      toast("Wolf is up");
+      return;
     }
-    const w = run.wolf;
-    const target =
-      nearest(h.x + 400, (e) => e.x > h.x) || nearest(w.x);
-    const dest = target ? target.x - 36 : h.x + 220;
-    w.leap = { from: w.x, to: dest, t: 0, hit: false };
-    w.taunt = 3.2 + (h.sicHold || 0);
+    h.skillCd[2] = cdScale(spec.cd);
+    const at = run.wolf ? run.wolf.x : h.x + 56;
+    const fresh = makeWolf();
+    fresh.x = at || h.x + 56;
+    const frac = Math.min(1, 0.7 + (h.sicRevive || 0));
+    fresh.hp = Math.max(1, Math.round(fresh.maxHp * frac));
+    fresh.leap = null;
+    fresh.taunt = 0;
+    run.wolf = fresh;
     if (h.sicHeal) healHero(h.maxHp * h.sicHeal);
-    w.anim = "atk";
-    floatText(w.x, groundY() - 140, "SIC 'EM", "#e6c15a");
+    floatText(fresh.x, groundY() - 150, "SIC 'EM", "#c9e6a0");
+    floatText(fresh.x, groundY() - 118, "UP", "#8fd18f");
     sfx(280, 0.12, "square", 0.05);
   }
 
@@ -1480,23 +1477,7 @@
       return;
     }
     if (w.regen) w.hp = Math.min(w.maxHp, w.hp + w.regen * dt);
-    if (w.leap) {
-      w.leap.t += dt;
-      const u = Math.min(1, w.leap.t / 0.28);
-      w.x = w.leap.from + (w.leap.to - w.leap.from) * u;
-      if (!w.leap.hit && u > 0.55) {
-        w.leap.hit = true;
-        for (const e of [...run.enemies]) {
-          if (Math.abs(e.x - w.x) < 70) {
-            hitEnemy(e, w.dmg * 1.5 * (1 + ((run.hero && run.hero.sicDmg) || 0)), false);
-            applyCc(e, 0.35);
-            w.hp = Math.min(w.maxHp, w.hp + w.dmg * 0.16);
-          }
-        }
-      }
-      if (u >= 1) w.leap = null;
-      return;
-    }
+    w.leap = null;
     const prey = nearest(w.x);
     const guard = h.x + 70;
     if (prey && Math.abs(prey.x - w.x) > w.reach) {
@@ -1511,8 +1492,8 @@
         w.anim = "atk";
         w.animT = 0;
         hitEnemy(prey, w.dmg, false);
-        const sip = Math.max(0, w.dmg * (0.16 + (h.wolfLeech || 0)));
-        w.hp = Math.min(w.maxHp, w.hp + sip);
+        const sip = Math.max(0, w.dmg * (h.wolfLeech || 0));
+        if (sip) w.hp = Math.min(w.maxHp, w.hp + sip);
         if (h.packBond) healHero(w.dmg * 0.1 * h.packBond);
         sfx(210, 0.05, "square", 0.03);
       }
@@ -1801,6 +1782,9 @@
             }
           }
         }
+      } else if (wolfAlive() && Math.abs(b.x - run.wolf.x) < 28) {
+        hitWolf(b.dmg);
+        b.dead = true;
       } else if (Math.abs(b.x - h.x) < 30) {
         hitHero(b.dmg, b.x);
         b.dead = true;
@@ -2023,10 +2007,7 @@
     const h = run.hero;
     if (!h || !healSkillReady()) return false;
     if (h.hp / h.maxHp <= 0.35) return true;
-    if (h.klass === "ranger" && run.wolf) {
-      if (run.wolf.hp <= 0) return true;
-      if (run.wolf.hp / run.wolf.maxHp <= 0.35) return true;
-    }
+    if (h.klass === "ranger" && wolfAlive() && run.wolf.hp / run.wolf.maxHp <= 0.35) return true;
     return false;
   }
 
@@ -2034,11 +2015,15 @@
     const h = run.hero;
     if (!h) return true;
     if (h.hp / h.maxHp <= 0.45) return false;
-    if (h.klass === "ranger" && run.wolf) {
-      if (run.wolf.hp <= 0) return false;
-      if (run.wolf.hp / run.wolf.maxHp <= 0.45) return false;
-    }
+    if (h.klass === "ranger" && wolfAlive() && run.wolf.hp / run.wolf.maxHp <= 0.45) return false;
     return true;
+  }
+
+  function sicReady() {
+    const h = run.hero;
+    if (!h || h.klass !== "ranger" || state !== "fight") return false;
+    if ((h.skillCd[2] || 0) > 0) return false;
+    return !!(run.wolf && run.wolf.hp <= 0);
   }
 
   function drawWorldBars(gy) {
@@ -2284,8 +2269,8 @@
     if (!w || (state !== "fight" && state !== "dead")) return;
     if (w.hp > 0) {
       const tanking = run.enemies.some((e) => threatFor(e) === w);
-      const tag = w.leap ? "SIC" : w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
-      const hot = w.taunt > 0 || w.leap || tanking;
+      const tag = w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
+      const hot = w.taunt > 0 || tanking;
       drawStamp(tag, sx(w.x), gy + 18, {
         color: hot ? "#1a1208" : "#d8f0a8",
         bg: hot ? "#ffe27a" : "rgba(8, 12, 6, 0.9)",
@@ -2301,7 +2286,7 @@
         font: "bold 20px VT323, monospace",
         h: 22,
       });
-      drawStamp("1 / 3 revive", sx(w.x), gy + 18, {
+      drawStamp("3 revive", sx(w.x), gy + 18, {
         color: "#ffe27a",
         border: "#c07040",
         font: "bold 16px VT323, monospace",
@@ -2663,6 +2648,9 @@
       if (h && !(h.mode === "home" || h.mode === "return")) return "Return";
       return s.name;
     }
+    if (s.id === "sic" && h && run.wolf && run.wolf.hp <= 0 && !(h.skillCd[slot] > 0)) {
+      return "Sic 'em — UP";
+    }
     if (s.cd && h && h.skillCd[slot] > 0) {
       return s.name + " (" + Math.ceil(h.skillCd[slot]) + "s)";
     }
@@ -2679,6 +2667,7 @@
     if (s.cd && (Number(h.skillCd[slot]) || 0) > 0) return true;
     if (s.id === "whirl" && h.whirl) return true;
     if (s.id === "inferno" && h.inferno) return true;
+    if (s.id === "sic" && wolfAlive()) return true;
     return false;
   }
 
@@ -2734,6 +2723,12 @@
         healBtn.classList.remove("ready-flash");
       }
     }
+    const sicBtn = document.getElementById("btn-s3");
+    if (sicBtn && h && h.klass === "ranger") {
+      const rez = sicReady();
+      sicBtn.classList.toggle("urgent", rez);
+      sicBtn.classList.toggle("ready-flash", rez);
+    }
   }
 
   function syncHud() {
@@ -2780,9 +2775,9 @@
     if (haste) buffs.push("Haste " + Math.ceil(h.buffs.haste) + "s");
     if (run.wolf) {
       if (wolfAlive()) {
-        const tag = run.wolf.leap ? "Sic" : run.wolf.taunt > 0 ? "Taunt" : "Guard";
+        const tag = run.wolf.taunt > 0 ? "Taunt" : "Guard";
         buffs.push("Wolf " + fmt(run.wolf.hp) + "/" + fmt(run.wolf.maxHp) + " " + tag);
-      } else buffs.push("Wolf down — 1 or 3");
+      } else buffs.push("Wolf down — press 3");
     }
     if (lastStanding()) buffs.push("Last Stand");
     if (h.secondWind > 0) buffs.push("Wind " + h.secondWind);
@@ -3242,6 +3237,19 @@
     },
     hurt(n) {
       if (run.hero && state === "fight") hitHero(n || 10, run.hero.x);
+    },
+    hurtWolf(n) {
+      if (run.wolf && state === "fight") hitWolf(n || 24);
+      return wolfSnapshot();
+    },
+    downWolf() {
+      if (!run.wolf) return null;
+      run.wolf.hp = 0;
+      run.wolf.taunt = 0;
+      run.wolf.leap = null;
+      run.wolf.deadT = 12;
+      floatText(run.wolf.x, groundY() - 150, "WOLF DOWN", "#c07040");
+      return wolfSnapshot();
     },
   };
 
