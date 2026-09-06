@@ -17,10 +17,10 @@ Open `http://localhost:8765`.
 ## Loop
 
 - The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
-- Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range with a modest drip (not a full-pack reset), and extra waves wait if the road is already crowded.
-- Kills drop gold, mana, hearts, and short buffs (rage / haste).
-- Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first class crate before Wave 4. Later crates still open at 5 / 9 / 13 / 17. **Each class has its own Armory pool** — Warrior steel, Mage fire/mana, Ranger bow/wolf. There are no shared/tagged cross-class rows.
-- **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or the wolf) are low and the heal is ready. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
+- Wave 1–2 are a single raider. Waves 3–6 stay two grunts. Shields and the first 3-pack wait until 7; berserkers until 9. Early waves also cap how many can stand on the road so leftovers do not stack into a W4 brick wall. Healers only patch allies in range with a modest drip (not a full-pack reset).
+- Kills grant gold immediately (it is not a walk-over). Hearts, mana, and short buffs (rage / haste) pop on the road, then magnet to the fighter — or to the wolf if it is closer — so Mage and Ranger collect them without walking. Warrior still picks them up by charging through, but is no longer the only class that benefits.
+- Spend gold in the Armory during the fight. A run starts with **24g**, and the opening crate is **8 / 8 / 9g**, so Mage can buy Ember and Ward before Wave 1 lands. Later crates still open at 5 / 9 / 13 / 17. **Each class has its own Armory pool** — Warrior steel, Mage fire/mana, Ranger bow/wolf. There are no shared/tagged cross-class rows.
+- **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or a living wolf) are low and the heal is ready. Ranger **Sic 'em** flashes when the wolf is DOWN. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
 - On death you keep Glory and spend it on **that class's prestige tree**. Then rise again as any class. Gold and run upgrades reset. Glory is shared; ranks are per class.
@@ -30,12 +30,27 @@ Open `http://localhost:8765`.
 | Class | Auto | Strike (Click / Space) | 1 | 2 | 3 |
 |---|---|---|---|---|---|
 | **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash to the back line |
-| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 7s) — freeze the pack. Starts a bit sturdier (84 HP, 1 armor) so early waves are less of a brick wall. Faces the road (toward enemies). |
-| **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (25 mana) — heal you and the wolf (revives if down) | Volley (7s) — five arrows | Sic 'em (8s) — wolf leaps the back line and taunts melee |
+| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 9s, 7s floor) — pack-scale freeze, not a full-map lock. Glassier than Warrior (84 HP, 1 armor) with a short early-wave ward. Faces the road (toward enemies). |
+| **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (22 mana) — heal you and a living wolf | Volley (7s) — five arrows | Sic 'em (12s) — revive the wolf when it is DOWN |
 
-The Ranger's wolf is a companion tank. Melee prefers the closer target; Sic 'em forces them onto the wolf for a few seconds. If the wolf falls, Field Dress or Sic 'em brings it back.
+The Ranger's wolf is a mortal companion tank. Melee and incoming shots can drop it. Field Dress patches you and a living wolf. **Sic 'em** is the revive — it does not leap or taunt. While the wolf is down you are glassier until 3 brings it back.
 
 Class kits stay distinct. Armory and prestige only add flavor on top of those skills.
+
+## Reach bars
+
+Stages are 10 waves. Bosses are every 10th wave: The Butcher (10), Ironhide (20), Skycleaver (30), Stormcaller (40), The Sunfallen (50), then they cycle.
+
+Design reach (Warrior is the floor; Mage / Ranger should also hit these without Nova cheese):
+
+| Prestiges | Target |
+|---|---|
+| 0 | Stage 1, waves 6–8 |
+| 1 (root filled after the first death) | 1st boss (wave 10) |
+| 2 | mid Stage 2 (waves 14–16) |
+| 3 | 2nd boss (wave 20) |
+
+Frost Nova is a panic CC: pack-scale radius (capped well short of the spawn line), ~1.35s freeze, 9s cooldown with a 7s floor so Tempest / tree haste cannot make it spamable.
 
 ## Armory (per class)
 
@@ -51,11 +66,15 @@ Wave gates stay 1 / 5 / 9 / 13 / 17. The offered buys change with the class you 
 
 Each class has its own tree. One **root** (3 ranks) must be filled before any branch opens. After that, **every rank** on a node must be filled before its children unlock. Glory costs climb as you go deeper.
 
-| Class | Tree | Root | Branches |
+| Class | Tree | Root | Branches (each forks after the old leaf) |
 |---|---|---|---|
-| **Warrior** | Iron Pact | Oath | Shield (Hide → Second Wind → Thorns → Last Stand), Blade (Tempo → Execute → Overkill → Bloodlust), Spoils (Purse → Greed → Sanguine → Heirloom) |
-| **Fire Mage** | Ember Court | Kindle | Pyre (Cinder → Blaze → Overkill → Wildfire), Frost (Chill → Nova Depth → Shatter → Permafrost), Well (Spark → Tempest → Fate → Phylactery) |
-| **Ranger** | Wild Hunt | Trail | Bow (Edge → Longshot → Echo → Marksman), Wolf (Pack → Pelt → Sic Master → Alpha), Stride (Stride → Trophy → Fieldcraft → Keepsake) |
+| **Warrior** | Iron Pact | Oath | Shield (Hide → … → Last Stand → Bulwark / Aegis → Fortress / Ironclad → Unbreakable / Bastion), Blade (Tempo → … → Bloodlust → Cleave Form / Deep Wounds → Whirl Master / Heavy Hand → War Master / Reaper), Spoils (Purse → … → Heirloom → War Chest / Scavenger → Quartermaster / Field Medic → Kingpin / Provisioner) |
+| **Fire Mage** | Ember Court | Kindle | Pyre (Cinder → … → Wildfire → Conflagrate / Immolate → Kindling / Wider Fire → Phoenix / Living Bomb), Frost (Chill → … → Permafrost → Frostbite / Ice Lance → Glacial / Cold Snap → Winterheart / Rime), Well (Spark → … → Phylactery → Battery / Evocation → Sage / Spellweave → Archon / Ritualist) |
+| **Ranger** | Wild Hunt | Trail | Bow (Edge → … → Marksman → Multishot / Headhunter → True Flight / Rain → Deadeye / Sharpshooter), Wolf (Pack → … → Alpha → Howl / Maul → Pack Bond / Dire → Huntsman / Alpha Aura), Stride (Stride → … → Keepsake → Camouflage / Looter → Trail Ward / Swift Wind → Veteran / Pathfinder) |
+
+Rows 0–4 are the original path (1 / 2 / 3 prestige bars still land here). Rows 5–7 are expensive forks: two choices that do not require filling both, then a capstone on the path you picked. Glory costs climb with depth. Full ranks on a node still unlock its children.
+
+Long Cast / Longshot / Track now extend **on-road** targeting and projectile travel. Base Mage / Ranger range sits short of the spawn line so extra range actually hits farther campers. Shots clamp at the playable road — they no longer fly into the shop / off-screen.
 
 Pick **Rise as** on the death screen to browse that class's tree before you spend.
 

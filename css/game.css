@@ -235,7 +235,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(960px, 96vw);
+  width: min(1100px, 96vw);
 }
 
 .tree-root {
@@ -254,8 +254,8 @@ body {
 
 .tree-branches {
   display: grid;
-  grid-template-columns: repeat(3, minmax(200px, 1fr));
-  gap: 8px 22px;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 8px 16px;
 }
 
 .tree-col {
@@ -345,6 +345,35 @@ body {
 .tree-step.depth-4 .tree-node {
   width: 92%;
   margin-left: 8%;
+}
+.tree-step.depth-5 .tree-node,
+.tree-step.depth-6 .tree-node,
+.tree-step.depth-7 .tree-node {
+  width: 90%;
+  margin-left: 10%;
+  box-shadow: inset 3px 0 0 #7a4aaa;
+}
+
+.tree-fork {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+
+.tree-fork .tree-step {
+  margin: 0;
+}
+
+.tree-fork .tree-step::before,
+.tree-fork .tree-step::after {
+  display: none;
+}
+
+.tree-fork .tree-node {
+  width: 100%;
+  margin-left: 0;
+  min-height: 100%;
 }
 
 .tree-node {

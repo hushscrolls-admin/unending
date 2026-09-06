@@ -10,7 +10,9 @@
   const CHARGE_SPEED = 560;
   const RETURN_SPEED = 500;
   const SHOP_W = 332;
-  const LIVE_CAP = 8;
+  const START_GOLD = 24;
+  const DROP_PICK_R = 160;
+  const DROP_MAGNET_AGE = 0.32;
   const VITAL_CAP = 900;
   const HEAL_GOLD = "#ffe27a";
   const HEAL_GOLD_HOT = "#fff4a8";
@@ -91,9 +93,43 @@
     return rageMult() * (lastStanding() ? 1.25 : 1);
   }
 
-  function cdScale(seconds) {
+  function playSpan() {
+    const h = run.hero;
+    return Math.max(160, playRight() - (h ? h.x : HOME_X));
+  }
+
+  function combatRange() {
+    const h = run.hero;
+    if (!h) return RANGE.ranger;
+    return clampCombatRange(h.range, playSpan());
+  }
+
+  function boltLimitX(dir) {
+    const h = run.hero;
+    const span = combatRange();
+    if (!h) return playRight() - 16;
+    if (dir < 0) return Math.max(h.x - span, camera + 8);
+    return Math.min(h.x + span, playRight() - 16);
+  }
+
+  function infernoEnd() {
+    const h = run.hero;
+    const extra = Math.max(0, combatRange() - classDef("mage").range) + (h.infernoReach || 0);
+    return Math.min(playRight() - 12, h.x + 310 + extra);
+  }
+
+  function cdScale(seconds, minCd) {
     const haste = (run.hero && run.hero.skillHaste) || 0;
-    return seconds * Math.max(0.45, 1 - haste);
+    const scaled = seconds * Math.max(0.45, 1 - haste);
+    if (minCd != null) return Math.max(minCd, scaled);
+    return scaled;
+  }
+
+  function skillCdScaled(slot) {
+    const h = run.hero;
+    const s = classDef(h && h.klass).skills[slot];
+    if (!s || !s.cd) return 0;
+    return cdScale(s.cd, s.cdMin);
   }
 
   function readDisk() {
@@ -334,7 +370,60 @@
       wolfStride: 0,
       sicHold: 0,
       sicDmg: 0,
+      sicRevive: 0,
       strikePierce: 0,
+      waveWard: 0,
+      mendArmor: 0,
+      mendArmorT: 0,
+      lowHpArmor: 0,
+      mendDR: 0,
+      mendDRHits: 0,
+      cheatDeath: false,
+      usedCheat: false,
+      mendAmp: 0,
+      bleed: 0,
+      whirlExtra: 0,
+      strikeStun: 0,
+      whirlRefund: 0,
+      executeHp: 0.4,
+      eliteGold: 0,
+      heartFind: 0,
+      heartAmp: 0,
+      heirloomSwift: false,
+      provisioner: false,
+      infernoExtra: 0,
+      infernoReach: 0,
+      burnMana: 0,
+      phoenix: false,
+      usedPhoenix: false,
+      livingBomb: false,
+      frostbite: 0,
+      iceLance: 0,
+      iceLanceHits: 0,
+      chillHold: 0,
+      novaMana: 0,
+      slowShatter: false,
+      rime: false,
+      killMana: 0,
+      cautMana: 0,
+      infernoEcho: 0,
+      cautWardExtra: 0,
+      multishot: 0,
+      critDmg: 0,
+      volleyExtra: 0,
+      deadeye: false,
+      strikeEcho: false,
+      howl: 0,
+      wolfLeech: 0,
+      packBond: 0,
+      dire: 0,
+      sicHeal: 0,
+      alphaAura: false,
+      camo: 0,
+      camoT: 0,
+      dressWard: 0,
+      dressWardT: 0,
+      waveHits: 0,
       anim: "idle",
       animT: 0,
       flash: 0,
@@ -353,17 +442,29 @@
       const lv = prestLv(n.id, hero.klass);
       if (lv > 0 && n.apply) n.apply(hero, lv);
     }
-    run.gold = 12 + (hero.startGold || 0);
+    run.gold = START_GOLD + (hero.startGold || 0);
     if (hero.heirloom) {
       const first = heirloomUpgrade(hero.klass);
       if (first) run.levels[first.id] = Math.max(run.levels[first.id] || 0, 1);
+    }
+    if (hero.heirloomSwift) {
+      const swiftId = hero.klass === "warrior" ? "w_swift" : hero.klass === "ranger" ? "r_swift" : "m_cadence";
+      run.levels[swiftId] = Math.max(run.levels[swiftId] || 0, 1);
+    }
+    if (hero.provisioner) {
+      if (hero.secondWind > 0) hero.secondWind += 1;
+      else {
+        hero.maxHp = Math.round(hero.maxHp * 1.1);
+        hero.hp = Math.round(hero.hp * 1.1);
+        hero.prestHp = (hero.prestHp || 0) + Math.round(classDef(hero.klass).hp * 0.1);
+      }
     }
     for (const u of shopList(hero.klass)) {
       const lv = run.levels[u.id] || 0;
       for (let i = 0; i < lv; i++) u.apply(hero);
     }
     hero.hp = Math.min(hero.maxHp, hero.hp);
-    hero.secondWind = Math.max(0, Math.min(2, Math.floor(Number(hero.secondWind) || 0)));
+    hero.secondWind = Math.max(0, Math.min(4, Math.floor(Number(hero.secondWind) || 0)));
     clampVitals(hero, {
       fallback: c.hp + (hero.prestHp || 0),
       manaFallback: c.maxMana,
@@ -379,14 +480,15 @@
     const h = run.hero;
     const pack = (h && h.pack) || 0;
     const wave = wolfWave();
-    const scale = 1 + Math.min(2.8, (wave - 1) * 0.22);
-    const hp = Math.round((96 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22));
+    const scale = 1 + Math.min(1.6, (wave - 1) * 0.12);
+    const dire = (h && h.dire) || 0;
+    const hp = Math.round((72 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22) * (1 + dire * 0.12));
     return {
       hp,
       maxHp: hp,
-      dmg: 6 + ((h && h.dmg) || 9) * 0.08 + pack * 2 + Math.min(3, (wave - 1) * 0.18),
-      armor: 5.5 + ((h && h.wolfArmor) || 0) + Math.min(9, (wave - 1) * 0.72) + pack * 0.6,
-      regen: 2.2 + ((h && h.wolfRegen) || 0) + Math.min(4.5, (wave - 1) * 0.32),
+      dmg: 6 + ((h && h.dmg) || 9) * 0.08 + pack * 2 + dire * 1.5 + Math.min(3, (wave - 1) * 0.18),
+      armor: 1.8 + ((h && h.wolfArmor) || 0) + Math.min(3.2, (wave - 1) * 0.22) + pack * 0.4,
+      regen: 0.4 + ((h && h.wolfRegen) || 0) + Math.min(1.0, (wave - 1) * 0.06),
     };
   }
 
@@ -394,10 +496,14 @@
     const w = run.wolf;
     if (!w) return w;
     const next = wolfBaseStats();
-    const ratio = keepRatio && w.maxHp > 0 ? Math.max(0, w.hp) / w.maxHp : 1;
     w.maxHp = next.maxHp;
-    w.hp = w.hp <= 0 && keepRatio ? 0 : Math.round(next.maxHp * ratio);
-    if (w.hp > 0) w.hp = Math.max(1, Math.min(w.maxHp, w.hp));
+    if (w.hp <= 0 && keepRatio) {
+      w.hp = 0;
+    } else if (keepRatio) {
+      w.hp = Math.max(0, Math.min(w.maxHp, w.hp));
+    } else {
+      w.hp = next.maxHp;
+    }
     w.armor = next.armor;
     w.dmg = next.dmg;
     w.regen = next.regen;
@@ -574,19 +680,32 @@
       vy: -80 - Math.random() * 40,
       vx: (Math.random() - 0.5) * 60,
       value: value || 0,
-      life: 6,
+      life: 8,
+      age: 0,
     });
   }
 
   function hitHero(amount, srcX, crit) {
     const h = run.hero;
-    let armor = h.armor;
+    let armor = h.armor + (h.mendArmorT > 0 ? 1.4 * (h.mendArmor || 0) : 0);
+    if (h.lowHpArmor && h.hp / h.maxHp <= 0.45) armor += 1.6 * h.lowHpArmor;
     if (h.klass === "mage" && run.wave > 0) {
-      if (run.wave <= 4) armor += 3.2;
-      else if (run.wave <= 7) armor += 1.8;
+      if (run.wave <= 5) armor += 5.8;
+      else if (run.wave <= 8) armor += 2.4;
     }
     let d = dmgIn(amount, armor);
+    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) d *= 0.78;
     if (h.cauterizeWard > 0) d *= 0.78;
+    if (h.waveHits > 0 && h.waveWard) {
+      d *= Math.max(0.4, 1 - 0.16 * h.waveWard);
+      h.waveHits -= 1;
+    }
+    if (h.mendDRHits > 0 && h.mendDR) {
+      d *= Math.max(0.5, 1 - 0.12 * h.mendDR);
+      h.mendDRHits -= 1;
+    }
+    if (h.camoT > 0 && h.camo) d *= Math.max(0.5, 1 - 0.14 * h.camo);
+    if (h.dressWardT > 0 && h.dressWard) d *= Math.max(0.55, 1 - 0.18 * h.dressWard);
     h.hp -= d;
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
     h.flash = 0.12;
@@ -606,6 +725,28 @@
       sfx(520, 0.14, "sine", 0.05);
     }
     if (h.hp <= 0) {
+      if (h.cheatDeath && !h.usedCheat) {
+        h.usedCheat = true;
+        h.hp = Math.max(1, h.maxHp * 0.12);
+        floatText(h.x + 60, groundY() - 220, "UNBREAKABLE", "#ffe27a");
+        sfx(480, 0.16, "sine", 0.05);
+        syncHud();
+        return;
+      }
+      if (h.phoenix && !h.usedPhoenix) {
+        h.usedPhoenix = true;
+        h.hp = Math.max(1, h.maxHp * 0.18);
+        for (const e of [...run.enemies]) {
+          if (Math.abs(e.x - h.x) < 220) {
+            applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.5, dur: 2.4 }));
+            e.igniteFlash = 0.8;
+          }
+        }
+        floatText(h.x + 60, groundY() - 220, "PHOENIX", "#ff6a3a");
+        sfx(360, 0.18, "sawtooth", 0.06);
+        syncHud();
+        return;
+      }
       h.hp = 0;
       die();
     } else {
@@ -620,10 +761,9 @@
   function hitWolf(amount, crit) {
     const w = run.wolf;
     if (!w || w.hp <= 0) return;
-    const armor = w.armor + (w.taunt > 0 ? 8 : 0);
+    const armor = w.armor + (w.taunt > 0 ? 1.4 : 0);
     let d = dmgIn(amount, armor);
-    if (w.taunt > 0) d *= 0.72;
-    d = Math.min(d, Math.max(6, w.maxHp * 0.13));
+    if (w.taunt > 0) d *= 0.9;
     w.hp -= d;
     w.flash = 0.12;
     floatText(
@@ -652,11 +792,13 @@
   }
 
   function strikeThreat(e) {
+    const h = run.hero;
     let dmg = e.dmg;
     const crit = Math.random() < (e.def.crit || 0);
     if (crit) dmg *= 2;
     const t = threatFor(e);
     if (t === run.hero) {
+      if (h && h.alphaAura && wolfAlive() && !e.def.projectile) dmg *= 0.9;
       hitHero(dmg, e.x, crit);
       if (run.hero.thorns && run.hero.hp > 0) {
         hitEnemy(e, dmg * 0.1 * run.hero.thorns, false);
@@ -707,11 +849,18 @@
   function hitEnemy(e, amount, crit, fromDot) {
     if (!e || e.hp <= 0) return;
     const h = run.hero;
-    if (h && h.execute && e.hp < e.maxHp * 0.4) {
+    if (h && h.execute && e.hp < e.maxHp * (h.executeHp || 0.4)) {
       amount *= 1 + 0.18 * h.execute;
     }
-    if (h && h.shatter && e.cc > 0 && !fromDot) {
-      amount *= 1 + 0.14 * h.shatter;
+    if (h && h.shatter && !fromDot && (e.cc > 0 || (h.slowShatter && e.slow > 0))) {
+      const half = e.cc > 0 ? 1 : 0.5;
+      amount *= 1 + 0.14 * h.shatter * half;
+    }
+    if (h && h.frostbite && e.slow > 0) amount *= 1 + 0.08 * h.frostbite;
+    if (h && h.deadeye && Math.abs(e.x - h.x) > 200) amount *= 1.14;
+    if (h && h.iceLanceHits > 0 && !fromDot) {
+      amount *= 1 + 0.28 * (h.iceLance || 0);
+      h.iceLanceHits -= 1;
     }
     const d = dmgIn(amount, e.armor);
     const over = d - e.hp;
@@ -733,7 +882,7 @@
       applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 }));
     }
     if (e.hp > 0 && h && h.chill && !fromDot) {
-      e.slow = Math.max(e.slow || 0, 1.1 * h.chill);
+      e.slow = Math.max(e.slow || 0, 1.1 * h.chill + (h.chillHold || 0));
     }
     if (e.hp <= 0) {
       if (h && h.overkill && over > 0 && !fromDot) {
@@ -746,17 +895,21 @@
 
   function killEnemy(e) {
     run.kills += 1;
-    const gold = Math.floor(e.gold * run.hero.goldFind);
+    const h = run.hero;
+    const elite = !!(e.def.boss || e.type === "mage" || e.type === "healer" || e.type === "assassin");
+    const goldMult = h.goldFind * (elite && h.eliteGold ? 1 + 0.22 * h.eliteGold : 1);
+    const gold = Math.floor(e.gold * goldMult);
     run.gold += gold;
     floatText(e.x, groundY() - 190, "+" + gold + "g", "#e6c15a");
-    if (!run.boughtAny && !run.shopNudge && run.gold >= 12) {
+    if (!run.boughtAny && !run.shopNudge && run.gold >= 10) {
       run.shopNudge = true;
       toast("Armory ready");
       buildShop();
     }
     if (e.magic) run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + e.magic);
     const r = Math.random();
-    if (r < 0.12) drop("heart", e.x, groundY() - 80);
+    const heartP = 0.12 + ((h && h.heartFind) || 0);
+    if (r < heartP) drop("heart", e.x, groundY() - 80);
     else if (r < 0.22) drop("mana", e.x, groundY() - 80);
     else if (r < 0.28) drop("rage", e.x, groundY() - 80);
     else if (r < 0.33) drop("haste", e.x, groundY() - 80);
@@ -771,14 +924,21 @@
       });
     }
     sfx(320, 0.07, "triangle", 0.05);
-    if (run.hero.bloodlust) {
-      run.hero.buffs.rage = Math.max(run.hero.buffs.rage, 1.6 * run.hero.bloodlust);
+    if (h.bloodlust) {
+      h.buffs.rage = Math.max(h.buffs.rage, 1.6 * h.bloodlust);
     }
-    if (run.hero.wildfire) {
+    if (h.whirlRefund && h.skillCd[1] > 0) h.skillCd[1] = Math.max(0, h.skillCd[1] - h.whirlRefund);
+    if (h.killMana) h.mana = Math.min(h.maxMana, h.mana + h.killMana);
+    if (h.burnMana && e.dots && e.dots.some((d) => d.kind === "burn")) {
+      h.mana = Math.min(h.maxMana, h.mana + 4 * h.burnMana);
+    }
+    if (h.rime && e.cc > 0) h.mana = Math.min(h.maxMana, h.mana + 10);
+    if (h.wildfire) {
       const near = nearest(e.x, (o) => o !== e && o.hp > 0);
       if (near) {
-        applyDot(near, ampBurn({ kind: "burn", dps: run.hero.dmg * 0.28 * run.hero.wildfire, dur: 2.2 }));
+        applyDot(near, ampBurn({ kind: "burn", dps: h.dmg * 0.28 * h.wildfire, dur: 2.2 }));
         near.igniteFlash = Math.max(near.igniteFlash || 0, 0.6);
+        if (h.livingBomb) hitEnemy(near, h.dmg * 0.3, false, true);
       }
     }
     const wasBoss = e.def.boss;
@@ -844,6 +1004,13 @@
       toast(crate ? "Wave " + n + crate : "Wave " + n);
       sfx(360, 0.1, "square", 0.04);
     }
+    if (h) {
+      if (h.waveWard) h.waveHits = 2;
+      if (h.camo) h.camoT = 2.2;
+      if (h.howl && run.wolf && run.wolf.hp > 0) {
+        run.wolf.taunt = Math.max(run.wolf.taunt || 0, 1.1 * h.howl);
+      }
+    }
     buildShop();
   }
 
@@ -899,6 +1066,7 @@
       pierce: opts.pierce || 0,
       aoe: opts.aoe || 0,
       burn: opts.burn || null,
+      maxX: opts.maxX != null ? opts.maxX : boltLimitX(dir),
       hit: [],
     });
   }
@@ -909,7 +1077,7 @@
     h.animT = 0;
     let dmg = h.dmg * (mult || 1) * autoDmgMult();
     const crit = Math.random() < h.crit;
-    if (crit) dmg *= 2;
+    if (crit) dmg *= 2 + (h.critDmg || 0);
     const targets = livingInRange(h.reach + 16, false).sort(
       (a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x)
     );
@@ -917,6 +1085,7 @@
       hitEnemy(targets[0], dmg, crit);
       if (extra && extra.stun) applyCc(targets[0], extra.stun);
       if (extra && extra.knock) targets[0].x += extra.knock;
+      if (h.bleed) applyDot(targets[0], { kind: "bleed", dps: h.dmg * 0.22 * h.bleed, dur: 2.2 });
     }
     if (targets[1] && extra && extra.cleave) {
       hitEnemy(targets[1], dmg * extra.cleave * (1 + (h.cleaveBonus || 0)), false);
@@ -934,12 +1103,13 @@
       if (!fromEcho && h.echo && Math.random() < h.echo) autoAttack(true);
       return;
     }
-    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= c.range);
+    const reach = combatRange();
+    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= reach);
     if (!t) return;
     const dir = t.x >= h.x ? 1 : -1;
     const crit = Math.random() < h.crit;
     let dmg = h.dmg * autoDmgMult();
-    if (crit) dmg *= 2;
+    if (crit) dmg *= 2 + (h.critDmg || 0);
     if (c.proj === "fire") {
       shoot({
         kind: "fire",
@@ -947,12 +1117,16 @@
         dmg,
         crit,
         speed: 380,
-        burn: ampBurn({ kind: "burn", dps: h.dmg * 0.36, dur: 2.8 }),
+        burn: ampBurn({ kind: "burn", dps: h.dmg * 0.42, dur: 3.0 }),
       });
       sfx(crit ? 480 : 400, 0.06, "triangle", 0.04);
     } else {
       shoot({ kind: "arrow", dir, dmg, crit, speed: 500 });
       sfx(crit ? 540 : 460, 0.05, "triangle", 0.04);
+    }
+    if (h.multishot) {
+      const second = nearest(h.x, (e) => e !== t && Math.abs(e.x - h.x) <= reach);
+      if (second) hitEnemy(second, h.dmg * 0.36 * h.multishot * autoDmgMult(), false);
     }
     if (!fromEcho && h.echo && Math.random() < h.echo) autoAttack(true);
   }
@@ -965,17 +1139,18 @@
     h.anim = "atk";
     h.animT = 0;
     if (c.id === "warrior") {
-      swing(2.15 * (h.strikeMult || 1), { stun: 0.55, knock: 18 });
+      swing(2.15 * (h.strikeMult || 1), { stun: 0.55 + (h.strikeStun || 0), knock: 18 });
       shake = 8;
       return;
     }
-    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= c.range + 40);
+    const reach = combatRange();
+    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= reach);
     const dir = t && t.x < h.x ? -1 : 1;
     const crit = Math.random() < h.crit;
     let dmg = h.dmg * heroDmgMult();
     if (c.id === "mage") {
       dmg *= 2.2;
-      if (crit) dmg *= 2;
+      if (crit) dmg *= 2 + (h.critDmg || 0);
       shoot({
         kind: "fire",
         dir,
@@ -990,7 +1165,7 @@
       sfx(180, 0.12, "sawtooth", 0.05);
     } else {
       dmg *= 2.7;
-      if (crit) dmg *= 2;
+      if (crit) dmg *= 2 + (h.critDmg || 0);
       shoot({
         kind: "arrow",
         dir,
@@ -1001,6 +1176,15 @@
       });
       shake = 6;
       sfx(560, 0.08, "square", 0.05);
+      if (h.strikeEcho && h.echo && Math.random() < h.echo) {
+        shoot({
+          kind: "arrow",
+          dir,
+          dmg: dmg * 0.7,
+          speed: 600,
+          pierce: 1 + (h.strikePierce || 0),
+        });
+      }
     }
   }
 
@@ -1019,9 +1203,11 @@
   function mend() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(skillManaCost(0) || 25)) return;
-    const heal = h.maxHp * 0.28;
+    const heal = h.maxHp * (0.28 + (h.mendAmp || 0));
     const got = healHero(heal);
     h.healFlash = 0.7;
+    if (h.mendArmor) h.mendArmorT = 3 * h.mendArmor;
+    if (h.mendDR) h.mendDRHits = 3;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     sfx(480, 0.12, "sine", 0.05);
   }
@@ -1032,13 +1218,15 @@
     const heal = h.maxHp * 0.32;
     const got = healHero(heal);
     h.cauterizeT = 1.15;
-    h.cauterizeWard = 2.4;
+    h.cauterizeWard = 2.4 + (h.cautWardExtra || 0);
     h.healFlash = 0.85;
     h.flash = Math.max(h.flash, 0.35);
     floatText(h.x + 86, groundY() - 236, "+" + fmt(got || heal), "#ff8a4a");
+    if (h.cautMana) h.mana = Math.min(h.maxMana, h.mana + 10 * h.cautMana);
+    const igniteR = Math.min(combatRange(), 200 + Math.max(0, combatRange() - classDef("mage").range) * 0.55);
     let ignited = 0;
     for (const e of [...run.enemies]) {
-      if (Math.abs(e.x - h.x) < 200) {
+      if (Math.abs(e.x - h.x) < igniteR) {
         hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
         applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.32, dur: 2.8 }));
         e.igniteFlash = 1.05;
@@ -1078,26 +1266,26 @@
     const heal = h.maxHp * 0.2;
     const got = healHero(heal);
     h.healFlash = 0.7;
+    if (h.dressWard) h.dressWardT = 1.6 * h.dressWard;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
-    if (run.wolf) {
-      if (run.wolf.hp <= 0) {
-        const fresh = makeWolf();
-        fresh.x = h.x + 60;
-        fresh.hp = Math.round(fresh.maxHp * 0.6);
-        run.wolf = fresh;
-        floatText(fresh.x, groundY() - 150, "UP", "#c9e6a0");
-      } else {
-        const wh = run.wolf.maxHp * 0.55;
-        run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + wh);
-        floatText(run.wolf.x, groundY() - 150, "+" + fmt(wh), "#8fd18f");
-      }
+    if (run.wolf && run.wolf.hp > 0) {
+      const wh = run.wolf.maxHp * 0.32;
+      run.wolf.hp = Math.min(run.wolf.maxHp, run.wolf.hp + wh);
+      floatText(run.wolf.x, groundY() - 150, "+" + fmt(wh), "#8fd18f");
     }
     sfx(500, 0.12, "sine", 0.05);
   }
 
   function nextWaveDelay(wave) {
-    const early = wave < 4 ? 1.8 : 0;
-    return 5.5 + wave * 0.45 + early;
+    const early = wave < 6 ? 6.8 : wave < 10 ? 3.0 : 0.6;
+    return 8.2 + wave * 0.5 + early;
+  }
+
+  function liveCap() {
+    const n = run.wave || 0;
+    if (n < 6) return 3;
+    if (n < 10) return 4;
+    return 6;
   }
 
   function charge() {
@@ -1127,7 +1315,7 @@
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0 || h.whirl) return;
     h.skillCd[1] = cdScale(spec.cd || 6);
-    h.whirl = { t: 0, next: 0, left: 3 };
+    h.whirl = { t: 0, next: 0, left: 3 + (h.whirlExtra || 0) };
     h.anim = "atk";
     h.animT = 0;
   }
@@ -1137,7 +1325,7 @@
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0) return;
     h.skillCd[1] = cdScale(spec.cd);
-    h.inferno = { t: 0, next: 0, left: 3, x: h.x + 150 };
+    h.inferno = { t: 0, next: 0, left: 3 + (h.infernoExtra || 0), x: h.x + 150 };
     h.anim = "atk";
     h.animT = 0;
     sfx(200, 0.14, "sawtooth", 0.05);
@@ -1148,12 +1336,19 @@
     const x = h.inferno.x;
     const dmg = h.dmg * 0.95 * autoDmgMult() * (h.infernoMult || 1);
     for (const e of [...run.enemies]) {
-      if (e.x > h.x + 20 && e.x < x + 160) {
+      if (e.x > h.x + 20 && e.x < infernoEnd()) {
         hitEnemy(e, dmg, false);
         applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.38, dur: 2.6 }));
       }
     }
     fx.rings.push({ x: x, t: 0.4, color: "rgba(255,90,20,0.75)", r: 30 });
+    if (h.infernoEcho && Math.random() < h.infernoEcho) {
+      for (const e of [...run.enemies]) {
+        if (e.x > h.x + 20 && e.x < infernoEnd()) {
+          hitEnemy(e, dmg * 0.55, false);
+        }
+      }
+    }
     shake = 6;
     sfx(160, 0.08, "sawtooth", 0.04);
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
@@ -1164,17 +1359,20 @@
     const spec = classDef(h.klass).skills[2];
     if (state !== "fight" || h.skillCd[2] > 0 || h.mana < spec.mana) return;
     h.mana -= spec.mana;
-    h.skillCd[2] = cdScale(spec.cd);
+    h.skillCd[2] = skillCdScaled(2);
     h.novaT = 0.45;
+    if (h.iceLance) h.iceLanceHits = 2;
+    if (h.novaMana) h.mana = Math.min(h.maxMana, h.mana + 8 * h.novaMana);
     const dmg = h.dmg * 0.55 * autoDmgMult();
-    const reach = 300 + (h.novaReach || 0);
+    const reach = novaReachFor(h.novaReach);
+    const hold = novaFreezeFor(h.novaHold);
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < reach) {
         hitEnemy(e, dmg, false);
-        applyCc(e, 2.8 + (h.novaHold || 0));
+        applyCc(e, hold);
       }
     }
-    fx.rings.push({ x: h.x, t: 0.5, color: "rgba(140,210,255,0.85)", r: 50 });
+    fx.rings.push({ x: h.x, t: 0.45, color: "rgba(140,210,255,0.85)", r: 36, w: 5, grow: reach - 36 });
     shake = 5;
     sfx(620, 0.16, "sine", 0.05);
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
@@ -1184,39 +1382,29 @@
     const h = run.hero;
     const c = classDef(h.klass);
     if (state !== "fight" || h.skillCd[1] > 0) return;
+    const reach = combatRange();
+    const targets = [...run.enemies]
+      .filter((e) => Math.abs(e.x - h.x) < reach)
+      .sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
+    if (!targets.length) return;
     h.skillCd[1] = cdScale(c.skills[1].cd);
     h.anim = "atk";
     h.animT = 0;
-    const targets = [...run.enemies]
-      .filter((e) => Math.abs(e.x - h.x) < c.range + 50)
-      .sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
-    const n = 5;
-    if (!targets.length) {
-      for (let i = 0; i < n; i++) {
-        shoot({
-          kind: "arrow",
-          dir: 1,
-          dmg: h.dmg * 0.7 * autoDmgMult(),
-          speed: 520,
-          y: groundY() - 70 - i * 16,
-        });
-      }
-    } else {
-      for (let i = 0; i < n; i++) {
-        const t = targets[i % targets.length];
-        const dir = t.x >= h.x ? 1 : -1;
-        const crit = Math.random() < h.crit * 0.6;
-        let dmg = h.dmg * 0.74 * autoDmgMult();
-        if (crit) dmg *= 2;
-        shoot({
-          kind: "arrow",
-          dir,
-          dmg,
-          crit,
-          speed: 540,
-          y: groundY() - 70 - (i - 2) * 14,
-        });
-      }
+    const n = 5 + (h.volleyExtra || 0);
+    for (let i = 0; i < n; i++) {
+      const t = targets[i % targets.length];
+      const dir = t.x >= h.x ? 1 : -1;
+      const crit = Math.random() < h.crit * 0.6;
+      let dmg = h.dmg * 0.74 * autoDmgMult();
+      if (crit) dmg *= 2;
+      shoot({
+        kind: "arrow",
+        dir,
+        dmg,
+        crit,
+        speed: 540,
+        y: groundY() - 70 - (i - 2) * 14,
+      });
     }
     shake = 5;
     sfx(480, 0.1, "triangle", 0.05);
@@ -1226,20 +1414,22 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[2];
     if (state !== "fight" || h.skillCd[2] > 0) return;
-    h.skillCd[2] = cdScale(spec.cd);
-    if (!run.wolf || run.wolf.hp <= 0) {
-      run.wolf = makeWolf();
-      run.wolf.x = h.x + 50;
-      floatText(run.wolf.x, groundY() - 150, "WOLF", "#c9e6a0");
+    if (wolfAlive()) {
+      toast("Wolf is up");
+      return;
     }
-    const w = run.wolf;
-    const target =
-      nearest(h.x + 400, (e) => e.x > h.x) || nearest(w.x);
-    const dest = target ? target.x - 36 : h.x + 220;
-    w.leap = { from: w.x, to: dest, t: 0, hit: false };
-    w.taunt = 3.2 + (h.sicHold || 0);
-    w.anim = "atk";
-    floatText(w.x, groundY() - 140, "SIC 'EM", "#e6c15a");
+    h.skillCd[2] = cdScale(spec.cd);
+    const at = run.wolf ? run.wolf.x : h.x + 56;
+    const fresh = makeWolf();
+    fresh.x = at || h.x + 56;
+    const frac = Math.min(1, 0.7 + (h.sicRevive || 0));
+    fresh.hp = Math.max(1, Math.round(fresh.maxHp * frac));
+    fresh.leap = null;
+    fresh.taunt = 0;
+    run.wolf = fresh;
+    if (h.sicHeal) healHero(h.maxHp * h.sicHeal);
+    floatText(fresh.x, groundY() - 150, "SIC 'EM", "#c9e6a0");
+    floatText(fresh.x, groundY() - 118, "UP", "#8fd18f");
     sfx(280, 0.12, "square", 0.05);
   }
 
@@ -1262,7 +1452,7 @@
   function pickup(d) {
     const h = run.hero;
     if (d.kind === "heart") {
-      const heal = h.maxHp * 0.18;
+      const heal = h.maxHp * (0.18 + (h.heartAmp || 0));
       healHero(heal);
       floatText(h.x + 56, groundY() - 180, "heal", "#ff8a8a");
     } else if (d.kind === "mana") {
@@ -1295,23 +1485,7 @@
       return;
     }
     if (w.regen) w.hp = Math.min(w.maxHp, w.hp + w.regen * dt);
-    if (w.leap) {
-      w.leap.t += dt;
-      const u = Math.min(1, w.leap.t / 0.28);
-      w.x = w.leap.from + (w.leap.to - w.leap.from) * u;
-      if (!w.leap.hit && u > 0.55) {
-        w.leap.hit = true;
-        for (const e of [...run.enemies]) {
-          if (Math.abs(e.x - w.x) < 70) {
-            hitEnemy(e, w.dmg * 1.5 * (1 + ((run.hero && run.hero.sicDmg) || 0)), false);
-            applyCc(e, 0.35);
-            w.hp = Math.min(w.maxHp, w.hp + w.dmg * 0.16);
-          }
-        }
-      }
-      if (u >= 1) w.leap = null;
-      return;
-    }
+    w.leap = null;
     const prey = nearest(w.x);
     const guard = h.x + 70;
     if (prey && Math.abs(prey.x - w.x) > w.reach) {
@@ -1326,8 +1500,9 @@
         w.anim = "atk";
         w.animT = 0;
         hitEnemy(prey, w.dmg, false);
-        const sip = Math.max(0, w.dmg * 0.16);
-        w.hp = Math.min(w.maxHp, w.hp + sip);
+        const sip = Math.max(0, w.dmg * (h.wolfLeech || 0));
+        if (sip) w.hp = Math.min(w.maxHp, w.hp + sip);
+        if (h.packBond) healHero(w.dmg * 0.1 * h.packBond);
         sfx(210, 0.05, "square", 0.03);
       }
     } else {
@@ -1368,6 +1543,9 @@
     h.novaT = Math.max(0, h.novaT - dt);
     h.cauterizeT = Math.max(0, (h.cauterizeT || 0) - dt);
     h.cauterizeWard = Math.max(0, (h.cauterizeWard || 0) - dt);
+    h.mendArmorT = Math.max(0, (h.mendArmorT || 0) - dt);
+    h.camoT = Math.max(0, (h.camoT || 0) - dt);
+    h.dressWardT = Math.max(0, (h.dressWardT || 0) - dt);
     h.healFlash = Math.max(0, (h.healFlash || 0) - dt);
     h.buffs.rage = Math.max(0, h.buffs.rage - dt);
     h.buffs.haste = Math.max(0, h.buffs.haste - dt);
@@ -1376,7 +1554,7 @@
     camera = HOME_X - PLAYER_SCREEN_X;
 
     if (!bossAlive()) {
-      if (run.enemies.length >= LIVE_CAP) {
+      if (run.enemies.length >= liveCap()) {
         run.waveTimer = Math.max(run.waveTimer, 1.8);
       } else {
         run.waveTimer -= dt;
@@ -1442,7 +1620,7 @@
       const ready =
         c.style === "melee"
           ? melee.length
-          : run.enemies.some((e) => Math.abs(e.x - h.x) <= c.range);
+          : run.enemies.some((e) => Math.abs(e.x - h.x) <= combatRange());
       if (ready) {
         const rate = h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1) * (lastStanding() ? 1.2 : 1);
         h.atkT -= dt * rate;
@@ -1612,9 +1790,16 @@
             }
           }
         }
+      } else if (wolfAlive() && Math.abs(b.x - run.wolf.x) < 28) {
+        hitWolf(b.dmg);
+        b.dead = true;
       } else if (Math.abs(b.x - h.x) < 30) {
         hitHero(b.dmg, b.x);
         b.dead = true;
+      }
+      if (b.friendly && b.maxX != null) {
+        if (b.vx >= 0 && b.x > b.maxX) b.dead = true;
+        if (b.vx < 0 && b.x < b.maxX) b.dead = true;
       }
       if (b.x < camera - 80 || b.x > camera + W + 80) b.dead = true;
     }
@@ -1622,16 +1807,44 @@
 
     for (const d of fx.drops) {
       d.life -= dt;
-      d.vy += 420 * dt;
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
+      d.age = (d.age || 0) + dt;
       const gy = groundY() - 28;
-      if (d.y > gy) {
-        d.y = gy;
-        d.vy *= -0.25;
-        d.vx *= 0.6;
+      if (d.age < DROP_MAGNET_AGE) {
+        d.vy += 420 * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        if (d.y > gy) {
+          d.y = gy;
+          d.vy *= -0.25;
+          d.vx *= 0.6;
+        }
+      } else {
+        let tx = h.x;
+        let ty = groundY() - 72;
+        if (run.wolf && run.wolf.hp > 0) {
+          const wd = Math.abs(d.x - run.wolf.x);
+          const hd = Math.abs(d.x - h.x);
+          if (wd + 24 < hd) {
+            tx = run.wolf.x;
+            ty = groundY() - 48;
+          }
+        }
+        const dx = tx - d.x;
+        const dy = ty - d.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const spd = 320 + Math.min(460, (d.age - DROP_MAGNET_AGE) * 220);
+        d.x += (dx / dist) * spd * dt;
+        d.y += (dy / dist) * spd * dt;
+        d.vx = 0;
+        d.vy = 0;
       }
-      if (Math.abs(d.x - h.x) < 50 && Math.abs(d.y - (groundY() - 60)) < 80) {
+      const nearHero = Math.abs(d.x - h.x) < DROP_PICK_R && Math.abs(d.y - (groundY() - 64)) < 110;
+      const nearWolf =
+        run.wolf &&
+        run.wolf.hp > 0 &&
+        Math.abs(d.x - run.wolf.x) < 80 &&
+        Math.abs(d.y - (groundY() - 48)) < 80;
+      if (nearHero || nearWolf) {
         pickup(d);
         d.life = 0;
       }
@@ -1802,10 +2015,7 @@
     const h = run.hero;
     if (!h || !healSkillReady()) return false;
     if (h.hp / h.maxHp <= 0.35) return true;
-    if (h.klass === "ranger" && run.wolf) {
-      if (run.wolf.hp <= 0) return true;
-      if (run.wolf.hp / run.wolf.maxHp <= 0.35) return true;
-    }
+    if (h.klass === "ranger" && wolfAlive() && run.wolf.hp / run.wolf.maxHp <= 0.35) return true;
     return false;
   }
 
@@ -1813,11 +2023,15 @@
     const h = run.hero;
     if (!h) return true;
     if (h.hp / h.maxHp <= 0.45) return false;
-    if (h.klass === "ranger" && run.wolf) {
-      if (run.wolf.hp <= 0) return false;
-      if (run.wolf.hp / run.wolf.maxHp <= 0.45) return false;
-    }
+    if (h.klass === "ranger" && wolfAlive() && run.wolf.hp / run.wolf.maxHp <= 0.45) return false;
     return true;
+  }
+
+  function sicReady() {
+    const h = run.hero;
+    if (!h || h.klass !== "ranger" || state !== "fight") return false;
+    if ((h.skillCd[2] || 0) > 0) return false;
+    return !!(run.wolf && run.wolf.hp <= 0);
   }
 
   function drawWorldBars(gy) {
@@ -1920,7 +2134,7 @@
     const h = run.hero;
     const s = classDef(h.klass).skills[slot];
     if (!s.cd) return 0;
-    return Math.min(1, (Number(h.skillCd[slot]) || 0) / Math.max(0.01, cdScale(s.cd)));
+    return Math.min(1, (Number(h.skillCd[slot]) || 0) / Math.max(0.01, skillCdScaled(slot)));
   }
 
   function drawHealVfx(e, gy, labels) {
@@ -2063,8 +2277,8 @@
     if (!w || (state !== "fight" && state !== "dead")) return;
     if (w.hp > 0) {
       const tanking = run.enemies.some((e) => threatFor(e) === w);
-      const tag = w.leap ? "SIC" : w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
-      const hot = w.taunt > 0 || w.leap || tanking;
+      const tag = w.taunt > 0 ? "TAUNT" : tanking ? "TANK" : "GUARD";
+      const hot = w.taunt > 0 || tanking;
       drawStamp(tag, sx(w.x), gy + 18, {
         color: hot ? "#1a1208" : "#d8f0a8",
         bg: hot ? "#ffe27a" : "rgba(8, 12, 6, 0.9)",
@@ -2080,7 +2294,7 @@
         font: "bold 20px VT323, monospace",
         h: 22,
       });
-      drawStamp("1 / 3 revive", sx(w.x), gy + 18, {
+      drawStamp("3 revive", sx(w.x), gy + 18, {
         color: "#ffe27a",
         border: "#c07040",
         font: "bold 16px VT323, monospace",
@@ -2211,13 +2425,15 @@
       }
       if (h.inferno) {
         ctx.fillStyle = "rgba(255,80,20," + (0.12 + (h.inferno.t % 0.22) * 0.5) + ")";
-        ctx.fillRect(sx(h.x + 30), gy - 20, 280, 18);
+        ctx.fillRect(sx(h.x + 30), gy - 20, Math.max(80, infernoEnd() - h.x - 30), 18);
       }
       if (h.novaT > 0) {
+        const reach = novaReachFor(h.novaReach);
+        const u = (0.45 - h.novaT) / 0.45;
         ctx.strokeStyle = "rgba(140,210,255,0.8)";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(sx(h.x), gy - 80, 80 + (0.45 - h.novaT) * 180, 0, Math.PI * 2);
+        ctx.arc(sx(h.x), gy - 80, 40 + u * (reach - 40), 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -2440,6 +2656,9 @@
       if (h && !(h.mode === "home" || h.mode === "return")) return "Return";
       return s.name;
     }
+    if (s.id === "sic" && h && run.wolf && run.wolf.hp <= 0 && !(h.skillCd[slot] > 0)) {
+      return "Sic 'em — UP";
+    }
     if (s.cd && h && h.skillCd[slot] > 0) {
       return s.name + " (" + Math.ceil(h.skillCd[slot]) + "s)";
     }
@@ -2456,6 +2675,7 @@
     if (s.cd && (Number(h.skillCd[slot]) || 0) > 0) return true;
     if (s.id === "whirl" && h.whirl) return true;
     if (s.id === "inferno" && h.inferno) return true;
+    if (s.id === "sic" && wolfAlive()) return true;
     return false;
   }
 
@@ -2511,6 +2731,12 @@
         healBtn.classList.remove("ready-flash");
       }
     }
+    const sicBtn = document.getElementById("btn-s3");
+    if (sicBtn && h && h.klass === "ranger") {
+      const rez = sicReady();
+      sicBtn.classList.toggle("urgent", rez);
+      sicBtn.classList.toggle("ready-flash", rez);
+    }
   }
 
   function syncHud() {
@@ -2547,14 +2773,19 @@
     document.getElementById("st-leech").textContent = hudNum((h.leech || 0) * 100, 80) + "%";
     document.getElementById("st-fortune").textContent = hudNum((h.goldFind || 0) * 100, 400) + "%";
     document.getElementById("st-regen").textContent = hudNum(h.manaRegen, 20) + "/s";
+    const rangeEl = document.getElementById("st-range");
+    if (rangeEl) {
+      rangeEl.textContent =
+        h.style === "ranged" ? String(Math.round(combatRange())) : String(Math.round(h.reach));
+    }
     const buffs = [];
     if (rage) buffs.push("Rage " + Math.ceil(h.buffs.rage) + "s");
     if (haste) buffs.push("Haste " + Math.ceil(h.buffs.haste) + "s");
     if (run.wolf) {
       if (wolfAlive()) {
-        const tag = run.wolf.leap ? "Sic" : run.wolf.taunt > 0 ? "Taunt" : "Guard";
+        const tag = run.wolf.taunt > 0 ? "Taunt" : "Guard";
         buffs.push("Wolf " + fmt(run.wolf.hp) + "/" + fmt(run.wolf.maxHp) + " " + tag);
-      } else buffs.push("Wolf down — 1 or 3");
+      } else buffs.push("Wolf down — press 3");
     }
     if (lastStanding()) buffs.push("Last Stand");
     if (h.secondWind > 0) buffs.push("Wind " + h.secondWind);
@@ -2606,13 +2837,13 @@
     if (nextEl) {
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
-          run.gold >= 12
+          run.gold >= 8
             ? "First steel is in reach — buy " +
               (starters.length <= 2
                 ? starters.join(" or ")
                 : starters.slice(0, -1).join(", ") + ", or " + starters[starters.length - 1]) +
               "."
-            : "First steel costs 12g. The first raiders pay for it.";
+            : "First steel costs 8g. The first raiders pay for it.";
       } else {
         nextEl.textContent = next
           ? "Next crate opens at wave " + next + "."
@@ -2758,10 +2989,24 @@
       col.innerHTML = `<h3>${name}</h3>`;
       const trunk = document.createElement("div");
       trunk.className = "tree-trunk";
-      tree.nodes
+      const colNodes = tree.nodes
         .filter((n) => !n.root && n.col === i)
-        .sort((a, b) => a.row - b.row)
-        .forEach((u) => trunk.appendChild(renderTreeNode(klass, u, bag)));
+        .sort((a, b) => a.row - b.row || (a.fork || 0) - (b.fork || 0));
+      const rows = [];
+      for (const u of colNodes) {
+        const last = rows[rows.length - 1];
+        if (last && last[0].row === u.row) last.push(u);
+        else rows.push([u]);
+      }
+      rows.forEach((group) => {
+        if (group.length === 1) trunk.appendChild(renderTreeNode(klass, group[0], bag));
+        else {
+          const fork = document.createElement("div");
+          fork.className = "tree-fork";
+          group.forEach((u) => fork.appendChild(renderTreeNode(klass, u, bag)));
+          trunk.appendChild(fork);
+        }
+      });
       col.appendChild(trunk);
       branches.appendChild(col);
     });
@@ -2884,6 +3129,12 @@
       if (run.hero && mana) run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + mana);
       buildShop();
     },
+    spawnDrop(kind, x) {
+      const k = kind || "heart";
+      const px = x != null ? x : (run.hero ? run.hero.x + 280 : 360);
+      drop(k, px, groundY() - 80);
+      return { kind: k, x: px, pickR: DROP_PICK_R, magnetAge: DROP_MAGNET_AGE };
+    },
     jump(wave) {
       const dest = Math.max(1, Math.floor(wave || 1));
       jumpDest = dest;
@@ -2913,10 +3164,26 @@
       }));
     },
     content() {
+      const h = run.hero;
       return {
         mageFlip: classDef("mage").flip,
         warriorFlip: classDef("warrior").flip,
         rangerFlip: classDef("ranger").flip,
+        nova: {
+          reach: novaReachFor(h && h.novaReach),
+          freeze: novaFreezeFor(h && h.novaHold),
+          cd: novaCdFor(h && h.skillHaste),
+          cdMin: NOVA.cdMin,
+          spawnGap: RANGE.spawnGap,
+        },
+        range: h
+          ? {
+              raw: h.range,
+              combat: combatRange(),
+              cap: roadRangeCap(playSpan()),
+              playSpan: playSpan(),
+            }
+          : { baseMage: RANGE.mage, baseRanger: RANGE.ranger },
         trees: Object.fromEntries(
           Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
         ),
@@ -2978,6 +3245,19 @@
     },
     hurt(n) {
       if (run.hero && state === "fight") hitHero(n || 10, run.hero.x);
+    },
+    hurtWolf(n) {
+      if (run.wolf && state === "fight") hitWolf(n || 24);
+      return wolfSnapshot();
+    },
+    downWolf() {
+      if (!run.wolf) return null;
+      run.wolf.hp = 0;
+      run.wolf.taunt = 0;
+      run.wolf.leap = null;
+      run.wolf.deadT = 12;
+      floatText(run.wolf.x, groundY() - 150, "WOLF DOWN", "#c07040");
+      return wolfSnapshot();
     },
   };
 
