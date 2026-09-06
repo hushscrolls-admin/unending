@@ -231,6 +231,33 @@ body {
   width: min(960px, 96vw);
 }
 
+#prestige-shop.class-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(960px, 96vw);
+}
+
+.tree-root {
+  width: min(360px, 100%);
+  margin: 0 auto;
+}
+
+.tree-root .tree-trunk {
+  padding-left: 22px;
+}
+
+.tree-root .tree-trunk::before {
+  top: 12px;
+  bottom: 8px;
+}
+
+.tree-branches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(200px, 1fr));
+  gap: 8px 22px;
+}
+
 .tree-col {
   display: flex;
   flex-direction: column;

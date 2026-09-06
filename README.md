@@ -19,33 +19,51 @@ Open `http://localhost:8765`.
 - The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
 - Wave 1 is a single raider. Pack size and enemy types grow from there: shields, berserkers, archers, mages, healers, assassins. Healers only patch allies in range with a modest drip (not a full-pack reset), and extra waves wait if the road is already crowded.
 - Kills drop gold, mana, hearts, and short buffs (rage / haste).
-- Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first Iron / Swift / Vitality buy before Wave 4. Later crates still open at 5 / 9 / 13 / 17. Armory rows and Blood Tree nodes carry **Warrior / Mage / Ranger / All** tags so you can plan class synergies, not just flat power.
+- Spend gold in the Armory during the fight. A run starts with 12g and the first raider pays for a first class crate before Wave 4. Later crates still open at 5 / 9 / 13 / 17. **Each class has its own Armory pool** — Warrior steel, Mage fire/mana, Ranger bow/wolf. There are no shared/tagged cross-class rows.
 - **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or the wolf) are low and the heal is ready. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
 - New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
 - Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
-- On death you keep Glory and spend it on the Blood Tree (Vital / Might / Fortune). Roots are the old flat bonuses; deeper nodes unlock charges, execute, thorns, splash, Last Stand, Bloodlust, and Heirloom. Then rise again as any class. Gold and run upgrades reset. Old Blood / Might / Purse / Greed / Spark / Fate ranks still apply.
+- On death you keep Glory and spend it on **that class's prestige tree**. Then rise again as any class. Gold and run upgrades reset. Glory is shared; ranks are per class.
 
 ## Classes
 
 | Class | Auto | Strike (Click / Space) | 1 | 2 | 3 |
 |---|---|---|---|---|---|
 | **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash to the back line |
-| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 7s) — freeze the pack. Starts a bit sturdier (84 HP, 1 armor) so early waves are less of a brick wall. |
+| **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 7s) — freeze the pack. Starts a bit sturdier (84 HP, 1 armor) so early waves are less of a brick wall. Faces the road (toward enemies). |
 | **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (25 mana) — heal you and the wolf (revives if down) | Volley (7s) — five arrows | Sic 'em (8s) — wolf leaps the back line and taunts melee |
 
 The Ranger's wolf is a companion tank. Melee prefers the closer target; Sic 'em forces them onto the wolf for a few seconds. If the wolf falls, Field Dress or Sic 'em brings it back.
 
-## Blood Tree
+Class kits stay distinct. Armory and prestige only add flavor on top of those skills.
 
-Three branches. Old saves keep Blood / Might / Purse / Greed / Spark / Fate ranks.
+## Armory (per class)
 
-| Branch | Path |
-|---|---|
-| **Vital** | Blood → Hide → Second Wind → Thorns → Last Stand |
-| **Might** | Might → Tempo → Execute → Overkill → Bloodlust |
-| **Fortune** | Purse → Greed → Spark → Fate → Heirloom |
+Wave gates stay 1 / 5 / 9 / 13 / 17. The offered buys change with the class you rose as.
 
-Child nodes unlock after one rank in the parent (not two), so the interesting leaves are reachable sooner. Leaf glory costs stay high. Ranks save to `localStorage` (`unending-save-v1`) on every buy and survive die → Rise, `unending.jump(n)`, and reload. The Armory line “Blood Tree held” lists owned ranks during a run.
+| Class | Wave 1 | Wave 5 | Wave 9 | Wave 13 | Wave 17 |
+|---|---|---|---|---|---|
+| **Warrior** | Iron, Swift, Vitality | Guard, Spoils | Leech, Cleave, Brace | Sharpen, Tempo, Rally | Champion, Rend |
+| **Fire Mage** | Ember, Cadence, Ward | Well, Tithe | Long Cast, Cinder, Focus | Pyre, Tempest, Kindle | Echo, Infernal |
+| **Ranger** | Bodkin, Swift, Vitality | Spoils, Stride | Edge, Longshot, Quiver | Sharpen, Echo, Track | Pack, Alpha |
+
+## Prestige trees
+
+Each class has its own tree. One **root** (3 ranks) must be filled before any branch opens. After that, **every rank** on a node must be filled before its children unlock. Glory costs climb as you go deeper.
+
+| Class | Tree | Root | Branches |
+|---|---|---|---|
+| **Warrior** | Iron Pact | Oath | Shield (Hide → Second Wind → Thorns → Last Stand), Blade (Tempo → Execute → Overkill → Bloodlust), Spoils (Purse → Greed → Sanguine → Heirloom) |
+| **Fire Mage** | Ember Court | Kindle | Pyre (Cinder → Blaze → Overkill → Wildfire), Frost (Chill → Nova Depth → Shatter → Permafrost), Well (Spark → Tempest → Fate → Phylactery) |
+| **Ranger** | Wild Hunt | Trail | Bow (Edge → Longshot → Echo → Marksman), Wolf (Pack → Pelt → Sic Master → Alpha), Stride (Stride → Trophy → Fieldcraft → Keepsake) |
+
+Pick **Rise as** on the death screen to browse that class's tree before you spend.
+
+Ranks save to `localStorage` (`unending-save-v1`, `saveVersion: 2`) on every buy and survive die → Rise, `unending.jump(n)`, and reload. The Armory line lists owned ranks for the class you are playing.
+
+### Save migration
+
+Old overnight Blood Tree ranks are **refunded as Glory**, then the old shared tree is cleared. Banked unspent Glory is kept. The next run toasts the refund amount. New ranks live under `trees.warrior` / `trees.mage` / `trees.ranger`. Existing Glory is never wiped.
 
 ## Controls
 
@@ -54,6 +72,8 @@ Child nodes unlock after one rank in the parent (not two), so the interesting le
 | Click / Space | Class strike |
 | 1 / 2 / 3 | Class skills (see table) |
 | P | Pause |
+
+The S / 1 / 2 / 3 cooldown strip sits under the top HUD on the left, away from the fighter.
 
 ## Art
 
