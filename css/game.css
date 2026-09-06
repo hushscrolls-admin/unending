@@ -144,6 +144,11 @@ body {
   backdrop-filter: blur(8px);
 }
 
+#shop.nudge {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold), 0 0 18px rgba(230, 193, 90, 0.35);
+}
+
 #shop h2 {
   margin: 0;
   font-family: "Press Start 2P", monospace;
@@ -448,7 +453,18 @@ body {
 
 .row.ready {
   border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold);
+  box-shadow: 0 0 0 2px var(--gold);
+  animation: first-buy-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes first-buy-pulse {
+  0%,
+  100% {
+    background: rgba(230, 193, 90, 0.12);
+  }
+  50% {
+    background: rgba(230, 193, 90, 0.32);
+  }
 }
 
 .row {
