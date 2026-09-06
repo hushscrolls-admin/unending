@@ -10,7 +10,7 @@
   const CHARGE_SPEED = 560;
   const RETURN_SPEED = 500;
   const SHOP_W = 332;
-  const LIVE_CAP = 7;
+  const LIVE_CAP = 6;
   const DROP_PICK_R = 160;
   const DROP_MAGNET_AGE = 0.32;
   const VITAL_CAP = 900;
@@ -1276,8 +1276,8 @@
   }
 
   function nextWaveDelay(wave) {
-    const early = wave < 6 ? 3.2 : wave < 10 ? 1.8 : 0.6;
-    return 6.6 + wave * 0.42 + early;
+    const early = wave < 6 ? 4.2 : wave < 10 ? 2.2 : 0.6;
+    return 7.0 + wave * 0.45 + early;
   }
 
   function charge() {
