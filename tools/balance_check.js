@@ -8,6 +8,9 @@ const {
   ENEMIES,
   STAGE_LEN,
   NOVA,
+  RANGE,
+  PRESTIGE_TREES,
+  clampCombatRange,
   goldCost,
   isBossWave,
   bossTypeFor,
@@ -44,6 +47,22 @@ assert(CLASSES.mage.skills[2].cdMin === NOVA.cdMin, "skill spec carries the Nova
 
 const firstIron = goldCost(18, 1.38, 0, 10);
 assert(firstIron <= 10, "opening crate should be a first-wave buy from the 14g start");
+
+assert(CLASSES.mage.range < RANGE.spawnGap, "Mage base range must sit short of the spawn line");
+assert(CLASSES.ranger.range < RANGE.spawnGap, "Ranger base range must sit short of the spawn line");
+assert(CLASSES.mage.range > 240, "Mage base range should still hit W8 archers (~250 keep)");
+assert(CLASSES.ranger.range >= 250, "Ranger base range should still contest W8 archers");
+assert(clampCombatRange(900, 728) <= 728 - RANGE.roadPad, "combat range must clamp inside the road");
+assert(clampCombatRange(CLASSES.mage.range + 24 * 8, 728) > CLASSES.mage.range, "range upgrades must still grow on the road");
+
+for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
+  const rows = tree.nodes.map((n) => n.row || 0);
+  const deep = Math.max(...rows);
+  const forks = tree.nodes.filter((n) => n.row === 5).length;
+  assert(deep >= 7, id + " tree should reach row 7");
+  assert(forks >= 6, id + " tree should fork at row 5 (two choices per branch)");
+  assert(tree.nodes.filter((n) => n.root).length === 1, id + " keeps a single root");
+}
 
 const bars = [
   { label: "0 prestige  S1 W6–8", waves: [6, 7, 8], hpMax: 2.2, dmgMax: 1.55, packMax: 5 },

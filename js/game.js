@@ -91,6 +91,31 @@
     return rageMult() * (lastStanding() ? 1.25 : 1);
   }
 
+  function playSpan() {
+    const h = run.hero;
+    return Math.max(160, playRight() - (h ? h.x : HOME_X));
+  }
+
+  function combatRange() {
+    const h = run.hero;
+    if (!h) return RANGE.ranger;
+    return clampCombatRange(h.range, playSpan());
+  }
+
+  function boltLimitX(dir) {
+    const h = run.hero;
+    const span = combatRange();
+    if (!h) return playRight() - 16;
+    if (dir < 0) return Math.max(h.x - span, camera + 8);
+    return Math.min(h.x + span, playRight() - 16);
+  }
+
+  function infernoEnd() {
+    const h = run.hero;
+    const extra = Math.max(0, combatRange() - classDef("mage").range) + (h.infernoReach || 0);
+    return Math.min(playRight() - 12, h.x + 310 + extra);
+  }
+
   function cdScale(seconds, minCd) {
     const haste = (run.hero && run.hero.skillHaste) || 0;
     const scaled = seconds * Math.max(0.45, 1 - haste);
@@ -344,6 +369,58 @@
       sicHold: 0,
       sicDmg: 0,
       strikePierce: 0,
+      waveWard: 0,
+      mendArmor: 0,
+      mendArmorT: 0,
+      lowHpArmor: 0,
+      mendDR: 0,
+      mendDRHits: 0,
+      cheatDeath: false,
+      usedCheat: false,
+      mendAmp: 0,
+      bleed: 0,
+      whirlExtra: 0,
+      strikeStun: 0,
+      whirlRefund: 0,
+      executeHp: 0.4,
+      eliteGold: 0,
+      heartFind: 0,
+      heartAmp: 0,
+      heirloomSwift: false,
+      provisioner: false,
+      infernoExtra: 0,
+      infernoReach: 0,
+      burnMana: 0,
+      phoenix: false,
+      usedPhoenix: false,
+      livingBomb: false,
+      frostbite: 0,
+      iceLance: 0,
+      iceLanceHits: 0,
+      chillHold: 0,
+      novaMana: 0,
+      slowShatter: false,
+      rime: false,
+      killMana: 0,
+      cautMana: 0,
+      infernoEcho: 0,
+      cautWardExtra: 0,
+      multishot: 0,
+      critDmg: 0,
+      volleyExtra: 0,
+      deadeye: false,
+      strikeEcho: false,
+      howl: 0,
+      wolfLeech: 0,
+      packBond: 0,
+      dire: 0,
+      sicHeal: 0,
+      alphaAura: false,
+      camo: 0,
+      camoT: 0,
+      dressWard: 0,
+      dressWardT: 0,
+      waveHits: 0,
       anim: "idle",
       animT: 0,
       flash: 0,
@@ -367,12 +444,24 @@
       const first = heirloomUpgrade(hero.klass);
       if (first) run.levels[first.id] = Math.max(run.levels[first.id] || 0, 1);
     }
+    if (hero.heirloomSwift) {
+      const swiftId = hero.klass === "warrior" ? "w_swift" : hero.klass === "ranger" ? "r_swift" : "m_cadence";
+      run.levels[swiftId] = Math.max(run.levels[swiftId] || 0, 1);
+    }
+    if (hero.provisioner) {
+      if (hero.secondWind > 0) hero.secondWind += 1;
+      else {
+        hero.maxHp = Math.round(hero.maxHp * 1.1);
+        hero.hp = Math.round(hero.hp * 1.1);
+        hero.prestHp = (hero.prestHp || 0) + Math.round(classDef(hero.klass).hp * 0.1);
+      }
+    }
     for (const u of shopList(hero.klass)) {
       const lv = run.levels[u.id] || 0;
       for (let i = 0; i < lv; i++) u.apply(hero);
     }
     hero.hp = Math.min(hero.maxHp, hero.hp);
-    hero.secondWind = Math.max(0, Math.min(2, Math.floor(Number(hero.secondWind) || 0)));
+    hero.secondWind = Math.max(0, Math.min(4, Math.floor(Number(hero.secondWind) || 0)));
     clampVitals(hero, {
       fallback: c.hp + (hero.prestHp || 0),
       manaFallback: c.maxMana,
@@ -389,11 +478,12 @@
     const pack = (h && h.pack) || 0;
     const wave = wolfWave();
     const scale = 1 + Math.min(2.8, (wave - 1) * 0.22);
-    const hp = Math.round((96 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22));
+    const dire = (h && h.dire) || 0;
+    const hp = Math.round((96 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22) * (1 + dire * 0.12));
     return {
       hp,
       maxHp: hp,
-      dmg: 6 + ((h && h.dmg) || 9) * 0.08 + pack * 2 + Math.min(3, (wave - 1) * 0.18),
+      dmg: 6 + ((h && h.dmg) || 9) * 0.08 + pack * 2 + dire * 1.5 + Math.min(3, (wave - 1) * 0.18),
       armor: 5.5 + ((h && h.wolfArmor) || 0) + Math.min(9, (wave - 1) * 0.72) + pack * 0.6,
       regen: 2.2 + ((h && h.wolfRegen) || 0) + Math.min(4.5, (wave - 1) * 0.32),
     };
@@ -589,13 +679,24 @@
 
   function hitHero(amount, srcX, crit) {
     const h = run.hero;
-    let armor = h.armor;
+    let armor = h.armor + (h.mendArmorT > 0 ? 1.4 * (h.mendArmor || 0) : 0);
+    if (h.lowHpArmor && h.hp / h.maxHp <= 0.45) armor += 1.6 * h.lowHpArmor;
     if (h.klass === "mage" && run.wave > 0) {
       if (run.wave <= 4) armor += 2.4;
       else if (run.wave <= 7) armor += 1.2;
     }
     let d = dmgIn(amount, armor);
     if (h.cauterizeWard > 0) d *= 0.78;
+    if (h.waveHits > 0 && h.waveWard) {
+      d *= Math.max(0.4, 1 - 0.16 * h.waveWard);
+      h.waveHits -= 1;
+    }
+    if (h.mendDRHits > 0 && h.mendDR) {
+      d *= Math.max(0.5, 1 - 0.12 * h.mendDR);
+      h.mendDRHits -= 1;
+    }
+    if (h.camoT > 0 && h.camo) d *= Math.max(0.5, 1 - 0.14 * h.camo);
+    if (h.dressWardT > 0 && h.dressWard) d *= Math.max(0.55, 1 - 0.18 * h.dressWard);
     h.hp -= d;
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
     h.flash = 0.12;
@@ -615,6 +716,28 @@
       sfx(520, 0.14, "sine", 0.05);
     }
     if (h.hp <= 0) {
+      if (h.cheatDeath && !h.usedCheat) {
+        h.usedCheat = true;
+        h.hp = Math.max(1, h.maxHp * 0.12);
+        floatText(h.x + 60, groundY() - 220, "UNBREAKABLE", "#ffe27a");
+        sfx(480, 0.16, "sine", 0.05);
+        syncHud();
+        return;
+      }
+      if (h.phoenix && !h.usedPhoenix) {
+        h.usedPhoenix = true;
+        h.hp = Math.max(1, h.maxHp * 0.18);
+        for (const e of [...run.enemies]) {
+          if (Math.abs(e.x - h.x) < 220) {
+            applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.5, dur: 2.4 }));
+            e.igniteFlash = 0.8;
+          }
+        }
+        floatText(h.x + 60, groundY() - 220, "PHOENIX", "#ff6a3a");
+        sfx(360, 0.18, "sawtooth", 0.06);
+        syncHud();
+        return;
+      }
       h.hp = 0;
       die();
     } else {
@@ -661,11 +784,13 @@
   }
 
   function strikeThreat(e) {
+    const h = run.hero;
     let dmg = e.dmg;
     const crit = Math.random() < (e.def.crit || 0);
     if (crit) dmg *= 2;
     const t = threatFor(e);
     if (t === run.hero) {
+      if (h && h.alphaAura && wolfAlive() && !e.def.projectile) dmg *= 0.9;
       hitHero(dmg, e.x, crit);
       if (run.hero.thorns && run.hero.hp > 0) {
         hitEnemy(e, dmg * 0.1 * run.hero.thorns, false);
@@ -716,11 +841,18 @@
   function hitEnemy(e, amount, crit, fromDot) {
     if (!e || e.hp <= 0) return;
     const h = run.hero;
-    if (h && h.execute && e.hp < e.maxHp * 0.4) {
+    if (h && h.execute && e.hp < e.maxHp * (h.executeHp || 0.4)) {
       amount *= 1 + 0.18 * h.execute;
     }
-    if (h && h.shatter && e.cc > 0 && !fromDot) {
-      amount *= 1 + 0.14 * h.shatter;
+    if (h && h.shatter && !fromDot && (e.cc > 0 || (h.slowShatter && e.slow > 0))) {
+      const half = e.cc > 0 ? 1 : 0.5;
+      amount *= 1 + 0.14 * h.shatter * half;
+    }
+    if (h && h.frostbite && e.slow > 0) amount *= 1 + 0.08 * h.frostbite;
+    if (h && h.deadeye && Math.abs(e.x - h.x) > 200) amount *= 1.14;
+    if (h && h.iceLanceHits > 0 && !fromDot) {
+      amount *= 1 + 0.28 * (h.iceLance || 0);
+      h.iceLanceHits -= 1;
     }
     const d = dmgIn(amount, e.armor);
     const over = d - e.hp;
@@ -742,7 +874,7 @@
       applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 }));
     }
     if (e.hp > 0 && h && h.chill && !fromDot) {
-      e.slow = Math.max(e.slow || 0, 1.1 * h.chill);
+      e.slow = Math.max(e.slow || 0, 1.1 * h.chill + (h.chillHold || 0));
     }
     if (e.hp <= 0) {
       if (h && h.overkill && over > 0 && !fromDot) {
@@ -755,7 +887,10 @@
 
   function killEnemy(e) {
     run.kills += 1;
-    const gold = Math.floor(e.gold * run.hero.goldFind);
+    const h = run.hero;
+    const elite = !!(e.def.boss || e.type === "mage" || e.type === "healer" || e.type === "assassin");
+    const goldMult = h.goldFind * (elite && h.eliteGold ? 1 + 0.22 * h.eliteGold : 1);
+    const gold = Math.floor(e.gold * goldMult);
     run.gold += gold;
     floatText(e.x, groundY() - 190, "+" + gold + "g", "#e6c15a");
     if (!run.boughtAny && !run.shopNudge && run.gold >= 10) {
@@ -765,7 +900,8 @@
     }
     if (e.magic) run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + e.magic);
     const r = Math.random();
-    if (r < 0.12) drop("heart", e.x, groundY() - 80);
+    const heartP = 0.12 + ((h && h.heartFind) || 0);
+    if (r < heartP) drop("heart", e.x, groundY() - 80);
     else if (r < 0.22) drop("mana", e.x, groundY() - 80);
     else if (r < 0.28) drop("rage", e.x, groundY() - 80);
     else if (r < 0.33) drop("haste", e.x, groundY() - 80);
@@ -780,14 +916,21 @@
       });
     }
     sfx(320, 0.07, "triangle", 0.05);
-    if (run.hero.bloodlust) {
-      run.hero.buffs.rage = Math.max(run.hero.buffs.rage, 1.6 * run.hero.bloodlust);
+    if (h.bloodlust) {
+      h.buffs.rage = Math.max(h.buffs.rage, 1.6 * h.bloodlust);
     }
-    if (run.hero.wildfire) {
+    if (h.whirlRefund && h.skillCd[1] > 0) h.skillCd[1] = Math.max(0, h.skillCd[1] - h.whirlRefund);
+    if (h.killMana) h.mana = Math.min(h.maxMana, h.mana + h.killMana);
+    if (h.burnMana && e.dots && e.dots.some((d) => d.kind === "burn")) {
+      h.mana = Math.min(h.maxMana, h.mana + 4 * h.burnMana);
+    }
+    if (h.rime && e.cc > 0) h.mana = Math.min(h.maxMana, h.mana + 10);
+    if (h.wildfire) {
       const near = nearest(e.x, (o) => o !== e && o.hp > 0);
       if (near) {
-        applyDot(near, ampBurn({ kind: "burn", dps: run.hero.dmg * 0.28 * run.hero.wildfire, dur: 2.2 }));
+        applyDot(near, ampBurn({ kind: "burn", dps: h.dmg * 0.28 * h.wildfire, dur: 2.2 }));
         near.igniteFlash = Math.max(near.igniteFlash || 0, 0.6);
+        if (h.livingBomb) hitEnemy(near, h.dmg * 0.3, false, true);
       }
     }
     const wasBoss = e.def.boss;
@@ -853,6 +996,13 @@
       toast(crate ? "Wave " + n + crate : "Wave " + n);
       sfx(360, 0.1, "square", 0.04);
     }
+    if (h) {
+      if (h.waveWard) h.waveHits = 2;
+      if (h.camo) h.camoT = 2.2;
+      if (h.howl && run.wolf && run.wolf.hp > 0) {
+        run.wolf.taunt = Math.max(run.wolf.taunt || 0, 1.1 * h.howl);
+      }
+    }
     buildShop();
   }
 
@@ -908,6 +1058,7 @@
       pierce: opts.pierce || 0,
       aoe: opts.aoe || 0,
       burn: opts.burn || null,
+      maxX: opts.maxX != null ? opts.maxX : boltLimitX(dir),
       hit: [],
     });
   }
@@ -918,7 +1069,7 @@
     h.animT = 0;
     let dmg = h.dmg * (mult || 1) * autoDmgMult();
     const crit = Math.random() < h.crit;
-    if (crit) dmg *= 2;
+    if (crit) dmg *= 2 + (h.critDmg || 0);
     const targets = livingInRange(h.reach + 16, false).sort(
       (a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x)
     );
@@ -926,6 +1077,7 @@
       hitEnemy(targets[0], dmg, crit);
       if (extra && extra.stun) applyCc(targets[0], extra.stun);
       if (extra && extra.knock) targets[0].x += extra.knock;
+      if (h.bleed) applyDot(targets[0], { kind: "bleed", dps: h.dmg * 0.22 * h.bleed, dur: 2.2 });
     }
     if (targets[1] && extra && extra.cleave) {
       hitEnemy(targets[1], dmg * extra.cleave * (1 + (h.cleaveBonus || 0)), false);
@@ -943,12 +1095,13 @@
       if (!fromEcho && h.echo && Math.random() < h.echo) autoAttack(true);
       return;
     }
-    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= c.range);
+    const reach = combatRange();
+    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= reach);
     if (!t) return;
     const dir = t.x >= h.x ? 1 : -1;
     const crit = Math.random() < h.crit;
     let dmg = h.dmg * autoDmgMult();
-    if (crit) dmg *= 2;
+    if (crit) dmg *= 2 + (h.critDmg || 0);
     if (c.proj === "fire") {
       shoot({
         kind: "fire",
@@ -963,6 +1116,10 @@
       shoot({ kind: "arrow", dir, dmg, crit, speed: 500 });
       sfx(crit ? 540 : 460, 0.05, "triangle", 0.04);
     }
+    if (h.multishot) {
+      const second = nearest(h.x, (e) => e !== t && Math.abs(e.x - h.x) <= reach);
+      if (second) hitEnemy(second, h.dmg * 0.36 * h.multishot * autoDmgMult(), false);
+    }
     if (!fromEcho && h.echo && Math.random() < h.echo) autoAttack(true);
   }
 
@@ -974,17 +1131,18 @@
     h.anim = "atk";
     h.animT = 0;
     if (c.id === "warrior") {
-      swing(2.15 * (h.strikeMult || 1), { stun: 0.55, knock: 18 });
+      swing(2.15 * (h.strikeMult || 1), { stun: 0.55 + (h.strikeStun || 0), knock: 18 });
       shake = 8;
       return;
     }
-    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= c.range + 40);
+    const reach = combatRange();
+    const t = nearest(h.x, (e) => Math.abs(e.x - h.x) <= reach);
     const dir = t && t.x < h.x ? -1 : 1;
     const crit = Math.random() < h.crit;
     let dmg = h.dmg * heroDmgMult();
     if (c.id === "mage") {
       dmg *= 2.2;
-      if (crit) dmg *= 2;
+      if (crit) dmg *= 2 + (h.critDmg || 0);
       shoot({
         kind: "fire",
         dir,
@@ -999,7 +1157,7 @@
       sfx(180, 0.12, "sawtooth", 0.05);
     } else {
       dmg *= 2.7;
-      if (crit) dmg *= 2;
+      if (crit) dmg *= 2 + (h.critDmg || 0);
       shoot({
         kind: "arrow",
         dir,
@@ -1010,6 +1168,15 @@
       });
       shake = 6;
       sfx(560, 0.08, "square", 0.05);
+      if (h.strikeEcho && h.echo && Math.random() < h.echo) {
+        shoot({
+          kind: "arrow",
+          dir,
+          dmg: dmg * 0.7,
+          speed: 600,
+          pierce: 1 + (h.strikePierce || 0),
+        });
+      }
     }
   }
 
@@ -1028,9 +1195,11 @@
   function mend() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(skillManaCost(0) || 25)) return;
-    const heal = h.maxHp * 0.28;
+    const heal = h.maxHp * (0.28 + (h.mendAmp || 0));
     const got = healHero(heal);
     h.healFlash = 0.7;
+    if (h.mendArmor) h.mendArmorT = 3 * h.mendArmor;
+    if (h.mendDR) h.mendDRHits = 3;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     sfx(480, 0.12, "sine", 0.05);
   }
@@ -1041,13 +1210,15 @@
     const heal = h.maxHp * 0.32;
     const got = healHero(heal);
     h.cauterizeT = 1.15;
-    h.cauterizeWard = 2.4;
+    h.cauterizeWard = 2.4 + (h.cautWardExtra || 0);
     h.healFlash = 0.85;
     h.flash = Math.max(h.flash, 0.35);
     floatText(h.x + 86, groundY() - 236, "+" + fmt(got || heal), "#ff8a4a");
+    if (h.cautMana) h.mana = Math.min(h.maxMana, h.mana + 10 * h.cautMana);
+    const igniteR = Math.min(combatRange(), 200 + Math.max(0, combatRange() - classDef("mage").range) * 0.55);
     let ignited = 0;
     for (const e of [...run.enemies]) {
-      if (Math.abs(e.x - h.x) < 200) {
+      if (Math.abs(e.x - h.x) < igniteR) {
         hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
         applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.32, dur: 2.8 }));
         e.igniteFlash = 1.05;
@@ -1087,6 +1258,7 @@
     const heal = h.maxHp * 0.2;
     const got = healHero(heal);
     h.healFlash = 0.7;
+    if (h.dressWard) h.dressWardT = 1.6 * h.dressWard;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
     if (run.wolf) {
       if (run.wolf.hp <= 0) {
@@ -1136,7 +1308,7 @@
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0 || h.whirl) return;
     h.skillCd[1] = cdScale(spec.cd || 6);
-    h.whirl = { t: 0, next: 0, left: 3 };
+    h.whirl = { t: 0, next: 0, left: 3 + (h.whirlExtra || 0) };
     h.anim = "atk";
     h.animT = 0;
   }
@@ -1146,7 +1318,7 @@
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0) return;
     h.skillCd[1] = cdScale(spec.cd);
-    h.inferno = { t: 0, next: 0, left: 3, x: h.x + 150 };
+    h.inferno = { t: 0, next: 0, left: 3 + (h.infernoExtra || 0), x: h.x + 150 };
     h.anim = "atk";
     h.animT = 0;
     sfx(200, 0.14, "sawtooth", 0.05);
@@ -1157,12 +1329,19 @@
     const x = h.inferno.x;
     const dmg = h.dmg * 0.95 * autoDmgMult() * (h.infernoMult || 1);
     for (const e of [...run.enemies]) {
-      if (e.x > h.x + 20 && e.x < x + 160) {
+      if (e.x > h.x + 20 && e.x < infernoEnd()) {
         hitEnemy(e, dmg, false);
         applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.38, dur: 2.6 }));
       }
     }
     fx.rings.push({ x: x, t: 0.4, color: "rgba(255,90,20,0.75)", r: 30 });
+    if (h.infernoEcho && Math.random() < h.infernoEcho) {
+      for (const e of [...run.enemies]) {
+        if (e.x > h.x + 20 && e.x < infernoEnd()) {
+          hitEnemy(e, dmg * 0.55, false);
+        }
+      }
+    }
     shake = 6;
     sfx(160, 0.08, "sawtooth", 0.04);
     clampVitals(h, { fallback: heroFallbackMax(), manaFallback: classDef(h.klass).maxMana });
@@ -1175,6 +1354,8 @@
     h.mana -= spec.mana;
     h.skillCd[2] = skillCdScaled(2);
     h.novaT = 0.45;
+    if (h.iceLance) h.iceLanceHits = 2;
+    if (h.novaMana) h.mana = Math.min(h.maxMana, h.mana + 8 * h.novaMana);
     const dmg = h.dmg * 0.55 * autoDmgMult();
     const reach = novaReachFor(h.novaReach);
     const hold = novaFreezeFor(h.novaHold);
@@ -1194,39 +1375,29 @@
     const h = run.hero;
     const c = classDef(h.klass);
     if (state !== "fight" || h.skillCd[1] > 0) return;
+    const reach = combatRange();
+    const targets = [...run.enemies]
+      .filter((e) => Math.abs(e.x - h.x) < reach)
+      .sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
+    if (!targets.length) return;
     h.skillCd[1] = cdScale(c.skills[1].cd);
     h.anim = "atk";
     h.animT = 0;
-    const targets = [...run.enemies]
-      .filter((e) => Math.abs(e.x - h.x) < c.range + 50)
-      .sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
-    const n = 5;
-    if (!targets.length) {
-      for (let i = 0; i < n; i++) {
-        shoot({
-          kind: "arrow",
-          dir: 1,
-          dmg: h.dmg * 0.7 * autoDmgMult(),
-          speed: 520,
-          y: groundY() - 70 - i * 16,
-        });
-      }
-    } else {
-      for (let i = 0; i < n; i++) {
-        const t = targets[i % targets.length];
-        const dir = t.x >= h.x ? 1 : -1;
-        const crit = Math.random() < h.crit * 0.6;
-        let dmg = h.dmg * 0.74 * autoDmgMult();
-        if (crit) dmg *= 2;
-        shoot({
-          kind: "arrow",
-          dir,
-          dmg,
-          crit,
-          speed: 540,
-          y: groundY() - 70 - (i - 2) * 14,
-        });
-      }
+    const n = 5 + (h.volleyExtra || 0);
+    for (let i = 0; i < n; i++) {
+      const t = targets[i % targets.length];
+      const dir = t.x >= h.x ? 1 : -1;
+      const crit = Math.random() < h.crit * 0.6;
+      let dmg = h.dmg * 0.74 * autoDmgMult();
+      if (crit) dmg *= 2;
+      shoot({
+        kind: "arrow",
+        dir,
+        dmg,
+        crit,
+        speed: 540,
+        y: groundY() - 70 - (i - 2) * 14,
+      });
     }
     shake = 5;
     sfx(480, 0.1, "triangle", 0.05);
@@ -1248,6 +1419,7 @@
     const dest = target ? target.x - 36 : h.x + 220;
     w.leap = { from: w.x, to: dest, t: 0, hit: false };
     w.taunt = 3.2 + (h.sicHold || 0);
+    if (h.sicHeal) healHero(h.maxHp * h.sicHeal);
     w.anim = "atk";
     floatText(w.x, groundY() - 140, "SIC 'EM", "#e6c15a");
     sfx(280, 0.12, "square", 0.05);
@@ -1272,7 +1444,7 @@
   function pickup(d) {
     const h = run.hero;
     if (d.kind === "heart") {
-      const heal = h.maxHp * 0.18;
+      const heal = h.maxHp * (0.18 + (h.heartAmp || 0));
       healHero(heal);
       floatText(h.x + 56, groundY() - 180, "heal", "#ff8a8a");
     } else if (d.kind === "mana") {
@@ -1336,8 +1508,9 @@
         w.anim = "atk";
         w.animT = 0;
         hitEnemy(prey, w.dmg, false);
-        const sip = Math.max(0, w.dmg * 0.16);
+        const sip = Math.max(0, w.dmg * (0.16 + (h.wolfLeech || 0)));
         w.hp = Math.min(w.maxHp, w.hp + sip);
+        if (h.packBond) healHero(w.dmg * 0.1 * h.packBond);
         sfx(210, 0.05, "square", 0.03);
       }
     } else {
@@ -1378,6 +1551,9 @@
     h.novaT = Math.max(0, h.novaT - dt);
     h.cauterizeT = Math.max(0, (h.cauterizeT || 0) - dt);
     h.cauterizeWard = Math.max(0, (h.cauterizeWard || 0) - dt);
+    h.mendArmorT = Math.max(0, (h.mendArmorT || 0) - dt);
+    h.camoT = Math.max(0, (h.camoT || 0) - dt);
+    h.dressWardT = Math.max(0, (h.dressWardT || 0) - dt);
     h.healFlash = Math.max(0, (h.healFlash || 0) - dt);
     h.buffs.rage = Math.max(0, h.buffs.rage - dt);
     h.buffs.haste = Math.max(0, h.buffs.haste - dt);
@@ -1452,7 +1628,7 @@
       const ready =
         c.style === "melee"
           ? melee.length
-          : run.enemies.some((e) => Math.abs(e.x - h.x) <= c.range);
+          : run.enemies.some((e) => Math.abs(e.x - h.x) <= combatRange());
       if (ready) {
         const rate = h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1) * (lastStanding() ? 1.2 : 1);
         h.atkT -= dt * rate;
@@ -1625,6 +1801,10 @@
       } else if (Math.abs(b.x - h.x) < 30) {
         hitHero(b.dmg, b.x);
         b.dead = true;
+      }
+      if (b.friendly && b.maxX != null) {
+        if (b.vx >= 0 && b.x > b.maxX) b.dead = true;
+        if (b.vx < 0 && b.x < b.maxX) b.dead = true;
       }
       if (b.x < camera - 80 || b.x > camera + W + 80) b.dead = true;
     }
@@ -2221,7 +2401,7 @@
       }
       if (h.inferno) {
         ctx.fillStyle = "rgba(255,80,20," + (0.12 + (h.inferno.t % 0.22) * 0.5) + ")";
-        ctx.fillRect(sx(h.x + 30), gy - 20, 280, 18);
+        ctx.fillRect(sx(h.x + 30), gy - 20, Math.max(80, infernoEnd() - h.x - 30), 18);
       }
       if (h.novaT > 0) {
         const reach = novaReachFor(h.novaReach);
@@ -2559,6 +2739,11 @@
     document.getElementById("st-leech").textContent = hudNum((h.leech || 0) * 100, 80) + "%";
     document.getElementById("st-fortune").textContent = hudNum((h.goldFind || 0) * 100, 400) + "%";
     document.getElementById("st-regen").textContent = hudNum(h.manaRegen, 20) + "/s";
+    const rangeEl = document.getElementById("st-range");
+    if (rangeEl) {
+      rangeEl.textContent =
+        h.style === "ranged" ? String(Math.round(combatRange())) : String(Math.round(h.reach));
+    }
     const buffs = [];
     if (rage) buffs.push("Rage " + Math.ceil(h.buffs.rage) + "s");
     if (haste) buffs.push("Haste " + Math.ceil(h.buffs.haste) + "s");
@@ -2770,10 +2955,24 @@
       col.innerHTML = `<h3>${name}</h3>`;
       const trunk = document.createElement("div");
       trunk.className = "tree-trunk";
-      tree.nodes
+      const colNodes = tree.nodes
         .filter((n) => !n.root && n.col === i)
-        .sort((a, b) => a.row - b.row)
-        .forEach((u) => trunk.appendChild(renderTreeNode(klass, u, bag)));
+        .sort((a, b) => a.row - b.row || (a.fork || 0) - (b.fork || 0));
+      const rows = [];
+      for (const u of colNodes) {
+        const last = rows[rows.length - 1];
+        if (last && last[0].row === u.row) last.push(u);
+        else rows.push([u]);
+      }
+      rows.forEach((group) => {
+        if (group.length === 1) trunk.appendChild(renderTreeNode(klass, group[0], bag));
+        else {
+          const fork = document.createElement("div");
+          fork.className = "tree-fork";
+          group.forEach((u) => fork.appendChild(renderTreeNode(klass, u, bag)));
+          trunk.appendChild(fork);
+        }
+      });
       col.appendChild(trunk);
       branches.appendChild(col);
     });
@@ -2935,8 +3134,16 @@
           freeze: novaFreezeFor(h && h.novaHold),
           cd: novaCdFor(h && h.skillHaste),
           cdMin: NOVA.cdMin,
-          spawnGap: 390,
+          spawnGap: RANGE.spawnGap,
         },
+        range: h
+          ? {
+              raw: h.range,
+              combat: combatRange(),
+              cap: roadRangeCap(playSpan()),
+              playSpan: playSpan(),
+            }
+          : { baseMage: RANGE.mage, baseRanger: RANGE.ranger },
         trees: Object.fromEntries(
           Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
         ),

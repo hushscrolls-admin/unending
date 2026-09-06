@@ -66,11 +66,15 @@ Wave gates stay 1 / 5 / 9 / 13 / 17. The offered buys change with the class you 
 
 Each class has its own tree. One **root** (3 ranks) must be filled before any branch opens. After that, **every rank** on a node must be filled before its children unlock. Glory costs climb as you go deeper.
 
-| Class | Tree | Root | Branches |
+| Class | Tree | Root | Branches (each forks after the old leaf) |
 |---|---|---|---|
-| **Warrior** | Iron Pact | Oath | Shield (Hide → Second Wind → Thorns → Last Stand), Blade (Tempo → Execute → Overkill → Bloodlust), Spoils (Purse → Greed → Sanguine → Heirloom) |
-| **Fire Mage** | Ember Court | Kindle | Pyre (Cinder → Blaze → Overkill → Wildfire), Frost (Chill → Nova Depth → Shatter → Permafrost), Well (Spark → Tempest → Fate → Phylactery) |
-| **Ranger** | Wild Hunt | Trail | Bow (Edge → Longshot → Echo → Marksman), Wolf (Pack → Pelt → Sic Master → Alpha), Stride (Stride → Trophy → Fieldcraft → Keepsake) |
+| **Warrior** | Iron Pact | Oath | Shield (Hide → … → Last Stand → Bulwark / Aegis → Fortress / Ironclad → Unbreakable / Bastion), Blade (Tempo → … → Bloodlust → Cleave Form / Deep Wounds → Whirl Master / Heavy Hand → War Master / Reaper), Spoils (Purse → … → Heirloom → War Chest / Scavenger → Quartermaster / Field Medic → Kingpin / Provisioner) |
+| **Fire Mage** | Ember Court | Kindle | Pyre (Cinder → … → Wildfire → Conflagrate / Immolate → Kindling / Wider Fire → Phoenix / Living Bomb), Frost (Chill → … → Permafrost → Frostbite / Ice Lance → Glacial / Cold Snap → Winterheart / Rime), Well (Spark → … → Phylactery → Battery / Evocation → Sage / Spellweave → Archon / Ritualist) |
+| **Ranger** | Wild Hunt | Trail | Bow (Edge → … → Marksman → Multishot / Headhunter → True Flight / Rain → Deadeye / Sharpshooter), Wolf (Pack → … → Alpha → Howl / Maul → Pack Bond / Dire → Huntsman / Alpha Aura), Stride (Stride → … → Keepsake → Camouflage / Looter → Trail Ward / Swift Wind → Veteran / Pathfinder) |
+
+Rows 0–4 are the original path (1 / 2 / 3 prestige bars still land here). Rows 5–7 are expensive forks: two choices that do not require filling both, then a capstone on the path you picked. Glory costs climb with depth. Full ranks on a node still unlock its children.
+
+Long Cast / Longshot / Track now extend **on-road** targeting and projectile travel. Base Mage / Ranger range sits short of the spawn line so extra range actually hits farther campers. Shots clamp at the playable road — they no longer fly into the shop / off-screen.
 
 Pick **Rise as** on the death screen to browse that class's tree before you spend.
 
