@@ -759,6 +759,11 @@ body {
   font-size: 24px;
 }
 
+.stat.stage-stat {
+  color: #9ec4a0;
+  font-size: 22px;
+}
+
 .overlay h2.pick-label,
 .pick-label {
   margin: 4px 0 8px;

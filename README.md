@@ -1,8 +1,8 @@
 # Unending
 
-A 2D sidescrolling idle fighter. One mercenary on the left of the road. Hordes walk out of the trees. Gold buys steel. Death buys Glory.
+A 2D sidescrolling idle fighter. One mercenary walks the road. Camps wait at fixed distances and only move when they come on screen. Gold buys steel. Death buys Glory.
 
-Pick **Warrior**, **Fire Mage**, or **Ranger** on the title screen (or after a death). Inspired by the layout and upgrade-loop feel of *Magic Archery* (character planted left, auto-action, spend while you watch), with melee or ranged combat and a prestige restart.
+Pick **Warrior**, **Fire Mage**, or **Ranger** on the title screen (or after a death). Auto-attacks and skills stay idle-fighter; the camera scrolls with the hero’s forward march. After each area boss the road opens into a new biome.
 
 ## Play
 
@@ -16,20 +16,21 @@ Open `http://localhost:8765`.
 
 ## Loop
 
-- The fighter holds the left. Melee walks in. Archers, casters, and healers keep a shorter distance than before so they stay on the road.
-- Wave 1–2 are a single raider. Waves 3–6 stay two grunts. Shields and the first 3-pack wait until 7; berserkers until 9. Early waves also cap how many can stand on the road so leftovers do not stack into a W4 brick wall. Healers only patch allies in range with a modest drip (not a full-pack reset).
+- The fighter **walks forward**. The camera follows. You do not steer — you spend, strike, and use skills.
+- Enemies sit at **static camps** along the road. They idle (WAIT) until they enter the wake line, then they aggro and fight.
+- Wave 1–2 are a single raider. Waves 3–6 stay two grunts. Shields and the first 3-pack wait until 7; berserkers until 9. Healers only patch allies in range with a modest drip (not a full-pack reset).
+- Every **10th wave** is a unique boss at the **end of the area**: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
+- After the boss falls, walk through the gate into a **new biome** (Duskwood Road → Ember Wastes → Rime Pass → Storm Flats → Sunken Court).
 - Kills grant gold immediately (it is not a walk-over). Hearts, mana, and short buffs (rage / haste) pop on the road, then magnet to the fighter — or to the wolf if it is closer — so Mage and Ranger collect them without walking. Warrior still picks them up by charging through, but is no longer the only class that benefits.
 - Spend gold in the Armory during the fight. A run starts with **24g**, and the opening crate is **8 / 8 / 9g**, so Mage can buy Ember and Ward before Wave 1 lands. Later crates still open at 5 / 9 / 13 / 17. **Each class has its own Armory pool** — Warrior steel, Mage fire/mana, Ranger bow/wolf. There are no shared/tagged cross-class rows.
 - **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or a living wolf) are low and the heal is ready. Ranger **Sic 'em** flashes when the wolf is DOWN. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
-- New waves march in on a timer even if the last pack is still alive. The gap grows as the wave number climbs.
-- Every 10th wave is a unique boss: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle).
 - On death you keep Glory and spend it on **that class's prestige tree**. Then rise again as any class. Gold and run upgrades reset. Glory is shared; ranks are per class.
 
 ## Classes
 
 | Class | Auto | Strike (Click / Space) | 1 | 2 | 3 |
 |---|---|---|---|---|---|
-| **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash to the back line |
+| **Warrior** | Melee cleave (second target at half damage) | Power Strike — heavy hit, short stun, knockback | Mend (25 mana) | Whirlwind (6s, three hits both sides) | Charge / Return — trampling dash through the current camp |
 | **Fire Mage** | Firebolt + burn DoT | Fireball — explosion and a stronger burn | Cauterize (25 mana) — heal and ignite nearby foes | Inferno (8s) — three pulses of ground fire | Frost Nova (28 mana, 9s, 7s floor) — pack-scale freeze, not a full-map lock. Glassier than Warrior (84 HP, 1 armor) with a short early-wave ward. Faces the road (toward enemies). |
 | **Ranger** | Bow shot | Aimed Shot — high burst, pierces two extras | Field Dress (22 mana) — heal you and a living wolf | Volley (7s) — five arrows | Sic 'em (12s) — revive the wolf when it is DOWN |
 

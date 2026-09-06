@@ -34,6 +34,126 @@ function clampCombatRange(range, playSpan) {
   return Math.min(n, roadRangeCap(playSpan));
 }
 
+// Walk-forward road. Camps sit at fixed distances and only aggro
+// when they enter the wake line. A boss caps each 10-wave biome.
+const ROAD = {
+  firstGap: 420,
+  packGap: 580,
+  packSpread: 32,
+  afterBoss: 340,
+  heroWalk: 124,
+  stopMelee: 110,
+  stopRanged: 172,
+};
+
+const BIOMES = [
+  {
+    id: "duskwood",
+    name: "Duskwood Road",
+    hue: 0,
+    sat: 1,
+    bright: 1,
+    skyTop: "#141c28",
+    skyBot: "#3a4a34",
+    ground: "#3a3224",
+    dust: "#6a5a38",
+    fog: "rgba(16, 24, 16, 0.16)",
+    accent: "#2d4a28",
+    particle: "leaf",
+  },
+  {
+    id: "ember",
+    name: "Ember Wastes",
+    hue: -32,
+    sat: 1.55,
+    bright: 0.72,
+    wash: "rgba(90, 18, 6, 0.42)",
+    skyTop: "#2a0806",
+    skyBot: "#8a2a10",
+    ground: "#4a140c",
+    dust: "#ff6a22",
+    fog: "rgba(120, 28, 8, 0.35)",
+    accent: "#c43a12",
+    particle: "ember",
+  },
+  {
+    id: "rime",
+    name: "Rime Pass",
+    hue: 175,
+    sat: 0.55,
+    bright: 1.12,
+    wash: "rgba(20, 50, 80, 0.38)",
+    skyTop: "#061018",
+    skyBot: "#3a6888",
+    ground: "#142430",
+    dust: "#d8f4ff",
+    fog: "rgba(200, 230, 250, 0.2)",
+    accent: "#6aa8c0",
+    particle: "snow",
+  },
+  {
+    id: "storm",
+    name: "Storm Flats",
+    hue: 52,
+    sat: 0.7,
+    bright: 0.62,
+    wash: "rgba(28, 16, 64, 0.44)",
+    skyTop: "#0a0818",
+    skyBot: "#3a2468",
+    ground: "#14101c",
+    dust: "#b090ff",
+    fog: "rgba(50, 24, 90, 0.32)",
+    accent: "#7a5ad8",
+    particle: "spark",
+  },
+  {
+    id: "sunken",
+    name: "Sunken Court",
+    hue: 12,
+    sat: 1.28,
+    bright: 0.88,
+    wash: "rgba(70, 42, 10, 0.36)",
+    skyTop: "#1a1008",
+    skyBot: "#8a5a20",
+    ground: "#322414",
+    dust: "#ffe27a",
+    fog: "rgba(80, 50, 16, 0.28)",
+    accent: "#e6c15a",
+    particle: "mote",
+  },
+];
+
+function stageIndex(wave) {
+  return Math.max(1, Math.ceil(Math.max(1, wave) / STAGE_LEN));
+}
+
+function waveInStage(wave) {
+  const w = Math.max(1, wave);
+  const r = w % STAGE_LEN;
+  return r === 0 ? STAGE_LEN : r;
+}
+
+function biomeForStage(stage) {
+  return BIOMES[(Math.max(1, stage) - 1) % BIOMES.length];
+}
+
+function stageSpan() {
+  return ROAD.firstGap + (STAGE_LEN - 1) * ROAD.packGap + ROAD.afterBoss;
+}
+
+function stageOriginX(stage) {
+  return 80 + (Math.max(1, stage) - 1) * stageSpan();
+}
+
+function packWorldX(stage, wave) {
+  const local = waveInStage(wave);
+  return stageOriginX(stage) + ROAD.firstGap + (local - 1) * ROAD.packGap;
+}
+
+function gateWorldX(stage) {
+  return packWorldX(stage, STAGE_LEN) + ROAD.afterBoss;
+}
+
 const CLASSES = {
   warrior: {
     id: "warrior",
@@ -2299,6 +2419,15 @@ if (typeof module !== "undefined" && module.exports) {
     STAGE_LEN,
     NOVA,
     RANGE,
+    ROAD,
+    BIOMES,
+    stageIndex,
+    waveInStage,
+    biomeForStage,
+    stageSpan,
+    stageOriginX,
+    packWorldX,
+    gateWorldX,
     roadRangeCap,
     clampCombatRange,
     RUN_UPGRADES,
