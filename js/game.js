@@ -12,7 +12,6 @@
   const SHOP_W = 332;
   const LIVE_CAP = 8;
   const VITAL_CAP = 900;
-  const PREST_ALIASES = { secondWind: "secondwind", lastStand: "laststand" };
   const HEAL_GOLD = "#ffe27a";
   const HEAL_GOLD_HOT = "#fff4a8";
   const HEAL_GOLD_INK = "#1a1208";
@@ -64,8 +63,19 @@
     return CLASSES[validClass(id || persist.klass)];
   }
 
-  function prestLv(id) {
-    return persist.prest[id] || 0;
+  function activeKlass() {
+    return validClass(run.hero && run.hero.klass ? run.hero.klass : persist.klass);
+  }
+
+  function treeBag(klass) {
+    const k = validClass(klass || activeKlass());
+    if (!persist.trees) persist.trees = emptyTrees();
+    if (!persist.trees[k]) persist.trees[k] = emptyTrees()[k];
+    return persist.trees[k];
+  }
+
+  function prestLv(id, klass) {
+    return treeBag(klass)[id] || 0;
   }
 
   function lastStanding() {
@@ -95,37 +105,48 @@
     }
   }
 
-  function mergePrest(a, b) {
-    const out = normalizePrest(a);
-    const extra = normalizePrest(b);
-    for (const n of PRESTIGE_TREE) {
-      out[n.id] = Math.max(out[n.id] || 0, extra[n.id] || 0);
+  function migrateRaw(raw) {
+    const src = raw && typeof raw === "object" ? raw : {};
+    const klass = validClass(src.klass);
+    const already = src.saveVersion >= SAVE_VERSION && src.trees;
+    if (already) {
+      return {
+        glory: src.glory || 0,
+        bestWave: src.bestWave || 0,
+        klass,
+        trees: normalizeTrees(src.trees),
+        refundNote: src.refundNote || 0,
+      };
     }
-    return out;
+    const refund = isLegacyPrest(src.prest) ? glorySpentLegacy(src.prest) : 0;
+    return {
+      glory: (src.glory || 0) + refund,
+      bestWave: src.bestWave || 0,
+      klass,
+      trees: normalizeTrees(src.trees),
+      refundNote: refund,
+    };
   }
 
   function loadSave() {
     const raw = readDisk();
-    if (raw) {
-      return {
-        glory: raw.glory || 0,
-        bestWave: raw.bestWave || 0,
-        klass: validClass(raw.klass),
-        prest: normalizePrest(raw.prest),
-      };
-    }
+    if (raw) return migrateRaw(raw);
     return {
       glory: 0,
       bestWave: 0,
       klass: "warrior",
-      prest: normalizePrest({}),
+      trees: emptyTrees(),
+      refundNote: 0,
     };
   }
 
   function save() {
     const disk = readDisk();
-    if (disk && disk.prest) persist.prest = mergePrest(persist.prest, disk.prest);
-    else persist.prest = normalizePrest(persist.prest);
+    if (disk && disk.saveVersion >= SAVE_VERSION && disk.trees) {
+      persist.trees = mergeTrees(persist.trees, disk.trees);
+    } else {
+      persist.trees = normalizeTrees(persist.trees);
+    }
     persist.bestWave = Math.max(persist.bestWave || 0, (disk && disk.bestWave) || 0);
     try {
       localStorage.setItem(
@@ -133,8 +154,10 @@
         JSON.stringify({
           glory: persist.glory,
           bestWave: persist.bestWave,
-          prest: persist.prest,
+          trees: persist.trees,
           klass: persist.klass,
+          saveVersion: SAVE_VERSION,
+          refundNote: persist.refundNote || 0,
         })
       );
     } catch (e) {
@@ -145,16 +168,19 @@
 
   function hydratePersist() {
     const disk = readDisk();
-    persist.prest = mergePrest(persist.prest, disk && disk.prest);
+    if (disk && disk.saveVersion >= SAVE_VERSION && disk.trees) {
+      persist.trees = mergeTrees(persist.trees, disk.trees);
+    }
     persist.bestWave = Math.max(persist.bestWave || 0, (disk && disk.bestWave) || 0);
     if (disk && disk.klass) persist.klass = persist.klass || validClass(disk.klass);
   }
 
   function treeHeldText() {
-    const owned = PRESTIGE_TREE.filter((n) => (persist.prest[n.id] || 0) > 0).map(
-      (n) => n.name + " " + persist.prest[n.id]
-    );
-    return owned.length ? "Blood Tree held: " + owned.join(" · ") : "Blood Tree: no ranks yet.";
+    const k = activeKlass();
+    const tree = prestigeTree(k);
+    const bag = treeBag(k);
+    const owned = tree.nodes.filter((n) => (bag[n.id] || 0) > 0).map((n) => n.name + " " + bag[n.id]);
+    return owned.length ? tree.name + " held: " + owned.join(" · ") : tree.name + ": no ranks yet.";
   }
 
   function syncTreeHeld() {
@@ -170,7 +196,8 @@
     return {
       glory: persist.glory,
       bestWave: persist.bestWave,
-      prest: Object.assign({}, persist.prest),
+      trees: JSON.parse(JSON.stringify(persist.trees)),
+      refundNote: persist.refundNote || 0,
       disk: readDisk(),
       held: treeHeldText(),
     };
@@ -195,36 +222,13 @@
     return { hp: n, max: m, text: n + "/" + m };
   }
 
-  function normalizePrest(prest) {
-    const out = Object.fromEntries(PRESTIGE_TREE.map((n) => [n.id, 0]));
-    const src = prest && typeof prest === "object" && !Array.isArray(prest) ? prest : {};
-    const alias = Object.assign({}, PREST_ALIASES);
-    for (const node of PRESTIGE_TREE) {
-      alias[node.id.toLowerCase()] = node.id;
-      alias[node.name.toLowerCase()] = node.id;
-    }
-    for (const [k, v] of Object.entries(src)) {
-      const id = alias[k] || alias[String(k).toLowerCase()] || k;
-      if (out[id] == null) continue;
-      const rank = Math.floor(Number(v) || 0);
-      if (rank > out[id]) out[id] = rank;
-    }
-    for (const node of PRESTIGE_TREE) {
-      out[node.id] = Math.max(0, Math.min(node.max || 8, out[node.id] || 0));
-    }
-    return out;
-  }
-
   function heroFallbackMax() {
     const h = run.hero;
     if (!h) return 100;
     const c = classDef(h.klass);
-    return (
-      c.hp +
-      prestLv("blood") * 20 +
-      (run.levels.vital || 0) * 25 +
-      (h.klass !== "ranger" ? (h.pack || 0) * 20 : 0)
-    );
+    const vitalIds = { warrior: "w_vital", mage: "m_ward", ranger: "r_vital" };
+    const vital = run.levels[vitalIds[h.klass] || "w_vital"] || 0;
+    return c.hp + (h.prestHp || 0) + vital * 25 + (h.klass !== "ranger" ? (h.pack || 0) * 20 : 0);
   }
 
   function clampVitals(u, opts) {
@@ -275,6 +279,7 @@
     persist.klass = validClass(id);
     save();
     buildClassPick();
+    if (state === "dead") buildPrestige();
   }
 
   function makeHero() {
@@ -312,6 +317,24 @@
       bloodlust: 0,
       secondWind: 0,
       heirloom: false,
+      startGold: 0,
+      prestHp: 0,
+      gloryBonus: 0,
+      cleaveBonus: 0,
+      burnAmp: 0,
+      infernoMult: 1,
+      chill: 0,
+      shatter: 0,
+      wildfire: 0,
+      novaReach: 0,
+      novaHold: 0,
+      wolfHp: 0,
+      wolfArmor: 0,
+      wolfRegen: 0,
+      wolfStride: 0,
+      sicHold: 0,
+      sicDmg: 0,
+      strikePierce: 0,
       anim: "idle",
       animT: 0,
       flash: 0,
@@ -326,19 +349,25 @@
       healFlash: 0,
       buffs: { rage: 0, haste: 0 },
     };
-    for (const n of PRESTIGE_TREE) {
-      const lv = prestLv(n.id);
+    for (const n of prestigeNodes(hero.klass)) {
+      const lv = prestLv(n.id, hero.klass);
       if (lv > 0 && n.apply) n.apply(hero, lv);
     }
-    run.gold = 12 + prestLv("purse") * 18;
-    if (hero.heirloom) run.levels.iron = Math.max(run.levels.iron || 0, 1);
-    for (const u of RUN_UPGRADES) {
+    run.gold = 12 + (hero.startGold || 0);
+    if (hero.heirloom) {
+      const first = heirloomUpgrade(hero.klass);
+      if (first) run.levels[first.id] = Math.max(run.levels[first.id] || 0, 1);
+    }
+    for (const u of shopList(hero.klass)) {
       const lv = run.levels[u.id] || 0;
       for (let i = 0; i < lv; i++) u.apply(hero);
     }
     hero.hp = Math.min(hero.maxHp, hero.hp);
     hero.secondWind = Math.max(0, Math.min(2, Math.floor(Number(hero.secondWind) || 0)));
-    clampVitals(hero, { fallback: hero.klass ? classDef(hero.klass).hp + prestLv("blood") * 20 : 100, manaFallback: c.maxMana });
+    clampVitals(hero, {
+      fallback: c.hp + (hero.prestHp || 0),
+      manaFallback: c.maxMana,
+    });
     return hero;
   }
 
@@ -347,16 +376,17 @@
   }
 
   function wolfBaseStats() {
-    const pack = (run.hero && run.hero.pack) || 0;
+    const h = run.hero;
+    const pack = (h && h.pack) || 0;
     const wave = wolfWave();
     const scale = 1 + Math.min(2.8, (wave - 1) * 0.22);
-    const hp = Math.round((96 + prestLv("blood") * 14) * scale * (1 + pack * 0.22));
+    const hp = Math.round((96 + ((h && h.wolfHp) || 0)) * scale * (1 + pack * 0.22));
     return {
       hp,
       maxHp: hp,
-      dmg: 6 + prestLv("might") + pack * 2 + Math.min(3, (wave - 1) * 0.18),
-      armor: 5.5 + prestLv("hide") * 0.8 + Math.min(9, (wave - 1) * 0.72) + pack * 0.6,
-      regen: 2.2 + Math.min(4.5, (wave - 1) * 0.32),
+      dmg: 6 + ((h && h.dmg) || 9) * 0.08 + pack * 2 + Math.min(3, (wave - 1) * 0.18),
+      armor: 5.5 + ((h && h.wolfArmor) || 0) + Math.min(9, (wave - 1) * 0.72) + pack * 0.6,
+      regen: 2.2 + ((h && h.wolfRegen) || 0) + Math.min(4.5, (wave - 1) * 0.32),
     };
   }
 
@@ -371,6 +401,7 @@
     w.armor = next.armor;
     w.dmg = next.dmg;
     w.regen = next.regen;
+    w.walk = 150 * (1 + ((run.hero && run.hero.wolfStride) || 0));
     return w;
   }
 
@@ -386,7 +417,7 @@
       atkRate: 0.9,
       atkT: 0,
       reach: 72,
-      walk: 150,
+      walk: 150 * (1 + ((run.hero && run.hero.wolfStride) || 0)),
       anim: "idle",
       animT: 0,
       flash: 0,
@@ -446,13 +477,19 @@
     } else {
       const held = treeHeldText();
       if (held.indexOf("held:") >= 0) toast(held, 2.2);
+      if (persist.refundNote > 0) {
+        toast("Old Blood Tree ranks refunded as " + persist.refundNote + " Glory", 3.4);
+        persist.refundNote = 0;
+        save();
+      }
     }
     sfx(220, 0.12, "square", 0.04);
   }
 
   function gloryFor(wave, kills) {
     const raw = Math.max(0, (wave - 1) * 2 + Math.floor(kills * 0.2) + Math.min(3, Math.max(0, wave)));
-    return Math.floor(raw * (1 + persist.prest.fate * 0.18));
+    const bonus = (run.hero && run.hero.gloryBonus) || 0;
+    return Math.floor(raw * (1 + bonus * 0.18));
   }
 
   function die() {
@@ -627,6 +664,16 @@
     } else hitWolf(dmg, crit);
   }
 
+  function ampBurn(spec) {
+    const h = run.hero;
+    if (!spec || !h || !h.burnAmp) return spec;
+    return {
+      kind: spec.kind,
+      dps: spec.dps * (1 + h.burnAmp),
+      dur: spec.dur * (1 + h.burnAmp * 0.45),
+    };
+  }
+
   function applyDot(e, spec) {
     if (!e || e.hp <= 0) return;
     e.dots = e.dots || [];
@@ -663,6 +710,9 @@
     if (h && h.execute && e.hp < e.maxHp * 0.4) {
       amount *= 1 + 0.18 * h.execute;
     }
+    if (h && h.shatter && e.cc > 0 && !fromDot) {
+      amount *= 1 + 0.14 * h.shatter;
+    }
     const d = dmgIn(amount, e.armor);
     const over = d - e.hp;
     e.hp -= d;
@@ -680,7 +730,10 @@
       }
     }
     if (e.hp > 0 && h && h.cinder && !fromDot) {
-      applyDot(e, { kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 });
+      applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.16 * h.cinder, dur: 1.8 }));
+    }
+    if (e.hp > 0 && h && h.chill && !fromDot) {
+      e.slow = Math.max(e.slow || 0, 1.1 * h.chill);
     }
     if (e.hp <= 0) {
       if (h && h.overkill && over > 0 && !fromDot) {
@@ -720,6 +773,13 @@
     sfx(320, 0.07, "triangle", 0.05);
     if (run.hero.bloodlust) {
       run.hero.buffs.rage = Math.max(run.hero.buffs.rage, 1.6 * run.hero.bloodlust);
+    }
+    if (run.hero.wildfire) {
+      const near = nearest(e.x, (o) => o !== e && o.hp > 0);
+      if (near) {
+        applyDot(near, ampBurn({ kind: "burn", dps: run.hero.dmg * 0.28 * run.hero.wildfire, dur: 2.2 }));
+        near.igniteFlash = Math.max(near.igniteFlash || 0, 0.6);
+      }
     }
     const wasBoss = e.def.boss;
     run.enemies = run.enemies.filter((x) => x !== e);
@@ -765,12 +825,13 @@
         stepped: false,
         dots: [],
         cc: 0,
+        slow: 0,
         charged: false,
         healTarget: null,
         healFlash: 0,
       });
     });
-    const fresh = shopUnlocksAt(n);
+    const fresh = shopUnlocksAt(n, activeKlass());
     const crate = fresh.length && n > 1 ? "  ·  " + fresh.map((u) => u.name).join(" / ") : "";
     if (jumpDest === n) {
       const msg = (isBossWave(n) ? "Jumped to BOSS " + defTitle(n) : "Jumped to wave " + n) + crate;
@@ -858,7 +919,7 @@
       if (extra && extra.knock) targets[0].x += extra.knock;
     }
     if (targets[1] && extra && extra.cleave) {
-      hitEnemy(targets[1], dmg * extra.cleave, false);
+      hitEnemy(targets[1], dmg * extra.cleave * (1 + (h.cleaveBonus || 0)), false);
     }
     sfx(crit ? 520 : 240, 0.06, "square", 0.05);
   }
@@ -886,7 +947,7 @@
         dmg,
         crit,
         speed: 380,
-        burn: { kind: "burn", dps: h.dmg * 0.36, dur: 2.8 },
+        burn: ampBurn({ kind: "burn", dps: h.dmg * 0.36, dur: 2.8 }),
       });
       sfx(crit ? 480 : 400, 0.06, "triangle", 0.04);
     } else {
@@ -922,7 +983,7 @@
         crit,
         speed: 340,
         aoe: 78,
-        burn: { kind: "burn", dps: h.dmg * 0.42, dur: 3.2 },
+        burn: ampBurn({ kind: "burn", dps: h.dmg * 0.42, dur: 3.2 }),
         y: groundY() - 96,
       });
       shake = 7;
@@ -936,7 +997,7 @@
         dmg,
         crit,
         speed: 620,
-        pierce: 2,
+        pierce: 2 + (h.strikePierce || 0),
       });
       shake = 6;
       sfx(560, 0.08, "square", 0.05);
@@ -979,7 +1040,7 @@
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < 200) {
         hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
-        applyDot(e, { kind: "burn", dps: h.dmg * 0.32, dur: 2.8 });
+        applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.32, dur: 2.8 }));
         e.igniteFlash = 1.05;
         ignited += 1;
         floatText(e.x, groundY() - 188, "IGNITE", "#ff6a22");
@@ -1085,11 +1146,11 @@
   function infernoPulse() {
     const h = run.hero;
     const x = h.inferno.x;
-    const dmg = h.dmg * 0.95 * autoDmgMult();
+    const dmg = h.dmg * 0.95 * autoDmgMult() * (h.infernoMult || 1);
     for (const e of [...run.enemies]) {
       if (e.x > h.x + 20 && e.x < x + 160) {
         hitEnemy(e, dmg, false);
-        applyDot(e, { kind: "burn", dps: h.dmg * 0.38, dur: 2.6 });
+        applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.38, dur: 2.6 }));
       }
     }
     fx.rings.push({ x: x, t: 0.4, color: "rgba(255,90,20,0.75)", r: 30 });
@@ -1106,10 +1167,11 @@
     h.skillCd[2] = cdScale(spec.cd);
     h.novaT = 0.45;
     const dmg = h.dmg * 0.55 * autoDmgMult();
+    const reach = 300 + (h.novaReach || 0);
     for (const e of [...run.enemies]) {
-      if (Math.abs(e.x - h.x) < 300) {
+      if (Math.abs(e.x - h.x) < reach) {
         hitEnemy(e, dmg, false);
-        applyCc(e, 2.8);
+        applyCc(e, 2.8 + (h.novaHold || 0));
       }
     }
     fx.rings.push({ x: h.x, t: 0.5, color: "rgba(140,210,255,0.85)", r: 50 });
@@ -1175,7 +1237,7 @@
       nearest(h.x + 400, (e) => e.x > h.x) || nearest(w.x);
     const dest = target ? target.x - 36 : h.x + 220;
     w.leap = { from: w.x, to: dest, t: 0, hit: false };
-    w.taunt = 3.2;
+    w.taunt = 3.2 + (h.sicHold || 0);
     w.anim = "atk";
     floatText(w.x, groundY() - 140, "SIC 'EM", "#e6c15a");
     sfx(280, 0.12, "square", 0.05);
@@ -1241,7 +1303,7 @@
         w.leap.hit = true;
         for (const e of [...run.enemies]) {
           if (Math.abs(e.x - w.x) < 70) {
-            hitEnemy(e, w.dmg * 1.5, false);
+            hitEnemy(e, w.dmg * 1.5 * (1 + ((run.hero && run.hero.sicDmg) || 0)), false);
             applyCc(e, 0.35);
             w.hp = Math.min(w.maxHp, w.hp + w.dmg * 0.16);
           }
@@ -1402,6 +1464,7 @@
       e.igniteFlash = Math.max(0, (e.igniteFlash || 0) - dt);
       e.animT += dt;
       e.cc = Math.max(0, (e.cc || 0) - dt);
+      e.slow = Math.max(0, (e.slow || 0) - dt);
       tickDots(e, dt);
       if (e.hp <= 0) continue;
       if (e.cc > 0) {
@@ -1422,7 +1485,7 @@
         sfx(260, 0.1, "triangle", 0.05);
       }
       const ranged = !!(e.def.projectile || e.def.heal);
-      const spd = e.defSpeed || e.def.speed;
+      const spd = (e.defSpeed || e.def.speed) * ((e.slow || 0) > 0 ? 0.62 : 1);
       const tgt = threatFor(e);
       const dx = e.x - tgt.x;
       e.facing = dx >= 0 ? -1 : 1;
@@ -1948,35 +2011,50 @@
     }
   }
 
-  function drawHeroCdPips(gy) {
+  function drawHeroCdPips() {
     const h = run.hero;
-    if (!h || (state !== "fight" && state !== "dead")) return;
-    const cdx = sx(h.x) - 74;
-    const cdy = gy - 156;
+    if (!h || state !== "fight") return;
     const cdef = classDef(h.klass);
+    const accent = cdef.color || "#e6c15a";
+    const slots = [
+      { lab: "S", frac: Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), color: "#e6c15a" },
+      { lab: "1", frac: skillCdFrac(0), color: "#7ad0ff" },
+      { lab: "2", frac: skillCdFrac(1), color: "#7ad0ff" },
+      { lab: "3", frac: skillCdFrac(2), color: "#7ad0ff" },
+    ];
+    const r = 13;
+    const gap = 12;
+    const padX = 16;
+    const padY = 9;
+    const panelW = padX * 2 + slots.length * (r * 2) + (slots.length - 1) * gap;
+    const panelH = 50;
+    const x0 = 14;
+    const y0 = H - 84;
     ctx.save();
-    ctx.fillStyle = "rgba(4, 3, 2, 0.86)";
-    ctx.strokeStyle = "#e6c15a";
-    ctx.lineWidth = 2;
-    ctx.fillRect(cdx - 18, cdy - 18, 36, 108);
-    ctx.strokeRect(cdx - 18.5, cdy - 18.5, 37, 109);
-    ctx.font = "bold 16px VT323, monospace";
+    ctx.fillStyle = "rgba(6, 8, 14, 0.78)";
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.rect(x0 + 0.5, y0 + 0.5, panelW, panelH);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(x0 + 1, y0 + 1, panelW - 1, 3);
+    ctx.globalAlpha = 1;
+    ctx.font = "bold 15px VT323, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const rings = [
-      { y: cdy, frac: Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), color: "#e6c15a", lab: "S" },
-      { y: cdy + 26, frac: skillCdFrac(0), color: "#7ad0ff", lab: "1" },
-      { y: cdy + 52, frac: skillCdFrac(1), color: "#7ad0ff", lab: "2" },
-      { y: cdy + 78, frac: skillCdFrac(2), color: "#7ad0ff", lab: "3" },
-    ];
-    for (const p of rings) {
-      drawCdRing(cdx, p.y, 12, p.frac, p.color);
+    slots.forEach((p, i) => {
+      const cx = x0 + padX + r + i * (r * 2 + gap);
+      const cy = y0 + padY + r + 2;
+      drawCdRing(cx, cy, r, p.frac, p.frac <= 0.02 ? "#fff4a8" : p.color);
       ctx.lineWidth = 4;
       ctx.strokeStyle = "#000";
-      ctx.strokeText(p.lab, cdx, p.y + 1);
-      ctx.fillStyle = p.frac <= 0.02 ? "#fff4a8" : p.color;
-      ctx.fillText(p.lab, cdx, p.y + 1);
-    }
+      ctx.strokeText(p.lab, cx, cy + 1);
+      ctx.fillStyle = p.frac <= 0.02 ? "#fff4a8" : "#e8eef6";
+      ctx.fillText(p.lab, cx, cy + 1);
+    });
     ctx.restore();
   }
 
@@ -2226,7 +2304,7 @@
           if (e.def.heal) drawHealVfx(e, gy, true);
         }
         drawWolfTags(gy);
-        drawHeroCdPips(gy);
+        drawHeroCdPips();
         if (h && h.cauterizeT > 0) {
           drawStamp("CAUTERIZE", sx(h.x), gy - 322, {
             color: "#1a1008",
@@ -2485,7 +2563,7 @@
     buffEl.classList.toggle("hot", buffs.length > 0);
     syncAbilities();
     syncTreeHeld();
-    for (const u of RUN_UPGRADES) {
+    for (const u of shopList(h.klass)) {
       const btn = document.getElementById("buy-" + u.id);
       if (!btn) continue;
       const lv = run.levels[u.id] || 0;
@@ -2520,21 +2598,28 @@
     if (!box) return;
     box.innerHTML = "";
     const wave = Math.max(1, run.wave || 1);
-    const next = nextShopUnlockWave(wave);
+    const klass = activeKlass();
+    const pool = shopList(klass);
+    const next = nextShopUnlockWave(wave, klass);
+    const starters = pool.filter((u) => shopUnlockWave(u) === 1).map((u) => u.name);
     const nextEl = document.getElementById("shop-next");
     if (nextEl) {
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
           run.gold >= 12
-            ? "First steel is in reach — buy Iron, Swift, or Vitality. Tags mark who gains most."
+            ? "First steel is in reach — buy " +
+              (starters.length <= 2
+                ? starters.join(" or ")
+                : starters.slice(0, -1).join(", ") + ", or " + starters[starters.length - 1]) +
+              "."
             : "First steel costs 12g. The first raiders pay for it.";
       } else {
         nextEl.textContent = next
-          ? "Next crate opens at wave " + next + ". Tags mark who gains most."
-          : "The armory is fully open. Tags mark who gains most.";
+          ? "Next crate opens at wave " + next + "."
+          : "The armory is fully open.";
       }
     }
-    for (const u of RUN_UPGRADES) {
+    for (const u of pool) {
       const need = shopUnlockWave(u);
       const open = wave >= need;
       if (!open && need !== next) continue;
@@ -2542,14 +2627,14 @@
       const row = document.createElement("div");
       row.className = "row" + (open ? "" : " locked");
       if (!open) {
-        row.innerHTML = `<div class="name">${u.icon} ${u.name}${synergyHtml(u)}</div>
+        row.innerHTML = `<div class="name">${u.icon} ${u.name}</div>
           <button type="button" disabled>wave ${need}</button>
           <div class="desc">${u.desc}</div>`;
         box.appendChild(row);
         continue;
       }
       if (open && lv === 0 && !run.boughtAny && run.gold >= u.cost(0)) row.classList.add("ready");
-      row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span>${synergyHtml(u)}</div>
+      row.innerHTML = `<div class="name">${u.icon} ${u.name} <span style="color:#8ea0b5">${lv}</span></div>
         <button id="buy-${u.id}" type="button">${fmt(u.cost(lv))}</button>
         <div class="desc">${u.desc}</div>`;
       box.appendChild(row);
@@ -2571,6 +2656,7 @@
 
   function buyRun(id) {
     const u = RUN_UPGRADES.find((x) => x.id === id);
+    if (!u || (u.klass && u.klass !== activeKlass())) return;
     const lv = run.levels[id] || 0;
     const c = u.cost(lv);
     if (run.gold < c || state !== "fight") return;
@@ -2579,26 +2665,32 @@
     run.levels[id] = lv + 1;
     run.boughtAny = true;
     u.apply(run.hero);
-    if (u.id === "pack") applyPack(run.hero);
+    if (u.id === "r_pack" || u.id === "pack") applyPack(run.hero);
     buildShop();
     sfx(560, 0.08, "square", 0.05);
   }
 
   function buyPrestige(id) {
-    const u = PRESTIGE_TREE.find((n) => n.id === id);
+    const klass = persist.klass;
+    const u = findPrestNode(klass, id);
     if (!u) return false;
-    const lv = persist.prest[u.id] || 0;
+    const bag = treeBag(klass);
+    const lv = bag[u.id] || 0;
     if (lv >= (u.max || 8)) return false;
-    if (!prestReqMet(u, persist.prest) && lv === 0) return false;
+    if (!prestReqMet(u, bag, klass) && lv === 0) return false;
     const c = u.cost(lv);
     if (persist.glory < c) return false;
     persist.glory -= c;
-    persist.prest[u.id] = (persist.prest[u.id] || 0) + 1;
-    persist.prest = mergePrest(persist.prest, (readDisk() || {}).prest);
+    bag[u.id] = (bag[u.id] || 0) + 1;
+    persist.trees = mergeTrees(persist.trees, ((readDisk() || {}).trees));
     save();
     const disk = readDisk();
-    const wrote = disk && disk.prest && (disk.prest[u.id] || 0) >= persist.prest[u.id];
-    if (!wrote) toast("Blood Tree save failed — ranks kept in this tab", 3);
+    const wrote =
+      disk &&
+      disk.trees &&
+      disk.trees[klass] &&
+      (disk.trees[klass][u.id] || 0) >= (persist.trees[klass][u.id] || 0);
+    if (!wrote) toast("Class tree save failed — ranks kept in this tab", 3);
     const bank = document.getElementById("glory-bank");
     if (bank) bank.textContent = fmt(persist.glory);
     document.getElementById("glory").textContent = fmt(persist.glory);
@@ -2607,49 +2699,73 @@
     return true;
   }
 
+  function renderTreeNode(klass, u, bag) {
+    const lv = bag[u.id] || 0;
+    const open = prestReqMet(u, bag, klass);
+    const maxed = lv >= (u.max || 8);
+    const c = u.cost(lv);
+    const st = lv > 0 ? "owned" : open ? "open" : "locked";
+    const req = prestReqText(u, klass);
+    const btnLabel = maxed ? "MAX" : c + " glory";
+    const step = document.createElement("div");
+    step.className = "tree-step depth-" + (u.root ? 0 : u.row) + " " + st;
+    step.innerHTML = `<div class="tree-node ${st}">
+      <div class="name">${u.name} <span>${lv}/${u.max}</span></div>
+      <div class="desc">${u.desc}</div>
+      ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
+      <button type="button">${btnLabel}</button>
+    </div>`;
+    const btn = step.querySelector("button");
+    btn.disabled = maxed || !open || persist.glory < c;
+    btn.onclick = () => buyPrestige(u.id);
+    return step;
+  }
+
   function buildPrestige() {
     const box = document.getElementById("prestige-shop");
     if (!box) return;
-    box.className = "tree";
+    const klass = persist.klass;
+    const tree = prestigeTree(klass);
+    const bag = treeBag(klass);
+    box.className = "tree class-tree";
     box.innerHTML = "";
     const bank = document.getElementById("glory-bank");
     if (bank) bank.textContent = fmt(persist.glory);
+    const title = document.getElementById("tree-title");
+    if (title) title.textContent = tree.name;
+    const note = document.getElementById("tree-note");
+    if (note) {
+      note.textContent =
+        tree.blurb +
+        " Fill every rank on a node before its children unlock. Deeper nodes cost more Glory.";
+    }
     syncTreeHeld();
-    const cols = [[], [], []];
-    for (const n of PRESTIGE_TREE) cols[n.col].push(n);
-    const titles = ["Vital", "Might", "Fortune"];
-    cols.forEach((list, i) => {
-      const col = document.createElement("div");
-      col.className = "tree-col";
-      col.innerHTML = `<h3>${titles[i]}</h3>`;
+    const root = prestigeRoot(klass);
+    if (root) {
+      const rootWrap = document.createElement("div");
+      rootWrap.className = "tree-root";
       const trunk = document.createElement("div");
       trunk.className = "tree-trunk";
-      list
+      trunk.appendChild(renderTreeNode(klass, root, bag));
+      rootWrap.appendChild(trunk);
+      box.appendChild(rootWrap);
+    }
+    const branches = document.createElement("div");
+    branches.className = "tree-branches";
+    tree.branches.forEach((name, i) => {
+      const col = document.createElement("div");
+      col.className = "tree-col";
+      col.innerHTML = `<h3>${name}</h3>`;
+      const trunk = document.createElement("div");
+      trunk.className = "tree-trunk";
+      tree.nodes
+        .filter((n) => !n.root && n.col === i)
         .sort((a, b) => a.row - b.row)
-        .forEach((u) => {
-          const lv = persist.prest[u.id] || 0;
-          const open = prestReqMet(u, persist.prest);
-          const maxed = lv >= (u.max || 8);
-          const c = u.cost(lv);
-          const state = lv > 0 ? "owned" : open ? "open" : "locked";
-          const step = document.createElement("div");
-          step.className = "tree-step depth-" + u.row + " " + state;
-          const req = prestReqText(u);
-          const btnLabel = maxed ? "MAX" : c + " glory";
-          step.innerHTML = `<div class="tree-node ${state}">
-            <div class="name">${u.name} <span>${lv}/${u.max}</span>${synergyHtml(u)}</div>
-            <div class="desc">${u.desc}</div>
-            ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
-            <button type="button">${btnLabel}</button>
-          </div>`;
-          const btn = step.querySelector("button");
-          btn.disabled = maxed || !open || persist.glory < c;
-          btn.onclick = () => buyPrestige(u.id);
-          trunk.appendChild(step);
-        });
+        .forEach((u) => trunk.appendChild(renderTreeNode(klass, u, bag)));
       col.appendChild(trunk);
-      box.appendChild(col);
+      branches.appendChild(col);
     });
+    box.appendChild(branches);
   }
 
   // --- loop / resize ---
@@ -2786,6 +2902,30 @@
     },
     tree() {
       return snapshotPersist();
+    },
+    shop() {
+      return shopList(activeKlass()).map((u) => ({
+        id: u.id,
+        name: u.name,
+        klass: u.klass,
+        wave: shopUnlockWave(u),
+        lv: run.levels[u.id] || 0,
+      }));
+    },
+    content() {
+      return {
+        mageFlip: classDef("mage").flip,
+        warriorFlip: classDef("warrior").flip,
+        rangerFlip: classDef("ranger").flip,
+        trees: Object.fromEntries(
+          Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
+        ),
+        shops: {
+          warrior: shopList("warrior").map((u) => u.name),
+          mage: shopList("mage").map((u) => u.name),
+          ranger: shopList("ranger").map((u) => u.name),
+        },
+      };
     },
     wolf() {
       return wolfSnapshot();

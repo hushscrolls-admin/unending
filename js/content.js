@@ -35,7 +35,7 @@ const CLASSES = {
     color: "#ff6a3a",
     sprite: "heroMage",
     anims: false,
-    flip: false,
+    flip: true,
     hue: 0,
     style: "ranged",
     proj: "fire",
@@ -299,436 +299,1186 @@ const ENEMIES = {
 
 const BOSS_ORDER = ["butcher", "ironhide", "skycleaver", "stormcaller", "sunfallen"];
 
+function goldCost(base, growth, lv, first) {
+  if (first != null && lv === 0) return first;
+  return Math.floor(base * Math.pow(growth, lv));
+}
+
+function bumpDmg(n) {
+  return (hero) => {
+    hero.dmg += n;
+  };
+}
+
+function bumpSpeed(mult) {
+  return (hero) => {
+    hero.atkRate *= mult;
+  };
+}
+
+function bumpVital(hp) {
+  return (hero) => {
+    hero.maxHp += hp;
+    hero.hp = Math.min(hero.maxHp, hero.hp + hp);
+  };
+}
+
 const RUN_UPGRADES = [
   {
-    id: "iron",
+    id: "w_iron",
+    klass: "warrior",
     name: "Iron",
     desc: "+2 damage",
     icon: "⚔",
     unlockWave: 1,
-    synergy: ["warrior", "ranger"],
-    cost: (lv) => (lv === 0 ? 12 : Math.floor(18 * Math.pow(1.38, lv))),
-    apply: (hero) => {
-      hero.dmg += 2;
-    },
+    heirloom: true,
+    cost: (lv) => goldCost(18, 1.38, lv, 12),
+    apply: bumpDmg(2),
   },
   {
-    id: "swift",
+    id: "w_swift",
+    klass: "warrior",
     name: "Swift",
     desc: "+8% attack speed",
     icon: "»",
     unlockWave: 1,
-    synergy: ["all"],
-    cost: (lv) => (lv === 0 ? 13 : Math.floor(20 * Math.pow(1.4, lv))),
-    apply: (hero) => {
-      hero.atkRate *= 1.08;
-    },
+    cost: (lv) => goldCost(20, 1.4, lv, 13),
+    apply: bumpSpeed(1.08),
   },
   {
-    id: "vital",
+    id: "w_vital",
+    klass: "warrior",
     name: "Vitality",
     desc: "+25 max HP, heal 25",
     icon: "♥",
     unlockWave: 1,
-    synergy: ["all"],
-    cost: (lv) => (lv === 0 ? 14 : Math.floor(22 * Math.pow(1.36, lv))),
-    apply: (hero) => {
-      hero.maxHp += 25;
-      hero.hp = Math.min(hero.maxHp, hero.hp + 25);
-    },
+    cost: (lv) => goldCost(22, 1.36, lv, 14),
+    apply: bumpVital(25),
   },
   {
-    id: "guard",
+    id: "w_guard",
+    klass: "warrior",
     name: "Guard",
     desc: "+1.5 armor",
     icon: "🛡",
     unlockWave: 5,
-    synergy: ["warrior"],
-    cost: (lv) => Math.floor(24 * Math.pow(1.4, lv)),
+    cost: (lv) => goldCost(24, 1.4, lv),
     apply: (hero) => {
       hero.armor += 1.5;
     },
   },
   {
-    id: "fortune",
-    name: "Fortune",
-    desc: "+12% gold find",
+    id: "w_spoils",
+    klass: "warrior",
+    name: "Spoils",
+    desc: "+12% gold from the fallen",
     icon: "●",
     unlockWave: 5,
-    synergy: ["all"],
-    cost: (lv) => Math.floor(25 * Math.pow(1.42, lv)),
+    cost: (lv) => goldCost(25, 1.42, lv),
     apply: (hero) => {
       hero.goldFind += 0.12;
     },
   },
   {
-    id: "leech",
+    id: "w_leech",
+    klass: "warrior",
     name: "Leech",
     desc: "+3% lifesteal",
     icon: "◈",
     unlockWave: 9,
-    synergy: ["warrior"],
-    cost: (lv) => Math.floor(28 * Math.pow(1.45, lv)),
+    cost: (lv) => goldCost(28, 1.45, lv),
     apply: (hero) => {
       hero.leech += 0.03;
     },
   },
   {
-    id: "edge",
-    name: "Edge",
-    desc: "+6% crit chance",
-    icon: "✦",
+    id: "w_cleave",
+    klass: "warrior",
+    name: "Cleave",
+    desc: "+16% damage to the second melee target",
+    icon: "🪓",
     unlockWave: 9,
-    synergy: ["ranger"],
-    cost: (lv) => Math.floor(30 * Math.pow(1.45, lv)),
+    cost: (lv) => goldCost(30, 1.44, lv),
     apply: (hero) => {
-      hero.crit += 0.06;
+      hero.cleaveBonus = (hero.cleaveBonus || 0) + 0.16;
     },
   },
   {
-    id: "reach",
-    name: "Reach",
-    desc: "+24 strike / shot range",
+    id: "w_brace",
+    klass: "warrior",
+    name: "Brace",
+    desc: "+2 armor",
+    icon: "☗",
+    unlockWave: 9,
+    cost: (lv) => goldCost(32, 1.42, lv),
+    apply: (hero) => {
+      hero.armor += 2;
+    },
+  },
+  {
+    id: "w_sharpen",
+    klass: "warrior",
+    name: "Sharpen",
+    desc: "+18% Power Strike damage",
+    icon: "✸",
+    unlockWave: 13,
+    cost: (lv) => goldCost(36, 1.48, lv),
+    apply: (hero) => {
+      hero.strikeMult = (hero.strikeMult || 1) * 1.18;
+    },
+  },
+  {
+    id: "w_tempo",
+    klass: "warrior",
+    name: "Tempo",
+    desc: "+8% attack speed",
+    icon: "↯",
+    unlockWave: 13,
+    cost: (lv) => goldCost(34, 1.46, lv),
+    apply: bumpSpeed(1.08),
+  },
+  {
+    id: "w_rally",
+    klass: "warrior",
+    name: "Rally",
+    desc: "−8% skill cooldowns",
+    icon: "⚑",
+    unlockWave: 13,
+    cost: (lv) => goldCost(34, 1.46, lv),
+    apply: (hero) => {
+      hero.skillHaste = (hero.skillHaste || 0) + 0.08;
+    },
+  },
+  {
+    id: "w_champion",
+    klass: "warrior",
+    name: "Champion",
+    desc: "+3 damage and +20 max HP",
+    icon: "♛",
+    unlockWave: 17,
+    cost: (lv) => goldCost(40, 1.5, lv),
+    apply: (hero) => {
+      hero.dmg += 3;
+      hero.maxHp += 20;
+      hero.hp = Math.min(hero.maxHp, hero.hp + 20);
+    },
+  },
+  {
+    id: "w_rend",
+    klass: "warrior",
+    name: "Rend",
+    desc: "+4% lifesteal and +1.2 armor",
+    icon: "☣",
+    unlockWave: 17,
+    cost: (lv) => goldCost(38, 1.48, lv),
+    apply: (hero) => {
+      hero.leech += 0.04;
+      hero.armor += 1.2;
+    },
+  },
+
+  {
+    id: "m_ember",
+    klass: "mage",
+    name: "Ember",
+    desc: "+2 damage",
+    icon: "✶",
+    unlockWave: 1,
+    heirloom: true,
+    cost: (lv) => goldCost(18, 1.38, lv, 12),
+    apply: bumpDmg(2),
+  },
+  {
+    id: "m_cadence",
+    klass: "mage",
+    name: "Cadence",
+    desc: "+8% cast speed",
+    icon: "»",
+    unlockWave: 1,
+    cost: (lv) => goldCost(20, 1.4, lv, 13),
+    apply: bumpSpeed(1.08),
+  },
+  {
+    id: "m_ward",
+    klass: "mage",
+    name: "Ward",
+    desc: "+25 max HP, heal 25",
+    icon: "♥",
+    unlockWave: 1,
+    cost: (lv) => goldCost(22, 1.36, lv, 14),
+    apply: bumpVital(25),
+  },
+  {
+    id: "m_well",
+    klass: "mage",
+    name: "Well",
+    desc: "+10 max mana and +0.5 mana regen",
+    icon: "◉",
+    unlockWave: 5,
+    cost: (lv) => goldCost(24, 1.4, lv),
+    apply: (hero) => {
+      hero.maxMana += 10;
+      hero.mana = Math.min(hero.maxMana, hero.mana + 8);
+      hero.manaRegen += 0.5;
+    },
+  },
+  {
+    id: "m_tithe",
+    klass: "mage",
+    name: "Tithe",
+    desc: "+12% gold from the fallen",
+    icon: "●",
+    unlockWave: 5,
+    cost: (lv) => goldCost(25, 1.42, lv),
+    apply: (hero) => {
+      hero.goldFind += 0.12;
+    },
+  },
+  {
+    id: "m_reach",
+    klass: "mage",
+    name: "Long Cast",
+    desc: "+24 bolt range",
     icon: "↦",
     unlockWave: 9,
-    synergy: ["ranger", "mage"],
-    cost: (lv) => Math.floor(32 * Math.pow(1.42, lv)),
+    cost: (lv) => goldCost(32, 1.42, lv),
     apply: (hero) => {
       hero.reach += 24;
       hero.range += 24;
     },
   },
   {
-    id: "tempest",
-    name: "Tempest",
-    desc: "−8% skill cooldowns",
-    icon: "↯",
-    unlockWave: 13,
-    synergy: ["mage"],
-    cost: (lv) => Math.floor(34 * Math.pow(1.46, lv)),
-    apply: (hero) => {
-      hero.skillHaste = (hero.skillHaste || 0) + 0.08;
-    },
-  },
-  {
-    id: "cinder",
+    id: "m_cinder",
+    klass: "mage",
     name: "Cinder",
     desc: "Hits apply a short burn",
     icon: "▴",
-    unlockWave: 13,
-    synergy: ["mage"],
-    cost: (lv) => Math.floor(36 * Math.pow(1.48, lv)),
+    unlockWave: 9,
+    cost: (lv) => goldCost(30, 1.45, lv),
     apply: (hero) => {
       hero.cinder = (hero.cinder || 0) + 1;
     },
   },
   {
-    id: "sharpen",
-    name: "Sharpen",
-    desc: "+18% class strike damage",
+    id: "m_focus",
+    klass: "mage",
+    name: "Focus",
+    desc: "+14 max mana and +6 starting mana",
+    icon: "✧",
+    unlockWave: 9,
+    cost: (lv) => goldCost(28, 1.44, lv),
+    apply: (hero) => {
+      hero.maxMana += 14;
+      hero.mana = Math.min(hero.maxMana, hero.mana + 6);
+    },
+  },
+  {
+    id: "m_pyre",
+    klass: "mage",
+    name: "Pyre",
+    desc: "+18% Fireball damage",
     icon: "✸",
     unlockWave: 13,
-    synergy: ["all"],
-    cost: (lv) => Math.floor(36 * Math.pow(1.48, lv)),
+    cost: (lv) => goldCost(36, 1.48, lv),
     apply: (hero) => {
       hero.strikeMult = (hero.strikeMult || 1) * 1.18;
     },
   },
   {
-    id: "echo",
+    id: "m_tempest",
+    klass: "mage",
+    name: "Tempest",
+    desc: "−8% skill cooldowns",
+    icon: "↯",
+    unlockWave: 13,
+    cost: (lv) => goldCost(34, 1.46, lv),
+    apply: (hero) => {
+      hero.skillHaste = (hero.skillHaste || 0) + 0.08;
+    },
+  },
+  {
+    id: "m_kindle",
+    klass: "mage",
+    name: "Kindle",
+    desc: "Autos and Fireball burns last longer and hit harder",
+    icon: "♨",
+    unlockWave: 13,
+    cost: (lv) => goldCost(36, 1.48, lv),
+    apply: (hero) => {
+      hero.burnAmp = (hero.burnAmp || 0) + 0.22;
+    },
+  },
+  {
+    id: "m_echo",
+    klass: "mage",
     name: "Echo",
-    desc: "12% chance to repeat an auto",
+    desc: "12% chance to repeat a firebolt",
     icon: "⟳",
     unlockWave: 17,
-    synergy: ["ranger"],
-    cost: (lv) => Math.floor(40 * Math.pow(1.5, lv)),
+    cost: (lv) => goldCost(40, 1.5, lv),
     apply: (hero) => {
       hero.echo = (hero.echo || 0) + 0.12;
     },
   },
   {
-    id: "pack",
+    id: "m_inferno",
+    klass: "mage",
+    name: "Infernal",
+    desc: "+22% Inferno pulse damage",
+    icon: "♨",
+    unlockWave: 17,
+    cost: (lv) => goldCost(38, 1.48, lv),
+    apply: (hero) => {
+      hero.infernoMult = (hero.infernoMult || 1) * 1.22;
+    },
+  },
+
+  {
+    id: "r_bodkin",
+    klass: "ranger",
+    name: "Bodkin",
+    desc: "+2 damage",
+    icon: "⚔",
+    unlockWave: 1,
+    heirloom: true,
+    cost: (lv) => goldCost(18, 1.38, lv, 12),
+    apply: bumpDmg(2),
+  },
+  {
+    id: "r_swift",
+    klass: "ranger",
+    name: "Swift",
+    desc: "+8% attack speed",
+    icon: "»",
+    unlockWave: 1,
+    cost: (lv) => goldCost(20, 1.4, lv, 13),
+    apply: bumpSpeed(1.08),
+  },
+  {
+    id: "r_vital",
+    klass: "ranger",
+    name: "Vitality",
+    desc: "+25 max HP, heal 25",
+    icon: "♥",
+    unlockWave: 1,
+    cost: (lv) => goldCost(22, 1.36, lv, 14),
+    apply: bumpVital(25),
+  },
+  {
+    id: "r_spoils",
+    klass: "ranger",
+    name: "Spoils",
+    desc: "+12% gold from the fallen",
+    icon: "●",
+    unlockWave: 5,
+    cost: (lv) => goldCost(25, 1.42, lv),
+    apply: (hero) => {
+      hero.goldFind += 0.12;
+    },
+  },
+  {
+    id: "r_stride",
+    klass: "ranger",
+    name: "Stride",
+    desc: "Wolf +18% move speed, you +12 shot range",
+    icon: "⇢",
+    unlockWave: 5,
+    cost: (lv) => goldCost(24, 1.4, lv),
+    apply: (hero) => {
+      hero.wolfStride = (hero.wolfStride || 0) + 0.18;
+      hero.reach += 12;
+      hero.range += 12;
+    },
+  },
+  {
+    id: "r_edge",
+    klass: "ranger",
+    name: "Edge",
+    desc: "+6% crit chance",
+    icon: "✦",
+    unlockWave: 9,
+    cost: (lv) => goldCost(30, 1.45, lv),
+    apply: (hero) => {
+      hero.crit += 0.06;
+    },
+  },
+  {
+    id: "r_reach",
+    klass: "ranger",
+    name: "Longshot",
+    desc: "+24 shot range",
+    icon: "↦",
+    unlockWave: 9,
+    cost: (lv) => goldCost(32, 1.42, lv),
+    apply: (hero) => {
+      hero.reach += 24;
+      hero.range += 24;
+    },
+  },
+  {
+    id: "r_quiver",
+    klass: "ranger",
+    name: "Quiver",
+    desc: "+8% attack speed",
+    icon: "➳",
+    unlockWave: 9,
+    cost: (lv) => goldCost(28, 1.44, lv),
+    apply: bumpSpeed(1.08),
+  },
+  {
+    id: "r_sharpen",
+    klass: "ranger",
+    name: "Sharpen",
+    desc: "+18% Aimed Shot damage",
+    icon: "✸",
+    unlockWave: 13,
+    cost: (lv) => goldCost(36, 1.48, lv),
+    apply: (hero) => {
+      hero.strikeMult = (hero.strikeMult || 1) * 1.18;
+    },
+  },
+  {
+    id: "r_echo",
+    klass: "ranger",
+    name: "Echo",
+    desc: "12% chance to repeat a shot",
+    icon: "⟳",
+    unlockWave: 13,
+    cost: (lv) => goldCost(36, 1.48, lv),
+    apply: (hero) => {
+      hero.echo = (hero.echo || 0) + 0.12;
+    },
+  },
+  {
+    id: "r_track",
+    klass: "ranger",
+    name: "Track",
+    desc: "+5% crit and +12 shot range",
+    icon: "◎",
+    unlockWave: 13,
+    cost: (lv) => goldCost(34, 1.46, lv),
+    apply: (hero) => {
+      hero.crit += 0.05;
+      hero.reach += 12;
+      hero.range += 12;
+    },
+  },
+  {
+    id: "r_pack",
+    klass: "ranger",
     name: "Pack",
-    desc: "Wolf +25% HP and +2 dmg, or +20 HP",
+    desc: "Wolf +22% HP and +2 damage",
     icon: "🐺",
     unlockWave: 17,
-    synergy: ["ranger"],
-    cost: (lv) => Math.floor(38 * Math.pow(1.48, lv)),
+    cost: (lv) => goldCost(38, 1.48, lv),
     apply: (hero) => {
       hero.pack = (hero.pack || 0) + 1;
     },
   },
-];
-
-const PRESTIGE_TREE = [
   {
-    id: "blood",
-    name: "Blood",
-    branch: "Vital",
-    col: 0,
-    row: 0,
-    max: 8,
-    synergy: ["all"],
-    desc: "+20 starting HP each run",
-    cost: (lv) => 1 + lv * 2,
-    apply: (h, lv) => {
-      h.maxHp += lv * 20;
-      h.hp += lv * 20;
-    },
-  },
-  {
-    id: "might",
-    name: "Might",
-    branch: "Might",
-    col: 1,
-    row: 0,
-    max: 8,
-    synergy: ["all"],
-    desc: "+2 starting damage each run",
-    cost: (lv) => 1 + lv * 2,
-    apply: (h, lv) => {
-      h.dmg += lv * 2;
-    },
-  },
-  {
-    id: "purse",
-    name: "Purse",
-    branch: "Fortune",
-    col: 2,
-    row: 0,
-    max: 8,
-    synergy: ["all"],
-    desc: "+18 starting gold each run",
-    cost: (lv) => 1 + lv * 2,
-  },
-  {
-    id: "hide",
-    name: "Hide",
-    branch: "Vital",
-    col: 0,
-    row: 1,
-    max: 5,
-    synergy: ["warrior"],
-    req: [{ id: "blood", lv: 1 }],
-    desc: "+1.2 armor each run",
-    cost: (lv) => 1 + lv * 2,
-    apply: (h, lv) => {
-      h.armor += lv * 1.2;
-    },
-  },
-  {
-    id: "tempo",
-    name: "Tempo",
-    branch: "Might",
-    col: 1,
-    row: 1,
-    max: 5,
-    synergy: ["all"],
-    req: [{ id: "might", lv: 1 }],
-    desc: "+5% attack speed each run",
-    cost: (lv) => 1 + lv * 2,
-    apply: (h, lv) => {
-      h.atkRate *= Math.pow(1.05, lv);
-    },
-  },
-  {
-    id: "greed",
-    name: "Greed",
-    branch: "Fortune",
-    col: 2,
-    row: 1,
-    max: 5,
-    synergy: ["all"],
-    req: [{ id: "purse", lv: 1 }],
-    desc: "+12% gold find each run",
-    cost: (lv) => 1 + lv * 2,
-    apply: (h, lv) => {
-      h.goldFind += lv * 0.12;
-    },
-  },
-  {
-    id: "secondwind",
-    name: "Second Wind",
-    branch: "Vital",
-    col: 0,
-    row: 2,
-    max: 2,
-    synergy: ["all"],
-    desc: "At fatal or 30% HP, heal 26% (charges = ranks)",
-    cost: (lv) => 3 + lv * 3,
-    apply: (h, lv) => {
-      h.secondWind = lv;
-    },
-  },
-  {
-    id: "execute",
-    name: "Execute",
-    branch: "Might",
-    col: 1,
-    row: 2,
-    max: 3,
-    synergy: ["warrior"],
-    req: [{ id: "tempo", lv: 1 }],
-    desc: "+18% damage to foes below 40% HP",
-    cost: (lv) => 3 + lv * 3,
-    apply: (h, lv) => {
-      h.execute = lv;
-    },
-  },
-  {
-    id: "spark",
-    name: "Spark",
-    branch: "Fortune",
-    col: 2,
-    row: 2,
-    max: 5,
-    synergy: ["mage"],
-    desc: "+0.7 mana regen each run",
-    cost: (lv) => 2 + lv * 2,
-    apply: (h, lv) => {
-      h.mana += lv * 5;
-      h.maxMana += lv * 10;
-      h.manaRegen += lv * 0.7;
-    },
-  },
-  {
-    id: "thorns",
-    name: "Thorns",
-    branch: "Vital",
-    col: 0,
-    row: 3,
-    max: 3,
-    synergy: ["warrior"],
-    req: [{ id: "secondwind", lv: 1 }],
-    desc: "Reflect 10% of melee hits",
-    cost: (lv) => 5 + lv * 3,
-    apply: (h, lv) => {
-      h.thorns = lv;
-    },
-  },
-  {
-    id: "overkill",
-    name: "Overkill",
-    branch: "Might",
-    col: 1,
-    row: 3,
-    max: 2,
-    synergy: ["warrior", "mage"],
-    req: [{ id: "execute", lv: 1 }],
-    desc: "Wasted damage splashes to the nearest foe",
-    cost: (lv) => 5 + lv * 3,
-    apply: (h, lv) => {
-      h.overkill = lv;
-    },
-  },
-  {
-    id: "fate",
-    name: "Fate",
-    branch: "Fortune",
-    col: 2,
-    row: 3,
-    max: 5,
-    synergy: ["all"],
-    req: [{ id: "spark", lv: 1 }],
-    desc: "+18% glory on death",
-    cost: (lv) => 2 + lv * 3,
-  },
-  {
-    id: "laststand",
-    name: "Last Stand",
-    branch: "Vital",
-    col: 0,
-    row: 4,
-    max: 1,
-    synergy: ["warrior"],
-    req: [{ id: "thorns", lv: 1 }],
-    desc: "Below 28% HP: +25% damage and +20% speed",
-    cost: (lv) => 8 + lv * 4,
-    apply: (h, lv) => {
-      if (lv > 0) h.lastStand = true;
-    },
-  },
-  {
-    id: "bloodlust",
-    name: "Bloodlust",
-    branch: "Might",
-    col: 1,
-    row: 4,
-    max: 2,
-    synergy: ["warrior"],
-    req: [{ id: "overkill", lv: 1 }],
-    desc: "Kills grant a short Rage (1.6s / rank)",
-    cost: (lv) => 6 + lv * 4,
-    apply: (h, lv) => {
-      h.bloodlust = lv;
-    },
-  },
-  {
-    id: "heirloom",
-    name: "Heirloom",
-    branch: "Fortune",
-    col: 2,
-    row: 4,
-    max: 1,
-    synergy: ["all"],
-    req: [{ id: "fate", lv: 1 }],
-    desc: "Each run starts with Iron I already forged",
-    cost: (lv) => 7 + lv * 4,
-    apply: (h, lv) => {
-      if (lv > 0) h.heirloom = true;
+    id: "r_alpha",
+    klass: "ranger",
+    name: "Alpha",
+    desc: "Wolf +1.4 armor and +0.8 regen",
+    icon: "☽",
+    unlockWave: 17,
+    cost: (lv) => goldCost(40, 1.5, lv),
+    apply: (hero) => {
+      hero.wolfArmor = (hero.wolfArmor || 0) + 1.4;
+      hero.wolfRegen = (hero.wolfRegen || 0) + 0.8;
     },
   },
 ];
 
-const PRESTIGE_UPGRADES = PRESTIGE_TREE;
-
-function prestReqMet(node, prest) {
-  if ((prest[node.id] || 0) > 0) return true;
-  return (node.req || []).every((r) => (prest[r.id] || 0) >= r.lv);
+function deepCost(depth, lv) {
+  const base = [2, 4, 8, 12, 18][depth] || 18;
+  const step = [2, 3, 4, 5, 6][depth] || 6;
+  return base + lv * step;
 }
 
-function prestReqText(node) {
+function node(spec) {
+  const depth = spec.root ? 0 : spec.row;
+  return Object.assign(
+    {
+      max: 3,
+      req: spec.root ? [] : spec.req || [],
+      cost: spec.cost || ((lv) => deepCost(depth, lv)),
+    },
+    spec
+  );
+}
+
+const PRESTIGE_TREES = {
+  warrior: {
+    id: "warrior",
+    name: "Iron Pact",
+    blurb: "One oath, then Shield, Blade, and Spoils.",
+    branches: ["Shield", "Blade", "Spoils"],
+    nodes: [
+      node({
+        id: "oath",
+        name: "Oath",
+        branch: "Root",
+        col: 1,
+        row: 0,
+        root: true,
+        max: 3,
+        desc: "+16 starting HP and +1 damage each run",
+        apply: (h, lv) => {
+          h.maxHp += lv * 16;
+          h.hp += lv * 16;
+          h.dmg += lv;
+          h.prestHp = (h.prestHp || 0) + lv * 16;
+        },
+      }),
+      node({
+        id: "hide",
+        name: "Hide",
+        branch: "Shield",
+        col: 0,
+        row: 1,
+        req: ["oath"],
+        desc: "+1.2 armor each run",
+        apply: (h, lv) => {
+          h.armor += lv * 1.2;
+        },
+      }),
+      node({
+        id: "secondwind",
+        name: "Second Wind",
+        branch: "Shield",
+        col: 0,
+        row: 2,
+        max: 2,
+        req: ["hide"],
+        desc: "At 30% HP, heal 26% (charges = ranks)",
+        apply: (h, lv) => {
+          h.secondWind = lv;
+        },
+      }),
+      node({
+        id: "thorns",
+        name: "Thorns",
+        branch: "Shield",
+        col: 0,
+        row: 3,
+        req: ["secondwind"],
+        desc: "Reflect 10% of melee hits per rank",
+        apply: (h, lv) => {
+          h.thorns = lv;
+        },
+      }),
+      node({
+        id: "laststand",
+        name: "Last Stand",
+        branch: "Shield",
+        col: 0,
+        row: 4,
+        max: 1,
+        req: ["thorns"],
+        desc: "Below 28% HP: +25% damage and +20% speed",
+        apply: (h, lv) => {
+          if (lv > 0) h.lastStand = true;
+        },
+      }),
+      node({
+        id: "tempo",
+        name: "Tempo",
+        branch: "Blade",
+        col: 1,
+        row: 1,
+        req: ["oath"],
+        desc: "+5% attack speed each run",
+        apply: (h, lv) => {
+          h.atkRate *= Math.pow(1.05, lv);
+        },
+      }),
+      node({
+        id: "execute",
+        name: "Execute",
+        branch: "Blade",
+        col: 1,
+        row: 2,
+        req: ["tempo"],
+        desc: "+18% damage to foes below 40% HP",
+        apply: (h, lv) => {
+          h.execute = lv;
+        },
+      }),
+      node({
+        id: "overkill",
+        name: "Overkill",
+        branch: "Blade",
+        col: 1,
+        row: 3,
+        max: 2,
+        req: ["execute"],
+        desc: "Wasted damage splashes to the nearest foe",
+        apply: (h, lv) => {
+          h.overkill = lv;
+        },
+      }),
+      node({
+        id: "bloodlust",
+        name: "Bloodlust",
+        branch: "Blade",
+        col: 1,
+        row: 4,
+        max: 2,
+        req: ["overkill"],
+        desc: "Kills grant Rage (1.6s per rank)",
+        apply: (h, lv) => {
+          h.bloodlust = lv;
+        },
+      }),
+      node({
+        id: "purse",
+        name: "Purse",
+        branch: "Spoils",
+        col: 2,
+        row: 1,
+        req: ["oath"],
+        desc: "+18 starting gold each run",
+        apply: (h, lv) => {
+          h.startGold = (h.startGold || 0) + lv * 18;
+        },
+      }),
+      node({
+        id: "greed",
+        name: "Greed",
+        branch: "Spoils",
+        col: 2,
+        row: 2,
+        req: ["purse"],
+        desc: "+12% gold find each run",
+        apply: (h, lv) => {
+          h.goldFind += lv * 0.12;
+        },
+      }),
+      node({
+        id: "sanguine",
+        name: "Sanguine",
+        branch: "Spoils",
+        col: 2,
+        row: 3,
+        req: ["greed"],
+        desc: "+2% lifesteal each run",
+        apply: (h, lv) => {
+          h.leech += lv * 0.02;
+        },
+      }),
+      node({
+        id: "heirloom",
+        name: "Heirloom",
+        branch: "Spoils",
+        col: 2,
+        row: 4,
+        max: 1,
+        req: ["sanguine"],
+        desc: "Each run starts with Iron I already forged",
+        apply: (h, lv) => {
+          if (lv > 0) h.heirloom = true;
+        },
+      }),
+    ],
+  },
+  mage: {
+    id: "mage",
+    name: "Ember Court",
+    blurb: "Kindle the root, then Pyre, Frost, and Well.",
+    branches: ["Pyre", "Frost", "Well"],
+    nodes: [
+      node({
+        id: "kindle",
+        name: "Kindle",
+        branch: "Root",
+        col: 1,
+        row: 0,
+        root: true,
+        max: 3,
+        desc: "+10 starting HP, +8 max mana, +0.35 mana regen",
+        apply: (h, lv) => {
+          h.maxHp += lv * 10;
+          h.hp += lv * 10;
+          h.maxMana += lv * 8;
+          h.mana += lv * 5;
+          h.manaRegen += lv * 0.35;
+          h.prestHp = (h.prestHp || 0) + lv * 10;
+        },
+      }),
+      node({
+        id: "cinder",
+        name: "Cinder",
+        branch: "Pyre",
+        col: 0,
+        row: 1,
+        req: ["kindle"],
+        desc: "Hits apply a short burn (stronger per rank)",
+        apply: (h, lv) => {
+          h.cinder = lv;
+        },
+      }),
+      node({
+        id: "blaze",
+        name: "Blaze",
+        branch: "Pyre",
+        col: 0,
+        row: 2,
+        req: ["cinder"],
+        desc: "+18% burn damage and duration",
+        apply: (h, lv) => {
+          h.burnAmp = (h.burnAmp || 0) + lv * 0.18;
+        },
+      }),
+      node({
+        id: "overkill",
+        name: "Overkill",
+        branch: "Pyre",
+        col: 0,
+        row: 3,
+        max: 2,
+        req: ["blaze"],
+        desc: "Wasted damage splashes to the nearest foe",
+        apply: (h, lv) => {
+          h.overkill = lv;
+        },
+      }),
+      node({
+        id: "wildfire",
+        name: "Wildfire",
+        branch: "Pyre",
+        col: 0,
+        row: 4,
+        max: 1,
+        req: ["overkill"],
+        desc: "Kills spread a short burn to the nearest foe",
+        apply: (h, lv) => {
+          h.wildfire = lv;
+        },
+      }),
+      node({
+        id: "chill",
+        name: "Chill",
+        branch: "Frost",
+        col: 1,
+        row: 1,
+        req: ["kindle"],
+        desc: "Hits slow foes (1.1s per rank)",
+        apply: (h, lv) => {
+          h.chill = lv;
+        },
+      }),
+      node({
+        id: "novadepth",
+        name: "Nova Depth",
+        branch: "Frost",
+        col: 1,
+        row: 2,
+        req: ["chill"],
+        desc: "Frost Nova +40 range and +0.35s freeze",
+        apply: (h, lv) => {
+          h.novaReach = (h.novaReach || 0) + lv * 40;
+          h.novaHold = (h.novaHold || 0) + lv * 0.35;
+        },
+      }),
+      node({
+        id: "shatter",
+        name: "Shatter",
+        branch: "Frost",
+        col: 1,
+        row: 3,
+        max: 2,
+        req: ["novadepth"],
+        desc: "+14% damage to frozen foes",
+        apply: (h, lv) => {
+          h.shatter = lv;
+        },
+      }),
+      node({
+        id: "permafrost",
+        name: "Permafrost",
+        branch: "Frost",
+        col: 1,
+        row: 4,
+        max: 1,
+        req: ["shatter"],
+        desc: "Frost Nova +0.8s freeze and +1 Shatter",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.novaHold = (h.novaHold || 0) + 0.8;
+            h.shatter = (h.shatter || 0) + 1;
+          }
+        },
+      }),
+      node({
+        id: "spark",
+        name: "Spark",
+        branch: "Well",
+        col: 2,
+        row: 1,
+        req: ["kindle"],
+        desc: "+10 max mana and +0.7 mana regen",
+        apply: (h, lv) => {
+          h.mana += lv * 5;
+          h.maxMana += lv * 10;
+          h.manaRegen += lv * 0.7;
+        },
+      }),
+      node({
+        id: "tempest",
+        name: "Tempest",
+        branch: "Well",
+        col: 2,
+        row: 2,
+        req: ["spark"],
+        desc: "−6% skill cooldowns per rank",
+        apply: (h, lv) => {
+          h.skillHaste = (h.skillHaste || 0) + lv * 0.06;
+        },
+      }),
+      node({
+        id: "fate",
+        name: "Fate",
+        branch: "Well",
+        col: 2,
+        row: 3,
+        req: ["tempest"],
+        desc: "+18% glory on death",
+        apply: (h, lv) => {
+          h.gloryBonus = lv;
+        },
+      }),
+      node({
+        id: "phylactery",
+        name: "Phylactery",
+        branch: "Well",
+        col: 2,
+        row: 4,
+        max: 1,
+        req: ["fate"],
+        desc: "Each run starts with Ember I already lit",
+        apply: (h, lv) => {
+          if (lv > 0) h.heirloom = true;
+        },
+      }),
+    ],
+  },
+  ranger: {
+    id: "ranger",
+    name: "Wild Hunt",
+    blurb: "Mark the trail, then Bow, Wolf, and Stride.",
+    branches: ["Bow", "Wolf", "Stride"],
+    nodes: [
+      node({
+        id: "trail",
+        name: "Trail",
+        branch: "Root",
+        col: 1,
+        row: 0,
+        root: true,
+        max: 3,
+        desc: "+10 starting HP, +1 damage, wolf +10 HP",
+        apply: (h, lv) => {
+          h.maxHp += lv * 10;
+          h.hp += lv * 10;
+          h.dmg += lv;
+          h.wolfHp = (h.wolfHp || 0) + lv * 10;
+          h.prestHp = (h.prestHp || 0) + lv * 10;
+        },
+      }),
+      node({
+        id: "edge",
+        name: "Edge",
+        branch: "Bow",
+        col: 0,
+        row: 1,
+        req: ["trail"],
+        desc: "+4% crit chance each run",
+        apply: (h, lv) => {
+          h.crit += lv * 0.04;
+        },
+      }),
+      node({
+        id: "reach",
+        name: "Longshot",
+        branch: "Bow",
+        col: 0,
+        row: 2,
+        req: ["edge"],
+        desc: "+16 shot range each run",
+        apply: (h, lv) => {
+          h.reach += lv * 16;
+          h.range += lv * 16;
+        },
+      }),
+      node({
+        id: "echo",
+        name: "Echo",
+        branch: "Bow",
+        col: 0,
+        row: 3,
+        max: 2,
+        req: ["reach"],
+        desc: "+12% chance to repeat an auto per rank",
+        apply: (h, lv) => {
+          h.echo = (h.echo || 0) + lv * 0.12;
+        },
+      }),
+      node({
+        id: "marksman",
+        name: "Marksman",
+        branch: "Bow",
+        col: 0,
+        row: 4,
+        max: 1,
+        req: ["echo"],
+        desc: "+18% Aimed Shot damage and +1 pierce",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.strikeMult = (h.strikeMult || 1) * 1.18;
+            h.strikePierce = (h.strikePierce || 0) + 1;
+          }
+        },
+      }),
+      node({
+        id: "pack",
+        name: "Pack",
+        branch: "Wolf",
+        col: 1,
+        row: 1,
+        req: ["trail"],
+        desc: "Wolf +22% HP and +2 damage per rank",
+        apply: (h, lv) => {
+          h.pack = lv;
+        },
+      }),
+      node({
+        id: "pelt",
+        name: "Pelt",
+        branch: "Wolf",
+        col: 1,
+        row: 2,
+        req: ["pack"],
+        desc: "Wolf +1.1 armor each run",
+        apply: (h, lv) => {
+          h.wolfArmor = (h.wolfArmor || 0) + lv * 1.1;
+        },
+      }),
+      node({
+        id: "sicmaster",
+        name: "Sic Master",
+        branch: "Wolf",
+        col: 1,
+        row: 3,
+        max: 2,
+        req: ["pelt"],
+        desc: "Sic 'em taunt +0.8s and leap +20% damage",
+        apply: (h, lv) => {
+          h.sicHold = (h.sicHold || 0) + lv * 0.8;
+          h.sicDmg = (h.sicDmg || 0) + lv * 0.2;
+        },
+      }),
+      node({
+        id: "alpha",
+        name: "Alpha",
+        branch: "Wolf",
+        col: 1,
+        row: 4,
+        max: 1,
+        req: ["sicmaster"],
+        desc: "Wolf +18% HP and +1.2 regen",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.pack = (h.pack || 0) + 1;
+            h.wolfRegen = (h.wolfRegen || 0) + 1.2;
+          }
+        },
+      }),
+      node({
+        id: "stride",
+        name: "Stride",
+        branch: "Stride",
+        col: 2,
+        row: 1,
+        req: ["trail"],
+        desc: "+5% attack speed and wolf +12% move speed",
+        apply: (h, lv) => {
+          h.atkRate *= Math.pow(1.05, lv);
+          h.wolfStride = (h.wolfStride || 0) + lv * 0.12;
+        },
+      }),
+      node({
+        id: "greed",
+        name: "Trophy",
+        branch: "Stride",
+        col: 2,
+        row: 2,
+        req: ["stride"],
+        desc: "+12% gold find each run",
+        apply: (h, lv) => {
+          h.goldFind += lv * 0.12;
+        },
+      }),
+      node({
+        id: "secondwind",
+        name: "Fieldcraft",
+        branch: "Stride",
+        col: 2,
+        row: 3,
+        max: 2,
+        req: ["greed"],
+        desc: "At 30% HP, heal 26% (charges = ranks)",
+        apply: (h, lv) => {
+          h.secondWind = lv;
+        },
+      }),
+      node({
+        id: "heirloom",
+        name: "Keepsake",
+        branch: "Stride",
+        col: 2,
+        row: 4,
+        max: 1,
+        req: ["secondwind"],
+        desc: "Each run starts with Bodkin I already nocked",
+        apply: (h, lv) => {
+          if (lv > 0) h.heirloom = true;
+        },
+      }),
+    ],
+  },
+};
+
+const LEGACY_PRESTIGE = [
+  { id: "blood", max: 8, cost: (lv) => 1 + lv * 2 },
+  { id: "might", max: 8, cost: (lv) => 1 + lv * 2 },
+  { id: "purse", max: 8, cost: (lv) => 1 + lv * 2 },
+  { id: "hide", max: 5, cost: (lv) => 1 + lv * 2 },
+  { id: "tempo", max: 5, cost: (lv) => 1 + lv * 2 },
+  { id: "greed", max: 5, cost: (lv) => 1 + lv * 2 },
+  { id: "secondwind", max: 2, cost: (lv) => 3 + lv * 3 },
+  { id: "execute", max: 3, cost: (lv) => 3 + lv * 3 },
+  { id: "spark", max: 5, cost: (lv) => 2 + lv * 2 },
+  { id: "thorns", max: 3, cost: (lv) => 5 + lv * 3 },
+  { id: "overkill", max: 2, cost: (lv) => 5 + lv * 3 },
+  { id: "fate", max: 5, cost: (lv) => 2 + lv * 3 },
+  { id: "laststand", max: 1, cost: (lv) => 8 + lv * 4 },
+  { id: "bloodlust", max: 2, cost: (lv) => 6 + lv * 4 },
+  { id: "heirloom", max: 1, cost: (lv) => 7 + lv * 4 },
+];
+
+const SAVE_VERSION = 2;
+
+function prestigeTree(klass) {
+  return PRESTIGE_TREES[klass] || PRESTIGE_TREES.warrior;
+}
+
+function prestigeNodes(klass) {
+  return prestigeTree(klass).nodes;
+}
+
+function prestigeRoot(klass) {
+  return prestigeNodes(klass).find((n) => n.root);
+}
+
+function findPrestNode(klass, id) {
+  return prestigeNodes(klass).find((n) => n.id === id);
+}
+
+function emptyTrees() {
+  const out = {};
+  for (const k of Object.keys(PRESTIGE_TREES)) {
+    out[k] = Object.fromEntries(PRESTIGE_TREES[k].nodes.map((n) => [n.id, 0]));
+  }
+  return out;
+}
+
+function normalizeTrees(trees) {
+  const out = emptyTrees();
+  const src = trees && typeof trees === "object" && !Array.isArray(trees) ? trees : {};
+  for (const k of Object.keys(out)) {
+    const bag = src[k] && typeof src[k] === "object" ? src[k] : {};
+    for (const n of PRESTIGE_TREES[k].nodes) {
+      const rank = Math.floor(Number(bag[n.id]) || 0);
+      out[k][n.id] = Math.max(0, Math.min(n.max, rank));
+    }
+  }
+  return out;
+}
+
+function mergeTrees(a, b) {
+  const out = normalizeTrees(a);
+  const extra = normalizeTrees(b);
+  for (const k of Object.keys(out)) {
+    for (const id of Object.keys(out[k])) {
+      out[k][id] = Math.max(out[k][id] || 0, extra[k][id] || 0);
+    }
+  }
+  return out;
+}
+
+function glorySpentLegacy(prest) {
+  if (!prest || typeof prest !== "object") return 0;
+  let spent = 0;
+  for (const n of LEGACY_PRESTIGE) {
+    const lv = Math.max(0, Math.min(n.max, Math.floor(Number(prest[n.id]) || 0)));
+    for (let i = 0; i < lv; i++) spent += n.cost(i);
+  }
+  return spent;
+}
+
+function isLegacyPrest(prest) {
+  if (!prest || typeof prest !== "object" || Array.isArray(prest)) return false;
+  if (prest.warrior || prest.mage || prest.ranger) return false;
+  return LEGACY_PRESTIGE.some((n) => (prest[n.id] || 0) > 0);
+}
+
+function parentRankNeed(klass, parentId) {
+  const parent = findPrestNode(klass, parentId);
+  return parent ? parent.max : 1;
+}
+
+function prestReqMet(node, prest, klass) {
+  if ((prest[node.id] || 0) > 0) return true;
+  return (node.req || []).every((id) => (prest[id] || 0) >= parentRankNeed(klass, id));
+}
+
+function prestReqText(node, klass) {
   if (!node.req || !node.req.length) return "";
   return node.req
-    .map((r) => {
-      const p = PRESTIGE_TREE.find((n) => n.id === r.id);
-      return (p ? p.name : r.id) + " " + r.lv;
+    .map((id) => {
+      const p = findPrestNode(klass, id);
+      const need = parentRankNeed(klass, id);
+      return (p ? p.name : id) + " " + need + "/" + need;
     })
     .join(" · ");
 }
 
-const SYNERGY_LABEL = { all: "All", warrior: "Warrior", mage: "Mage", ranger: "Ranger" };
-
-function synergyTags(item) {
-  const tags = item.synergy && item.synergy.length ? item.synergy : ["all"];
-  return tags;
-}
-
-function synergyHtml(item) {
-  return (
-    '<span class="syn">' +
-    synergyTags(item)
-      .map((t) => '<i class="tag ' + t + '">' + (SYNERGY_LABEL[t] || t) + "</i>")
-      .join("") +
-    "</span>"
-  );
+function shopList(klass) {
+  const id = klass && PRESTIGE_TREES[klass] ? klass : null;
+  if (!id) return RUN_UPGRADES.slice();
+  return RUN_UPGRADES.filter((u) => u.klass === id);
 }
 
 function shopUnlockWave(u) {
   return u.unlockWave || 1;
 }
 
-function nextShopUnlockWave(wave) {
+function nextShopUnlockWave(wave, klass) {
   let best = 0;
-  for (const u of RUN_UPGRADES) {
+  for (const u of shopList(klass)) {
     const w = shopUnlockWave(u);
     if (w > wave && (!best || w < best)) best = w;
   }
   return best;
 }
 
-function shopUnlocksAt(wave) {
-  return RUN_UPGRADES.filter((u) => shopUnlockWave(u) === wave);
+function shopUnlocksAt(wave, klass) {
+  return shopList(klass).filter((u) => shopUnlockWave(u) === wave);
+}
+
+function heirloomUpgrade(klass) {
+  return shopList(klass).find((u) => u.heirloom);
 }
 
 function waveCount(n) {
