@@ -71,10 +71,10 @@ for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
 }
 
 const bars = [
-  { label: "0 prestige  S1 W6–8", waves: [6, 7, 8], hpMax: 1.55, dmgMax: 1.28, packMax: 4 },
-  { label: "1 prestige  1st boss W10", waves: [10], hpMax: 1.85, dmgMax: 1.4, packMax: 1 },
-  { label: "2 prestige  mid S2 W14–16", waves: [14, 15, 16], hpMax: 3.3, dmgMax: 1.95, packMax: 5 },
-  { label: "3 prestige  2nd boss W20", waves: [20], hpMax: 4.9, dmgMax: 2.4, packMax: 1 },
+  { label: "0 prestige  S1 W6–8", waves: [6, 7, 8], hpMax: 1.45, dmgMax: 1.22, packMax: 3 },
+  { label: "1 prestige  1st boss W10", waves: [10], hpMax: 1.7, dmgMax: 1.35, packMax: 1 },
+  { label: "2 prestige  mid S2 W14–16", waves: [14, 15, 16], hpMax: 3.1, dmgMax: 1.85, packMax: 5 },
+  { label: "3 prestige  2nd boss W20", waves: [20], hpMax: 4.5, dmgMax: 2.25, packMax: 1 },
 ];
 
 console.log("Scott reach table (stage = 10 waves)\n");

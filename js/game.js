@@ -569,6 +569,10 @@
       run.wave = jumpDest - 1;
       run.waveTimer = 0.05;
       syncWolfVitals(false);
+    } else {
+      run.wave = 1;
+      spawnWave();
+      run.waveTimer = nextWaveDelay(1);
     }
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
@@ -2801,7 +2805,8 @@
       if (!btn) continue;
       const lv = run.levels[u.id] || 0;
       const cost = u.cost(lv);
-      btn.textContent = fmt(cost);
+      const first = lv === 0 && !run.boughtAny && run.gold >= cost && shopUnlockWave(u) === 1;
+      btn.textContent = first ? "BUY " + fmt(cost) : fmt(cost);
       btn.disabled = run.gold < cost;
     }
   }
@@ -2922,7 +2927,7 @@
     const lv = run.levels[id] || 0;
     const c = u.cost(lv);
     if (run.gold < c || state !== "fight") return;
-    if (run.wave < shopUnlockWave(u)) return;
+    if (Math.max(1, run.wave || 1) < shopUnlockWave(u)) return;
     run.gold -= c;
     run.levels[id] = lv + 1;
     run.boughtAny = true;
