@@ -6,7 +6,10 @@
     "idle": ["idle_1.png", "idle_2.png", "idle_3.png", "idle_4.png", "idle_5.png", "idle_6.png"],
     "attack": ["atk_1.png", "atk_2.png", "atk_3.png", "atk_4.png"],
     "fpsIdle": 6,
-    "fpsAttack": 12
+    "fpsAttack": 12,
+    "mage": "assets/sprites/hero/mage.png",
+    "wolf": "assets/sprites/hero/wolf.png",
+    "ranger": "assets/sprites/enemies/archer.png"
   },
   "enemies": {
     "grunt": "assets/sprites/enemies/grunt.png",
@@ -19,7 +22,8 @@
   },
   "fx": {
     "arrow": "assets/sprites/fx/arrow.png",
-    "bolt": "assets/sprites/fx/bolt.png"
+    "bolt": "assets/sprites/fx/bolt.png",
+    "fire": "assets/sprites/fx/fire.png"
   },
   "ui": {
     "coin": "assets/ui/coin.png",
