@@ -2264,8 +2264,8 @@ function waveScale(n) {
   const mid = Math.max(0, Math.min(w - STAGE_LEN, STAGE_LEN));
   const late = Math.max(0, w - STAGE_LEN * 2);
   return {
-    hp: Math.pow(1.025, open) * Math.pow(1.075, rise) * Math.pow(1.105, mid) * Math.pow(1.12, late),
-    dmg: Math.pow(1.012, open) * Math.pow(1.038, rise) * Math.pow(1.055, mid) * Math.pow(1.065, late),
+    hp: Math.pow(1.015, open) * Math.pow(1.075, rise) * Math.pow(1.105, mid) * Math.pow(1.12, late),
+    dmg: Math.pow(1.008, open) * Math.pow(1.038, rise) * Math.pow(1.055, mid) * Math.pow(1.065, late),
     gold: 1 + (w - 1) * 0.1,
   };
 }

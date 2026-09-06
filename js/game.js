@@ -53,7 +53,9 @@
       enemies: [],
       boughtAny: false,
       shopNudge: false,
-      firstBuyHold: 22,
+      firstBuyHold: 28,
+      shopFreeze: 0,
+      shopNudgeAt: 0,
       levels: Object.fromEntries(RUN_UPGRADES.map((u) => [u.id, 0])),
     };
   }
@@ -593,6 +595,7 @@
         persist.refundNote = 0;
         save();
       }
+      armShopFreeze();
       nudgeFirstBuy(true);
     }
     sfx(220, 0.12, "square", 0.04);
@@ -696,11 +699,12 @@
     let armor = h.armor + (h.mendArmorT > 0 ? 1.4 * (h.mendArmor || 0) : 0);
     if (h.lowHpArmor && h.hp / h.maxHp <= 0.45) armor += 1.6 * h.lowHpArmor;
     if (h.klass === "mage" && run.wave > 0) {
-      if (run.wave <= 5) armor += 5.8;
-      else if (run.wave <= 8) armor += 2.4;
+      if (run.wave <= 5) armor += 6.4;
+      else if (run.wave <= 8) armor += 3.2;
     }
     let d = dmgIn(amount, armor);
-    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) d *= 0.78;
+    if (h.klass === "mage" && run.wave > 0 && run.wave <= 5) d *= 0.74;
+    else if (h.klass === "mage" && run.wave > 0 && run.wave <= 8) d *= 0.88;
     if (h.cauterizeWard > 0) d *= 0.78;
     if (h.waveHits > 0 && h.waveWard) {
       d *= Math.max(0.4, 1 - 0.16 * h.waveWard);
@@ -1013,7 +1017,12 @@
         run.wolf.taunt = Math.max(run.wolf.taunt || 0, 1.1 * h.howl);
       }
     }
+    if (firstBuyPending()) {
+      armShopFreeze();
+      run.shopNudgeAt = 0;
+    }
     buildShop();
+    if (firstBuyPending()) nudgeFirstBuy(true);
   }
 
   function defTitle(n) {
@@ -1528,7 +1537,7 @@
         if (ban) ban.classList.remove("show");
       }
     }
-    if (state !== "fight" || paused) {
+    if (state !== "fight" || paused || tickShopFreeze(dt)) {
       shake = 0;
       updateFx(dt);
       syncHud();
@@ -1555,9 +1564,17 @@
     shake = Math.max(0, shake - dt * 18);
     camera = HOME_X - PLAYER_SCREEN_X;
 
-    if (!run.boughtAny && run.wave < 4 && (run.firstBuyHold || 0) > 0) {
-      run.firstBuyHold -= dt;
-      run.waveTimer = Math.max(run.waveTimer, 2.4);
+    if (firstBuyPending()) {
+      if ((run.firstBuyHold || 0) > 0) {
+        run.firstBuyHold -= dt;
+        run.waveTimer = Math.max(run.waveTimer, 3.2);
+      }
+      if ((run.shopNudgeAt || 0) <= 0) {
+        nudgeFirstBuy(true);
+        run.shopNudgeAt = 6;
+      } else {
+        run.shopNudgeAt -= dt;
+      }
     }
     if (!bossAlive()) {
       if (run.enemies.length >= liveCap()) {
@@ -2692,8 +2709,7 @@
       hud.textContent = c.name;
       hud.style.color = c.color;
     }
-    const hint = document.getElementById("shop-hint");
-    if (hint) hint.textContent = c.blurb + " Spend gold while they fight.";
+    syncFirstBuyCopy(c);
     const keys = document.getElementById("keys");
     if (keys) {
       keys.textContent =
@@ -2842,10 +2858,45 @@
     return s ? s.cost(0) : 8;
   }
 
+  function firstBuyPending() {
+    return state === "fight" && !run.boughtAny && run.gold >= firstCrateCost() && Math.max(1, run.wave || 1) < 4;
+  }
+
   function firstBuyLabel() {
     return starterShop()
       .map((u) => u.name + " " + u.cost(0) + "g")
       .join(" · ");
+  }
+
+  function armShopFreeze() {
+    if (run.boughtAny || run.gold < firstCrateCost()) return;
+    if (state !== "fight") return;
+    if (Math.max(1, run.wave || 1) >= 4) return;
+    run.shopFreeze = 4.8;
+  }
+
+  function tickShopFreeze(dt) {
+    if (!firstBuyPending()) {
+      run.shopFreeze = 0;
+      return false;
+    }
+    if ((run.shopFreeze || 0) <= 0) return false;
+    run.shopFreeze -= dt;
+    run.waveTimer = Math.max(run.waveTimer, 3.2);
+    return true;
+  }
+
+  function syncFirstBuyCopy(cls) {
+    const c = cls || classDef(run.hero ? run.hero.klass : persist.klass);
+    const pending = !run.boughtAny && run.gold >= firstCrateCost() && state === "fight";
+    const title = document.getElementById("shop-title");
+    if (title) title.textContent = pending ? "BUY NOW" : "Armory";
+    const hint = document.getElementById("shop-hint");
+    if (hint) {
+      hint.textContent = pending
+        ? "You have " + fmt(run.gold) + "g. First steel is " + firstCrateCost() + "g — click BUY before Wave 4."
+        : c.blurb + " Spend gold while they fight.";
+    }
   }
 
   function nudgeFirstBuy(force) {
@@ -2853,11 +2904,12 @@
     if (run.gold < firstCrateCost()) return;
     const shop = document.getElementById("shop");
     if (shop) shop.classList.add("nudge");
+    syncFirstBuyCopy();
     if (force || !run.shopNudge) {
       run.shopNudge = true;
       const label = firstBuyLabel();
       toast("BUY NOW  " + label, 3.8);
-      showJumpBanner("Armory open — " + label);
+      showJumpBanner("BUY NOW — " + label + ". Fight waits.");
     }
     buildShop();
   }
@@ -2876,7 +2928,7 @@
       if (!run.boughtAny && wave < 5) {
         nextEl.textContent =
           run.gold >= firstCrateCost()
-            ? "BUY NOW — " + firstBuyLabel() + ". Next wave waits until you do."
+            ? "BUY NOW — " + firstBuyLabel() + ". Combat pauses until you click BUY."
             : "First steel costs " + firstCrateCost() + "g.";
       } else {
         nextEl.textContent = next
@@ -2932,8 +2984,12 @@
     run.levels[id] = lv + 1;
     run.boughtAny = true;
     run.firstBuyHold = 0;
+    run.shopFreeze = 0;
+    run.shopNudgeAt = 0;
     const shopEl = document.getElementById("shop");
     if (shopEl) shopEl.classList.remove("nudge");
+    const title = document.getElementById("shop-title");
+    if (title) title.textContent = "Armory";
     u.apply(run.hero);
     if (u.id === "r_pack" || u.id === "pack") applyPack(run.hero);
     buildShop();
@@ -3233,6 +3289,8 @@
         },
         startGold: START_GOLD,
         firstCrate: firstCrateCost(),
+        firstBuyPending: firstBuyPending(),
+        shopFreeze: Math.max(0, run.shopFreeze || 0),
       };
     },
     wolf() {
