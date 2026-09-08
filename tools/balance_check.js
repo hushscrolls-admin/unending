@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Prints the Scott reach table and fails if Nova or the curve drift.
+ * Prints the Scott reach table and fails if Nova, tempo, or the curve drift.
  * Stage = 10 waves. Bosses on 10 / 20 / 30.
+ * Pass 15: virgin Warrior must die around S1 W6–8, not stroll to W38.
  */
 const {
   CLASSES,
@@ -16,10 +17,13 @@ const {
   bossTypeFor,
   waveRoster,
   waveScale,
+  nextWaveDelay,
+  liveCap,
   novaReachFor,
   novaFreezeFor,
   novaCdFor,
 } = require("../js/content.js");
+const { runSuite, report } = require("./reach_sim.js");
 
 const FAIL = [];
 function assert(cond, msg) {
@@ -78,11 +82,21 @@ for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
   );
 }
 
+assert(typeof nextWaveDelay === "function" && typeof liveCap === "function", "tempo helpers are exported");
+assert(nextWaveDelay(8) < nextWaveDelay(2), "W8 packs arrive faster than W2");
+assert(nextWaveDelay(6) < nextWaveDelay(4), "tempo tightens through mid Stage 1");
+assert(nextWaveDelay(9) > nextWaveDelay(8), "pre-boss beat is longer than W8 stack delay");
+assert(liveCap(3) <= 3, "W1–3 live cap stays small so the opener is readable");
+assert(liveCap(6) >= 5, "mid Stage 1 live cap allows overlapping packs");
+assert(ENEMIES.grunt.hp >= 38 && ENEMIES.grunt.dmg >= 8.5, "raider base is Pass-15 strong");
+assert(ENEMIES.archer.keep === 100 && ENEMIES.mage.keep === 100, "ranged keep stays 100");
+
 const bars = [
-  { label: "0 prestige  S1 W6–8", waves: [6, 7, 8], hpMax: 1.55, dmgMax: 1.28, packMax: 4 },
-  { label: "1 prestige  1st boss W10", waves: [10], hpMax: 1.85, dmgMax: 1.4, packMax: 1 },
-  { label: "2 prestige  mid S2 W14–16", waves: [14, 15, 16], hpMax: 3.3, dmgMax: 1.95, packMax: 5 },
-  { label: "3 prestige  2nd boss W20", waves: [20], hpMax: 4.9, dmgMax: 2.4, packMax: 1 },
+  { label: "learnable W1–3", waves: [1, 2, 3], hpMin: 1, hpMax: 1.12, dmgMin: 1, dmgMax: 1.08, packMax: 2 },
+  { label: "0 prestige  S1 W6–8", waves: [6, 7, 8], hpMin: 1.35, hpMax: 2.2, dmgMin: 1.22, dmgMax: 1.72, packMax: 4 },
+  { label: "1 prestige  1st boss W10", waves: [10], hpMin: 2.2, hpMax: 3.2, dmgMin: 1.7, dmgMax: 2.2, packMax: 1 },
+  { label: "2 prestige  mid S2 W14–16", waves: [14, 15, 16], hpMin: 3.6, hpMax: 5.6, dmgMin: 2.1, dmgMax: 2.9, packMax: 5 },
+  { label: "3 prestige  2nd boss W20", waves: [20], hpMin: 6.4, hpMax: 9.2, dmgMin: 2.7, dmgMax: 3.7, packMax: 1 },
 ];
 
 console.log("Scott reach table (stage = 10 waves)\n");
@@ -115,12 +129,19 @@ console.log("  reach", NOVA.reach, "cap", maxReach, "spawn gap", spawnGap);
 console.log("  freeze", NOVA.freeze, "maxed", maxFreeze.toFixed(2));
 console.log("  cd", NOVA.cd, "floor", minCd, "at absurd haste");
 
+console.log("\nTempo");
+for (const n of [1, 3, 6, 8, 9, 10, 16]) {
+  console.log("  W" + n, "delay", nextWaveDelay(n) + "s", "liveCap", liveCap(n));
+}
+
 console.log("\nBar checks");
 for (const bar of bars) {
   for (const n of bar.waves) {
     const sc = waveScale(n);
     const pack = waveRoster(n).length;
-    const ok = sc.hp <= bar.hpMax && sc.dmg <= bar.dmgMax && pack <= bar.packMax;
+    const lo = (!bar.hpMin || sc.hp >= bar.hpMin) && (!bar.dmgMin || sc.dmg >= bar.dmgMin);
+    const hi = sc.hp <= bar.hpMax && sc.dmg <= bar.dmgMax && pack <= bar.packMax;
+    const ok = lo && hi;
     console.log(
       " ",
       ok ? "ok" : "FAIL",
@@ -136,6 +157,26 @@ for (const bar of bars) {
     assert(ok, bar.label + " W" + n + " drifted (hp " + sc.hp.toFixed(2) + " dmg " + sc.dmg.toFixed(2) + ")");
   }
 }
+
+console.log("\nReach sim (Warrior, Iron ASAP, Power Strike on CD)");
+const suite = runSuite();
+report("BEFORE  0 prestige", suite.virginBefore);
+report("AFTER   0 prestige", suite.virginAfter);
+report("AFTER   1p Oath+Hide", suite.p1);
+report("AFTER   2p + Mend", suite.p2);
+report("AFTER   3p + Mend", suite.p3);
+
+const v0 = suite.virginAfter;
+const before = suite.virginBefore;
+assert(!before.deathWave || before.deathWave >= 16, "legacy virgin must still stroll past mid S2 (before snapshot)");
+assert(v0.deathWave != null, "Pass 15 virgin must die");
+assert(v0.deathWave >= 6 && v0.deathWave <= 9, "Pass 15 virgin dies around S1 W6–8 (got W" + v0.deathWave + ")");
+assert((v0.hpAt[6] || 0) < v0.maxHp * 0.85, "virgin is already taking real damage by W6");
+assert(v0.overlapAt != null && v0.overlapAt <= 6, "packs overlap by mid Stage 1");
+assert((suite.p1.hpAt[10] || 0) > 0, "1 prestige reaches The Butcher");
+assert(suite.p1.deathWave == null || suite.p1.deathWave >= 10, "1 prestige does not die before the first boss");
+assert((suite.p2.hpAt[14] || 0) > 0, "2 prestige reaches mid Stage 2");
+assert((suite.p3.hpAt[20] || 0) > 0, "3 prestige reaches the second boss");
 
 if (FAIL.length) {
   console.error("\nFAILED\n" + FAIL.map((m) => " - " + m).join("\n"));

@@ -1,10 +1,11 @@
 // Stage = 10 waves. Bosses land on 10 / 20 / 30 / 40 / 50
 // (Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen).
 // Scott reach bars (design, not spreadsheet DPS):
-//   0 prestiges → Stage 1 waves 6–8
+//   0 prestiges → Stage 1 waves 6–8 (die or soft-cap; Armory alone)
 //   1 prestige  → 1st boss (wave 10)
 //   2 prestiges → mid Stage 2 (waves 14–16)
 //   3 prestiges → 2nd boss (wave 20)
+// Pass 15: faster pack tempo + steeper foe HP/dmg so virgin cannot stroll to W38.
 const STAGE_LEN = 10;
 
 const NOVA = {
@@ -290,8 +291,8 @@ const ENEMIES = {
     name: "Raider",
     sprite: "grunt",
     walk: true,
-    hp: 28,
-    dmg: 5,
+    hp: 40,
+    dmg: 9,
     armor: 0,
     speed: 70,
     atkRate: 0.85,
@@ -304,9 +305,9 @@ const ENEMIES = {
   shield: {
     name: "Shield",
     sprite: "shield",
-    hp: 46,
-    dmg: 4,
-    armor: 5.5,
+    hp: 60,
+    dmg: 7.5,
+    armor: 6.2,
     speed: 48,
     atkRate: 0.7,
     reach: 86,
@@ -318,8 +319,8 @@ const ENEMIES = {
   berserk: {
     name: "Berserker",
     sprite: "berserk",
-    hp: 26,
-    dmg: 8,
+    hp: 36,
+    dmg: 11,
     armor: 0,
     speed: 95,
     atkRate: 1.05,
@@ -333,8 +334,8 @@ const ENEMIES = {
   archer: {
     name: "Archer",
     sprite: "archer",
-    hp: 20,
-    dmg: 7,
+    hp: 26,
+    dmg: 9,
     armor: 0,
     speed: 62,
     atkRate: 0.7,
@@ -350,8 +351,8 @@ const ENEMIES = {
   mage: {
     name: "Mage",
     sprite: "mage",
-    hp: 18,
-    dmg: 11,
+    hp: 24,
+    dmg: 13,
     armor: 0,
     speed: 50,
     atkRate: 0.42,
@@ -367,8 +368,8 @@ const ENEMIES = {
   healer: {
     name: "Healer",
     sprite: "healer",
-    hp: 22,
-    dmg: 3,
+    hp: 28,
+    dmg: 4,
     armor: 0,
     speed: 58,
     atkRate: 0.55,
@@ -377,15 +378,15 @@ const ENEMIES = {
     gold: 15,
     magic: 7,
     color: "#c9a227",
-    heal: 6,
+    heal: 7,
     healRate: 3.7,
     healRange: 168,
   },
   assassin: {
     name: "Assassin",
     sprite: "assassin",
-    hp: 22,
-    dmg: 4,
+    hp: 28,
+    dmg: 5.5,
     armor: 0,
     speed: 88,
     atkRate: 1.05,
@@ -402,9 +403,9 @@ const ENEMIES = {
     sprite: "butcher",
     boss: true,
     scale: 1.55,
-    hp: 90,
-    dmg: 12,
-    armor: 2,
+    hp: 108,
+    dmg: 14,
+    armor: 2.4,
     speed: 38,
     atkRate: 0.55,
     reach: 110,
@@ -419,8 +420,8 @@ const ENEMIES = {
     sprite: "ironhide",
     boss: true,
     scale: 1.5,
-    hp: 110,
-    dmg: 11,
+    hp: 155,
+    dmg: 14,
     armor: 16,
     speed: 28,
     atkRate: 0.48,
@@ -435,8 +436,8 @@ const ENEMIES = {
     sprite: "skycleaver",
     boss: true,
     scale: 1.5,
-    hp: 75,
-    dmg: 12,
+    hp: 105,
+    dmg: 15,
     armor: 1,
     speed: 44,
     atkRate: 0.55,
@@ -455,8 +456,8 @@ const ENEMIES = {
     sprite: "stormcaller",
     boss: true,
     scale: 1.48,
-    hp: 70,
-    dmg: 15,
+    hp: 100,
+    dmg: 18,
     armor: 0,
     speed: 36,
     atkRate: 0.38,
@@ -475,8 +476,8 @@ const ENEMIES = {
     sprite: "sunfallen",
     boss: true,
     scale: 1.48,
-    hp: 95,
-    dmg: 10,
+    hp: 130,
+    dmg: 13,
     armor: 3,
     speed: 34,
     atkRate: 0.5,
@@ -485,7 +486,7 @@ const ENEMIES = {
     gold: 80,
     magic: 22,
     color: "#d07030",
-    heal: 7,
+    heal: 8,
     healRate: 3.4,
     healRange: 180,
     projectile: "bolt",
@@ -3090,15 +3091,40 @@ function waveRoster(n) {
 
 function waveScale(n) {
   const w = Math.max(1, n);
-  const open = Math.min(w - 1, 4);
-  const rise = Math.max(0, Math.min(w - 5, 5));
+  // W1–3 stay near 1.0 so the first fights are readable.
+  // W4–10 climb hard so Armory alone cannot stroll Stage 1.
+  const open = Math.min(w - 1, 3);
+  const rise = Math.max(0, Math.min(w - 4, 6));
   const mid = Math.max(0, Math.min(w - STAGE_LEN, STAGE_LEN));
   const late = Math.max(0, w - STAGE_LEN * 2);
   return {
-    hp: Math.pow(1.015, open) * Math.pow(1.075, rise) * Math.pow(1.105, mid) * Math.pow(1.12, late),
-    dmg: Math.pow(1.008, open) * Math.pow(1.038, rise) * Math.pow(1.055, mid) * Math.pow(1.065, late),
+    hp: Math.pow(1.024, open) * Math.pow(1.168, rise) * Math.pow(1.108, mid) * Math.pow(1.118, late),
+    dmg: Math.pow(1.02, open) * Math.pow(1.108, rise) * Math.pow(1.05, mid) * Math.pow(1.06, late),
     gold: 1 + (w - 1) * 0.1,
   };
+}
+
+// Delay after spawning `wave` before the next pack. Early waves stay
+// readable; mid Stage 1 starts stacking so pressure overlaps.
+function nextWaveDelay(wave) {
+  const w = Math.max(1, wave);
+  // After wave 9 / 19 / … leave a beat so the boss is a set-piece,
+  // not a pile-on top of leftover trash.
+  if (w % 10 === 9) return 4.4;
+  if (w <= 2) return 8.2;
+  if (w <= 4) return 4.6;
+  if (w <= 6) return 2.45;
+  if (w <= 8) return 1.5;
+  if (w <= 12) return 2.05;
+  return 1.6;
+}
+
+function liveCap(wave) {
+  const n = Math.max(0, wave);
+  if (n < 4) return 3;
+  if (n < 7) return 6;
+  if (n < 10) return 6;
+  return 8;
 }
 
 function novaReachFor(extra) {
@@ -3185,6 +3211,8 @@ if (typeof module !== "undefined" && module.exports) {
     bossTypeFor,
     waveRoster,
     waveScale,
+    nextWaveDelay,
+    liveCap,
     novaReachFor,
     novaFreezeFor,
     novaCdFor,

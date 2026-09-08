@@ -1366,8 +1366,8 @@
 
   function tickWaves(dt) {
     if (firstBuyPending() || bossAlive()) return;
-    const live = run.enemies.filter((e) => e.hp > 0).length;
-    if (live >= liveCap()) {
+    const live = liveFoes();
+    if (live >= liveCap(run.wave)) {
       run.waveTimer = Math.max(run.waveTimer, 1.8);
       return;
     }
@@ -1674,16 +1674,8 @@
     sfx(500, 0.12, "sine", 0.05);
   }
 
-  function nextWaveDelay(wave) {
-    const early = wave < 6 ? 6.8 : wave < 10 ? 3.0 : 0.6;
-    return 8.2 + wave * 0.5 + early;
-  }
-
-  function liveCap() {
-    const n = run.wave || 0;
-    if (n < 6) return 3;
-    if (n < 10) return 4;
-    return 6;
+  function liveFoes() {
+    return run.enemies.filter((e) => e.hp > 0).length;
   }
 
   function charge() {
@@ -3885,7 +3877,8 @@
         },
         biomes: BIOMES.map((b) => b.name),
         stageLen: STAGE_LEN,
-        scale: [1, 8, 10, 16, 20].map((n) => ({ wave: n, ...waveScale(n) })),
+        scale: [1, 6, 8, 10, 16, 20].map((n) => ({ wave: n, ...waveScale(n) })),
+        tempo: [1, 6, 8, 9, 16].map((n) => ({ wave: n, delay: nextWaveDelay(n), liveCap: liveCap(n) })),
         startGold: START_GOLD,
         firstCrate: firstCrateCost(),
         firstBuyPending: firstBuyPending(),
