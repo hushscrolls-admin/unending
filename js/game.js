@@ -1030,7 +1030,7 @@
     }
     if (e.hp <= 0) {
       if (h && h.overkill && over > 0 && !fromDot) {
-        const near = nearest(e.x, (o) => o !== e && o.hp > 0);
+        const near = nearestInRange(e.x, splashRange(), (o) => o !== e);
         if (near) hitEnemy(near, over * 0.4 * h.overkill, false, true);
       }
       killEnemy(e);
@@ -1074,7 +1074,7 @@
     }
     if (h.rime && e.cc > 0) h.mana = Math.min(h.maxMana, h.mana + 10);
     if (h.wildfire) {
-      const near = nearest(e.x, (o) => o !== e && o.hp > 0);
+      const near = nearestInRange(e.x, splashRange(), (o) => o !== e);
       if (near) {
         applyDot(near, ampBurn({ kind: "burn", dps: h.dmg * 0.28 * h.wildfire, dur: 2.2 }));
         near.igniteFlash = Math.max(near.igniteFlash || 0, 0.6);
@@ -1323,8 +1323,19 @@
     return best;
   }
 
+  function meleeReach() {
+    const h = run.hero;
+    return (h && h.reach ? h.reach : 92) + 16;
+  }
+
+  function splashRange() {
+    return Math.min(220, ROAD.packGap * 0.38);
+  }
+
   function inMelee(e, reach) {
-    return Math.abs(e.x - run.hero.x) < reach;
+    if (!e || e.hp <= 0) return false;
+    const r = reach == null ? meleeReach() : reach;
+    return Math.abs(e.x - run.hero.x) <= r;
   }
 
   function isBehind(e) {
@@ -1336,10 +1347,20 @@
   }
 
   function livingInRange(range, allowBehind) {
+    const r = range == null ? meleeReach() : range;
     return run.enemies.filter((e) => {
-      if (Math.abs(e.x - run.hero.x) > range) return false;
+      if (!e || e.hp <= 0) return false;
+      if (Math.abs(e.x - run.hero.x) > r) return false;
       if (!allowBehind && shadowedBehind(e)) return false;
       return true;
+    });
+  }
+
+  function nearestInRange(fromX, range, pred) {
+    return nearest(fromX, (e) => {
+      if (!e || e.hp <= 0) return false;
+      if (Math.abs(e.x - fromX) > range) return false;
+      return pred ? pred(e) : true;
     });
   }
 
@@ -1370,16 +1391,17 @@
     let dmg = h.dmg * (mult || 1) * autoDmgMult();
     const crit = Math.random() < h.crit;
     if (crit) dmg *= 2 + (h.critDmg || 0);
-    const targets = livingInRange(h.reach + 16, false).sort(
+    const reach = meleeReach();
+    const targets = livingInRange(reach, false).sort(
       (a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x)
     );
-    if (targets[0]) {
+    if (targets[0] && inMelee(targets[0], reach)) {
       hitEnemy(targets[0], dmg, crit);
       if (extra && extra.stun) applyCc(targets[0], extra.stun);
       if (extra && extra.knock) applyKnock(targets[0], extra.knock);
       if (h.bleed) applyDot(targets[0], { kind: "bleed", dps: h.dmg * 0.22 * h.bleed, dur: 2.2 });
     }
-    if (targets[1] && extra && extra.cleave) {
+    if (targets[1] && extra && extra.cleave && inMelee(targets[1], reach)) {
       hitEnemy(targets[1], dmg * extra.cleave * (1 + (h.cleaveBonus || 0)), false);
     }
     sfx(crit ? 520 : 240, 0.06, "square", 0.05);
@@ -1614,7 +1636,7 @@
   function whirlHit() {
     const h = run.hero;
     const dmg = h.dmg * 0.85 * (h.whirlDmg || 1) * autoDmgMult();
-    const targets = run.enemies.filter((e) => Math.abs(e.x - h.x) < WHIRL_RANGE);
+    const targets = run.enemies.filter((e) => e.hp > 0 && Math.abs(e.x - h.x) <= WHIRL_RANGE);
     for (const e of targets) {
       hitEnemy(e, dmg, false);
       if (h.whirlStun) applyCc(e, h.whirlStun);
@@ -1887,14 +1909,14 @@
       }
     }
 
-    const melee = livingInRange(h.reach + 16, false);
+    const melee = livingInRange(meleeReach(), false);
 
     if (h.mode === "charge") {
       h.x += CHARGE_SPEED * (1 + (h.chargeSpd || 0)) * dt;
       h.anim = "atk";
       h.animT = 0.12;
       for (const e of [...run.enemies]) {
-        if (!e.charged && Math.abs(e.x - h.x) < 42) {
+        if (e.hp > 0 && !e.charged && Math.abs(e.x - h.x) < 42) {
           e.charged = true;
           e.aggro = true;
           hitEnemy(e, h.dmg * (0.8 + (h.chargeDmg || 0)) * autoDmgMult(), false);
@@ -4038,6 +4060,39 @@
         });
       }
       return out;
+    },
+    meleeProbe() {
+      const h = run.hero;
+      const reach = meleeReach();
+      const splash = splashRange();
+      return {
+        heroX: h ? h.x : 0,
+        reach,
+        splash,
+        whirl: WHIRL_RANGE,
+        inMelee: livingInRange(reach, false).map((e) => ({
+          type: e.type,
+          wave: e.wave,
+          x: Math.round(e.x),
+          dx: Math.round(e.x - (h ? h.x : 0)),
+          hp: Math.round(e.hp),
+          maxHp: Math.round(e.maxHp),
+          aggro: !!e.aggro,
+        })),
+        camps: run.enemies
+          .filter((e) => e.hp > 0)
+          .map((e) => ({
+            type: e.type,
+            wave: e.wave,
+            x: Math.round(e.x),
+            dx: Math.round(e.x - (h ? h.x : 0)),
+            hp: Math.round(e.hp * 10) / 10,
+            maxHp: Math.round(e.maxHp * 10) / 10,
+            aggro: !!e.aggro,
+            dots: (e.dots || []).map((d) => d.kind),
+            inMelee: inMelee(e, reach),
+          })),
+      };
     },
     smite() {
       [...run.enemies].forEach(killEnemy);
