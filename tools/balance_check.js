@@ -3,6 +3,7 @@
  * Prints the Scott reach table and fails if Nova, tempo, or the curve drift.
  * Stage = 10 waves. Bosses on 10 / 20 / 30.
  * Pass 15: virgin Warrior must die around S1 W6–8, not stroll to W38.
+ * Pass 15.1: 3-prestige must struggle at Ironhide and die soon after, not stroll to W40.
  */
 const {
   CLASSES,
@@ -97,6 +98,7 @@ const bars = [
   { label: "1 prestige  1st boss W10", waves: [10], hpMin: 2.2, hpMax: 3.2, dmgMin: 1.7, dmgMax: 2.2, packMax: 1 },
   { label: "2 prestige  mid S2 W14–16", waves: [14, 15, 16], hpMin: 3.6, hpMax: 5.6, dmgMin: 2.1, dmgMax: 2.9, packMax: 5 },
   { label: "3 prestige  2nd boss W20", waves: [20], hpMin: 6.4, hpMax: 9.2, dmgMin: 2.7, dmgMax: 3.7, packMax: 1 },
+  { label: "post-Ironhide W24", waves: [24], hpMin: 18, hpMax: 32, dmgMin: 5.2, dmgMax: 8.2, packMax: 6 },
 ];
 
 console.log("Scott reach table (stage = 10 waves)\n");
@@ -130,7 +132,7 @@ console.log("  freeze", NOVA.freeze, "maxed", maxFreeze.toFixed(2));
 console.log("  cd", NOVA.cd, "floor", minCd, "at absurd haste");
 
 console.log("\nTempo");
-for (const n of [1, 3, 6, 8, 9, 10, 16]) {
+for (const n of [1, 3, 6, 8, 9, 10, 16, 18, 21]) {
   console.log("  W" + n, "delay", nextWaveDelay(n) + "s", "liveCap", liveCap(n));
 }
 
@@ -175,8 +177,20 @@ assert((v0.hpAt[6] || 0) < v0.maxHp * 0.85, "virgin is already taking real damag
 assert(v0.overlapAt != null && v0.overlapAt <= 6, "packs overlap by mid Stage 1");
 assert((suite.p1.hpAt[10] || 0) > 0, "1 prestige reaches The Butcher");
 assert(suite.p1.deathWave == null || suite.p1.deathWave >= 10, "1 prestige does not die before the first boss");
+assert(suite.p1.deathWave != null && suite.p1.deathWave <= 13, "1 prestige dies soon after the first boss");
 assert((suite.p2.hpAt[14] || 0) > 0, "2 prestige reaches mid Stage 2");
+assert(suite.p2.deathWave != null && suite.p2.deathWave <= 18, "2 prestige dies around mid Stage 2");
 assert((suite.p3.hpAt[20] || 0) > 0, "3 prestige reaches the second boss");
+assert(suite.p3.deathWave != null, "3 prestige must die");
+assert(
+  suite.p3.deathWave >= 20 && suite.p3.deathWave <= 28,
+  "3 prestige dies at/soon after Ironhide, not W40 (got W" + suite.p3.deathWave + ")"
+);
+assert(suite.p3.survived === false, "3 prestige does not stroll to the wave cap");
+assert(nextWaveDelay(21) < nextWaveDelay(16), "Stage 3 packs arrive faster than mid Stage 2");
+assert(liveCap(21) > liveCap(16), "Stage 3 live cap stacks more bodies than mid Stage 2");
+assert(waveRoster(21).length === 6, "Stage 3 opens with 6-packs");
+assert(ENEMIES.ironhide.hp >= 175 && ENEMIES.ironhide.dmg >= 16, "Ironhide is a real 3-prestige wall");
 
 if (FAIL.length) {
   console.error("\nFAILED\n" + FAIL.map((m) => " - " + m).join("\n"));

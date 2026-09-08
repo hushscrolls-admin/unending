@@ -6,6 +6,8 @@
 //   2 prestiges → mid Stage 2 (waves 14–16)
 //   3 prestiges → 2nd boss (wave 20)
 // Pass 15: faster pack tempo + steeper foe HP/dmg so virgin cannot stroll to W38.
+// Pass 15.1: keep the virgin floor; kick harder after W16 so 3-prestige
+// cannot stroll from Ironhide to Stormcaller.
 const STAGE_LEN = 10;
 
 const NOVA = {
@@ -420,9 +422,9 @@ const ENEMIES = {
     sprite: "ironhide",
     boss: true,
     scale: 1.5,
-    hp: 155,
-    dmg: 14,
-    armor: 16,
+    hp: 190,
+    dmg: 18,
+    armor: 17,
     speed: 28,
     atkRate: 0.48,
     reach: 115,
@@ -3058,7 +3060,8 @@ function heirloomUpgrade(klass) {
 }
 
 function waveCount(n) {
-  return Math.min(5, Math.max(1, Math.ceil((n + 1) / 3.5)));
+  const cap = n >= 21 ? 6 : 5;
+  return Math.min(cap, Math.max(1, Math.ceil((n + 1) / 3.5)));
 }
 
 function isBossWave(n) {
@@ -3093,13 +3096,26 @@ function waveScale(n) {
   const w = Math.max(1, n);
   // W1–3 stay near 1.0 so the first fights are readable.
   // W4–10 climb hard so Armory alone cannot stroll Stage 1.
+  // W11–16 (early Stage 2) keep the 2-prestige mid-S2 bar.
+  // W17–20 and W21+ kick harder so Mend + Armory cannot stroll to W40.
   const open = Math.min(w - 1, 3);
   const rise = Math.max(0, Math.min(w - 4, 6));
-  const mid = Math.max(0, Math.min(w - STAGE_LEN, STAGE_LEN));
+  const earlyMid = Math.max(0, Math.min(w - STAGE_LEN, 6));
+  const lateMid = Math.max(0, Math.min(w - 16, 4));
   const late = Math.max(0, w - STAGE_LEN * 2);
   return {
-    hp: Math.pow(1.024, open) * Math.pow(1.168, rise) * Math.pow(1.108, mid) * Math.pow(1.118, late),
-    dmg: Math.pow(1.02, open) * Math.pow(1.108, rise) * Math.pow(1.05, mid) * Math.pow(1.06, late),
+    hp:
+      Math.pow(1.024, open) *
+      Math.pow(1.168, rise) *
+      Math.pow(1.108, earlyMid) *
+      Math.pow(1.16, lateMid) *
+      Math.pow(1.28, late),
+    dmg:
+      Math.pow(1.02, open) *
+      Math.pow(1.108, rise) *
+      Math.pow(1.05, earlyMid) *
+      Math.pow(1.085, lateMid) *
+      Math.pow(1.16, late),
     gold: 1 + (w - 1) * 0.1,
   };
 }
@@ -3116,7 +3132,9 @@ function nextWaveDelay(wave) {
   if (w <= 6) return 2.45;
   if (w <= 8) return 1.5;
   if (w <= 12) return 2.05;
-  return 1.6;
+  if (w <= 16) return 1.6;
+  if (w <= 20) return 1.15;
+  return 0.72;
 }
 
 function liveCap(wave) {
@@ -3124,7 +3142,9 @@ function liveCap(wave) {
   if (n < 4) return 3;
   if (n < 7) return 6;
   if (n < 10) return 6;
-  return 8;
+  if (n < 17) return 8;
+  if (n < 21) return 10;
+  return 12;
 }
 
 function novaReachFor(extra) {

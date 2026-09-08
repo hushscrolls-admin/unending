@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Deterministic virgin-Warrior reach sim (Iron ASAP, Power Strike on CD).
- * Used by balance_check. Pass 15: should die around S1 W6–8, not stroll to W38.
+ * Used by balance_check. Pass 15: virgin dies around S1 W6–8, not stroll to W38.
+ * Pass 15.1: 3-prestige struggles at Ironhide and dies soon after, not alive W40.
  */
 "use strict";
 
@@ -440,7 +441,7 @@ if (require.main === module) {
   report("AFTER   1p Oath 3", suite.p1);
   report("AFTER   2p Oath+Hide+Tempo", suite.p2);
   report("AFTER   3p + Mend", suite.p3);
-  console.log("\nPass 15 target: virgin dies S1 W6–8. 1p ≥ W10. 2p mid S2. 3p W20.");
+  console.log("\nPass 15.1 target: virgin dies S1 W6–8. 1p ≈ W10. 2p mid S2. 3p ≈ W20 and dies soon after.");
 }
 
 module.exports = { simulate, runSuite, report, LEGACY };
