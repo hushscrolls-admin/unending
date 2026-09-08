@@ -13,7 +13,7 @@
   const START_GOLD = 24;
   const DROP_PICK_R = 160;
   const DROP_MAGNET_AGE = 0.32;
-  const VITAL_CAP = 900;
+  const VITAL_CAP = HERO_VITAL_CAP;
   const HEAL_GOLD = "#ffe27a";
   const HEAL_GOLD_HOT = "#fff4a8";
   const HEAL_GOLD_INK = "#1a1208";
@@ -245,14 +245,7 @@
   }
 
   function hpPair(hp, max) {
-    const cap = VITAL_CAP;
-    let m = Math.floor(Number(max));
-    if (!Number.isFinite(m) || m < 1) m = 1;
-    if (m > cap) m = cap;
-    let n = Math.floor(Number(hp));
-    if (!Number.isFinite(n) || n < 0) n = 0;
-    if (n > m) n = m;
-    return { hp: n, max: m, text: n + "/" + m };
+    return heroHpPair(hp, max);
   }
 
   function heroFallbackMax() {
@@ -2419,7 +2412,7 @@
     ctx.strokeStyle = o.urgent ? "#ffe27a" : low ? "#ff8a6a" : "#1a120c";
     ctx.lineWidth = o.urgent ? 2.2 : 1.4;
     ctx.strokeRect(left + 0.5, y + 0.5, w - 1, hgt - 1);
-    const pair = hpPair(hp, max);
+    const pair = o.hero ? hpPair(hp, max) : worldHpPair(hp, max);
     const label = o.label ? o.label + " " + pair.text : pair.text;
     ctx.font = "bold 13px VT323, monospace";
     ctx.textAlign = "center";
@@ -2534,6 +2527,7 @@
         h: 13,
         label: "YOU",
         urgent: healUrgent(),
+        hero: true,
       });
     }
   }
@@ -3851,6 +3845,23 @@
         jumpDest,
         kills: run.kills,
         wave: run.wave,
+      };
+    },
+    hpLabels() {
+      const h = run.hero;
+      const hud = document.getElementById("hp-text");
+      return {
+        heroHud: hud ? hud.textContent : "",
+        heroPair: h ? hpPair(h.hp, h.maxHp).text : "",
+        foes: run.enemies
+          .filter((e) => e.hp > 0)
+          .map((e) => ({
+            name: e.def.name,
+            boss: !!e.def.boss,
+            hp: e.hp,
+            maxHp: e.maxHp,
+            label: worldHpPair(e.hp, e.maxHp).text,
+          })),
       };
     },
     smite() {

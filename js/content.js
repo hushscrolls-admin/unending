@@ -3073,6 +3073,34 @@ function allyHealAmount(def, wave, healerCount) {
   return raw * pile;
 }
 
+// Hero HUD / clamp only. World bars must not use this or late bosses
+// label as 900/900 while real damage still lands.
+const HERO_VITAL_CAP = 900;
+
+function formatHpPair(hp, max, cap) {
+  let m = Math.floor(Number(max));
+  if (!Number.isFinite(m) || m < 1) m = 1;
+  if (cap != null && Number.isFinite(cap) && m > cap) m = cap;
+  let n = Math.floor(Number(hp));
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (n > m) n = m;
+  return { hp: n, max: m, text: n + "/" + m };
+}
+
+function heroHpPair(hp, max) {
+  return formatHpPair(hp, max, HERO_VITAL_CAP);
+}
+
+function worldHpPair(hp, max) {
+  return formatHpPair(hp, max, null);
+}
+
+function foeHpAt(type, wave) {
+  const def = ENEMIES[type];
+  if (!def) return 0;
+  return def.hp * waveScale(wave).hp;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CLASSES,
@@ -3106,6 +3134,11 @@ if (typeof module !== "undefined" && module.exports) {
     novaFreezeFor,
     novaCdFor,
     allyHealAmount,
+    HERO_VITAL_CAP,
+    formatHpPair,
+    heroHpPair,
+    worldHpPair,
+    foeHpAt,
     emptyTrees,
     normalizeTrees,
     migrateSave,
