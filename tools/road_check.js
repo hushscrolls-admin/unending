@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * Walk-forward road layout plus Pass 10 curve / Nova / tree guards.
- * Does not replace balance_check.js — it only asserts the road still sits
- * on top of that floor.
+ * Walk-forward road + right-edge interval spawns, plus Pass 10 curve /
+ * Nova / tree guards. Does not replace balance_check.js.
  */
 "use strict";
 
@@ -21,6 +20,8 @@ const {
   stageOriginX,
   packWorldX,
   gateWorldX,
+  spawnEdgeX,
+  rangedKeepFor,
   BOSS_GATE_PAD,
   bossHoldX,
   clampBossWorldX,
@@ -69,7 +70,21 @@ ok(waveCount(1) >= 1 && waveCount(8) <= 4, "Pass 10 pack growth stays modest");
 
 ok(ROAD.heroWalk >= 100, "hero march speed is a walk, not a sprint");
 ok(ROAD.stopMelee < ROAD.stopRanged, "ranged holds farther than melee");
-ok(ROAD.packGap > ROAD.firstGap, "later camps sit farther apart than the first");
+ok(ROAD.packGap > ROAD.firstGap, "stage span still spaces later waves farther than the first");
+ok(ROAD.rangedKeep <= CLASSES.warrior.reach + 16, "ranged keep sits inside Warrior melee");
+ok(ROAD.kiteFace <= 80, "kite face-step stays inside melee");
+ok(ROAD.kiteLeash <= 12, "kite leash cannot walk the fight off the pile");
+ok(ENEMIES.archer.keep <= ROAD.rangedKeep, "archer keep is capped");
+ok(ENEMIES.mage.keep <= ROAD.rangedKeep, "enemy mage keep is capped");
+ok(rangedKeepFor(ENEMIES.archer) <= ROAD.rangedKeep, "archer keep helper matches the cap");
+ok(
+  ROAD.rangedKeep + ROAD.kiteLeash <= CLASSES.warrior.reach + 16,
+  "even a full kite leash stays inside Warrior melee"
+);
+ok(ROAD.heroWalk > ENEMIES.archer.speed, "Warrior walk outpaces archer backpedal");
+ok(spawnEdgeX(80, 808) === 80 + RANGE.spawnGap, "wide playfield still caps at the spawn gap");
+ok(spawnEdgeX(80, 200) === 220, "narrow playfield uses the right edge");
+ok(spawnEdgeX(400, 400 + 728) === 400 + RANGE.spawnGap, "spawn rides the hero, not a world camp");
 
 ok(NOVA.reach === 172 && NOVA.reachCap === 220, "Nova stay pack-scale");
 ok(NOVA.cd === 9 && NOVA.cdMin === 7 && NOVA.mana === 28, "Nova 9s / 7s floor / 28 mana");
@@ -108,6 +123,28 @@ for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
 ok(CLASSES.warrior.style === "melee", "Warrior is melee");
 ok(CLASSES.mage.style === "ranged" && CLASSES.ranger.style === "ranged", "Mage/Ranger stay ranged");
 
+// Walk-up sim: shield parks Warrior; archer must still sit in melee.
+{
+  let hx = 80;
+  let ax = spawnEdgeX(hx, hx + 728) + 56;
+  let sx = spawnEdgeX(hx, hx + 728);
+  let plant = null;
+  const keep = rangedKeepFor(ENEMIES.archer);
+  const reach = CLASSES.warrior.reach + 16;
+  const dt = 1 / 60;
+  for (let t = 0; t < 10; t += dt) {
+    if (Math.abs(sx - hx) > 56) sx += Math.sign(hx + 70 - sx) * ENEMIES.shield.speed * dt;
+    let desired = Math.min(hx + keep, hx + 728 - 36);
+    if (plant == null && ax <= desired + 12) plant = ax;
+    const leash = (plant != null ? plant : desired) + ROAD.kiteLeash;
+    desired = Math.min(desired, leash);
+    if (ax > desired + 8) ax -= ENEMIES.archer.speed * dt;
+    const blocked = sx - hx < ROAD.stopMelee || ax - hx < reach - 6;
+    if (!blocked) hx += ROAD.heroWalk * dt;
+  }
+  ok(ax - hx <= reach, "shield-parked Warrior still reaches the archer (gap " + Math.round(ax - hx) + ")");
+}
+
 if (FAIL.length) {
   console.error("road_check failed:\n - " + FAIL.join("\n - "));
   process.exit(1);
@@ -119,6 +156,8 @@ console.log(
     {
       biomes: BIOMES.map((b) => b.name),
       firstPack: packWorldX(1, 1),
+      spawn: spawnEdgeX(80, 808),
+      kite: { keep: ROAD.rangedKeep, face: ROAD.kiteFace, leash: ROAD.kiteLeash },
       bossX: packWorldX(1, 10),
       hold: bossHoldX(1),
       gate: gateWorldX(1),
