@@ -107,7 +107,7 @@ New ranks live under `trees.warrior` / `trees.mage` / `trees.ranger`.
 
 The S cooldown pip is always shown. 1 / 2 / 3 pips and Armory skill buttons stay locked until that class tree grants the slot.
 
-Duskwood roadside pines are layered silhouettes with trunks — they should not read as orange “up arrow” UI. WAIT stamps and HEAL RANGE are unchanged.
+Roadside deco is the same tree grammar in every biome: a trunk, a wide blocky canopy, then a theme accent. Duskwood and Ember add ember/flame tongues so the trees read as **on fire**, not as up-arrow chevrons. Rime gets snow caps, Storm a lightning tick, Sunken a gilt edge. WAIT stamps and HEAL RANGE are unchanged.
 
 ## Art
 

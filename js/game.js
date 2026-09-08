@@ -2216,39 +2216,143 @@
     }
   }
 
+  function treePalette(biome) {
+    if (biome.id === "duskwood") {
+      return {
+        ink: "#0a0806",
+        trunk: "#5a3a1c",
+        bark: "#8a5a28",
+        canopy: "#3a5a28",
+        canopyHi: "#5a7a38",
+        fire: true,
+        ember: "#ff6a22",
+        flame: "#ffb040",
+        core: "#fff4a8",
+      };
+    }
+    if (biome.id === "ember") {
+      return {
+        ink: "#0a0402",
+        trunk: "#5a2814",
+        bark: "#8a3a18",
+        canopy: "#6a3218",
+        canopyHi: "#b04a20",
+        fire: true,
+        ember: "#ff4a12",
+        flame: "#ff8a2a",
+        core: "#ffe27a",
+      };
+    }
+    if (biome.id === "rime") {
+      return {
+        ink: "#061018",
+        trunk: "#3a5060",
+        bark: "#6a88a0",
+        canopy: "#5a7a8c",
+        canopyHi: "#c8e8f6",
+        frost: true,
+      };
+    }
+    if (biome.id === "storm") {
+      return {
+        ink: "#080610",
+        trunk: "#3a2a58",
+        bark: "#6a4a88",
+        canopy: "#4a3080",
+        canopyHi: "#8a64d0",
+        spark: true,
+      };
+    }
+    return {
+      ink: "#140c06",
+      trunk: "#5a3a18",
+      bark: "#8a5a20",
+      canopy: "#6a4a1c",
+      canopyHi: "#e6c15a",
+      gilt: true,
+    };
+  }
+
+  function fillBlock(x, y, w, h, fill, ink) {
+    ctx.fillStyle = ink;
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  function drawRoadTree(x, gy, seed, pal) {
+    const lean = (seed % 3) - 1;
+    const scale = 1.28 + (seed % 3) * 0.12;
+    const cx = Math.round(x + 22 + lean * 8);
+    const trunkW = Math.max(10, Math.round(12 * scale));
+    const trunkH = Math.round(46 * scale);
+    const massW = Math.round(64 * scale);
+    const massH = Math.round(36 * scale);
+    const capW = Math.round(48 * scale);
+    const capH = Math.round(16 * scale);
+    const trunkTop = gy - trunkH;
+    const massY = trunkTop - Math.round(massH * 0.62);
+    const capY = massY - Math.round(capH * 0.45);
+    fillBlock(cx - Math.floor(trunkW / 2), trunkTop, trunkW, trunkH, pal.trunk, pal.ink);
+    ctx.fillStyle = pal.bark;
+    ctx.fillRect(cx - Math.floor(trunkW / 2) + 3, trunkTop + 8, 3, trunkH - 14);
+    fillBlock(cx - Math.floor(massW / 2), massY, massW, massH, pal.canopy, pal.ink);
+    fillBlock(cx - Math.floor(capW / 2), capY, capW, capH, pal.canopy, pal.ink);
+    fillBlock(cx - Math.floor(massW / 2) - 10, massY + 8, 16, massH - 14, pal.canopy, pal.ink);
+    fillBlock(cx + Math.floor(massW / 2) - 6, massY + 6, 18, massH - 12, pal.canopy, pal.ink);
+    ctx.fillStyle = pal.canopyHi;
+    ctx.fillRect(cx - 14, massY + 8, 22, 6);
+    ctx.fillRect(cx + 8, massY + 14, 16, 5);
+    if (pal.frost) {
+      ctx.fillStyle = "#e8f6ff";
+      ctx.fillRect(cx - Math.floor(capW / 2), capY - 2, capW, 4);
+      ctx.fillRect(cx - Math.floor(massW / 2) + 6, massY + 2, massW - 12, 3);
+    }
+    if (pal.spark) {
+      ctx.fillStyle = "#d8c4ff";
+      ctx.fillRect(cx + Math.floor(massW / 2) - 4, capY - 4, 2, 14);
+      ctx.fillRect(cx + Math.floor(massW / 2) - 8, capY + 4, 10, 2);
+    }
+    if (pal.gilt) {
+      ctx.fillStyle = pal.canopyHi;
+      ctx.fillRect(cx - Math.floor(capW / 2) + 4, capY, capW - 8, 3);
+      ctx.fillRect(cx + 12, massY + 12, 6, 6);
+    }
+    if (pal.fire) {
+      ctx.fillStyle = "rgba(255, 90, 20, 0.28)";
+      ctx.beginPath();
+      ctx.ellipse(cx, massY + massH * 0.45, massW * 0.42, massH * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = pal.ember;
+      ctx.fillRect(cx - 16, massY + 10, 10, 8);
+      ctx.fillRect(cx + 6, massY + 16, 12, 8);
+      ctx.fillRect(cx - 4, capY + 4, 8, 6);
+      ctx.fillStyle = pal.flame;
+      ctx.fillRect(cx - 13, massY + 12, 5, 4);
+      ctx.fillRect(cx + 9, massY + 18, 6, 4);
+      ctx.fillStyle = pal.core;
+      ctx.fillRect(cx - 2, capY + 6, 3, 3);
+      ctx.fillStyle = pal.ember;
+      ctx.fillRect(cx - 6, trunkTop + 12, 4, 4);
+      ctx.fillRect(cx + 2, trunkTop + 22, 3, 3);
+      ctx.fillRect(cx - 4, gy - 8, 3, 3);
+      ctx.fillStyle = pal.flame;
+      ctx.fillRect(cx + Math.floor(massW / 2) - 2, massY + 10, 5, 7);
+      ctx.fillRect(cx - Math.floor(massW / 2) + 2, massY + 14, 5, 6);
+    }
+  }
+
+  // Roadside deco: oak-shaped trees (wide canopy + trunk), never a chevron.
+  // Duskwood / Ember add ember cores and side flame; other biomes keep the same grammar.
   function drawSilhouettes(biome, gy) {
     const span = 220;
     const start = Math.floor(camera / span) - 1;
+    const pal = treePalette(biome);
     ctx.save();
-    ctx.fillStyle = biome.accent;
-    ctx.globalAlpha = biome.id === "duskwood" ? 0.28 : 0.55;
+    ctx.globalAlpha = 0.94;
     for (let i = 0; i < 8; i++) {
-      const wx = (start + i) * span + 40;
-      const x = sx(wx);
-      const hgt = 90 + ((start + i) % 5) * 16;
-      if (biome.id === "duskwood") {
-        continue;
-      } else if (biome.id === "ember") {
-        ctx.fillRect(x + 8, gy - hgt * 0.45, 22, hgt * 0.45);
-        ctx.beginPath();
-        ctx.moveTo(x, gy - hgt * 0.45);
-        ctx.lineTo(x + 19, gy - hgt);
-        ctx.lineTo(x + 38, gy - hgt * 0.45);
-        ctx.fill();
-      } else if (biome.id === "rime") {
-        ctx.beginPath();
-        ctx.moveTo(x + 16, gy);
-        ctx.lineTo(x + 6, gy - hgt);
-        ctx.lineTo(x + 26, gy - hgt * 0.7);
-        ctx.lineTo(x + 36, gy);
-        ctx.fill();
-      } else if (biome.id === "storm") {
-        ctx.fillRect(x + 10, gy - hgt * 0.35, 28, hgt * 0.35);
-        ctx.fillRect(x + 18, gy - hgt, 8, hgt);
-      } else {
-        ctx.fillRect(x + 4, gy - hgt * 0.6, 34, hgt * 0.6);
-        ctx.fillRect(x + 12, gy - hgt, 18, hgt * 0.4);
-      }
+      const n = start + i;
+      drawRoadTree(sx(n * span + 40), gy, Math.abs(n), pal);
     }
     ctx.restore();
   }
