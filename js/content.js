@@ -34,17 +34,36 @@ function clampCombatRange(range, playSpan) {
   return Math.min(n, roadRangeCap(playSpan));
 }
 
-// Walk-forward road. Camps sit at fixed distances and only aggro
-// when they enter the wake line. A boss caps each 10-wave biome.
+// Walk-forward road. Trash packs enter from screen-right on a timer.
+// Stage span / gate math still space biomes; bosses cap each area.
 const ROAD = {
   firstGap: 420,
   packGap: 580,
-  packSpread: 32,
+  packSpread: 28,
   afterBoss: 340,
   heroWalk: 124,
   stopMelee: 110,
   stopRanged: 172,
+  // Ranged plant inside a gap Warrior can walk into. Kite face/leash
+  // stop endless backpedal off the fight (Charge must not be required).
+  rangedKeep: 168,
+  kiteFace: 70,
+  kiteLeash: 36,
 };
+
+function spawnEdgeX(heroX, playRightX) {
+  const far = (Number(playRightX) || 0) + 20;
+  const cap = (Number(heroX) || 80) + RANGE.spawnGap;
+  if (!Number.isFinite(far)) return cap;
+  if (!Number.isFinite(cap)) return far;
+  return Math.min(far, cap);
+}
+
+function rangedKeepFor(def) {
+  const raw = def && def.keep != null ? Number(def.keep) : ROAD.rangedKeep;
+  const n = Number.isFinite(raw) ? raw : ROAD.rangedKeep;
+  return Math.min(ROAD.rangedKeep, Math.max(80, n));
+}
 
 const BIOMES = [
   {
@@ -314,7 +333,7 @@ const ENEMIES = {
     speed: 62,
     atkRate: 0.7,
     reach: 78,
-    keep: 250,
+    keep: 168,
     gold: 13,
     magic: 4,
     color: "#4a6a3a",
@@ -331,7 +350,7 @@ const ENEMIES = {
     speed: 50,
     atkRate: 0.42,
     reach: 78,
-    keep: 270,
+    keep: 168,
     gold: 16,
     magic: 8,
     color: "#3a4aaa",
@@ -348,7 +367,7 @@ const ENEMIES = {
     speed: 58,
     atkRate: 0.55,
     reach: 78,
-    keep: 200,
+    keep: 148,
     gold: 15,
     magic: 7,
     color: "#c9a227",
@@ -3142,6 +3161,8 @@ if (typeof module !== "undefined" && module.exports) {
     stageOriginX,
     packWorldX,
     gateWorldX,
+    spawnEdgeX,
+    rangedKeepFor,
     BOSS_GATE_PAD,
     bossHoldX,
     clampBossWorldX,

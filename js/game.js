@@ -43,11 +43,11 @@
 
   function emptyRun() {
     return {
-      wave: 1,
+      wave: 0,
       stage: 1,
       kills: 0,
       gold: 0,
-      waveTimer: 0,
+      waveTimer: 0.45,
       spawning: false,
       hero: null,
       wolf: null,
@@ -58,6 +58,9 @@
       shopFreeze: 0,
       shopNudgeAt: 0,
       placed: {},
+      gates: [],
+      gateX: null,
+      bossHoldX: null,
       gateOpen: false,
       biomeFlash: 0,
       levels: Object.fromEntries(RUN_UPGRADES.map((u) => [u.id, 0])),
@@ -593,10 +596,11 @@
     if (jumped) {
       jumpToWave(jumpDest, { grant: true });
     } else {
-      placeStage(1);
-      run.wave = 1;
+      run.wave = 0;
+      run.waveTimer = 0.45;
       run.stage = 1;
       run.hero.x = stageOriginX(1);
+      run.hero.homeX = run.hero.x;
       run.hero.mode = "march";
       if (run.wolf) run.wolf.x = run.hero.x + 72;
       followCamera(0);
@@ -1085,6 +1089,7 @@
     run.enemies = run.enemies.filter((x) => x !== e);
     if (wasBoss && !bossAlive()) {
       openGate();
+      run.waveTimer = nextWaveDelay(run.wave);
     }
   }
 
@@ -1094,19 +1099,6 @@
 
   function playRight() {
     return camera + W - SHOP_W;
-  }
-
-  function viewLeft() {
-    return camera - 28;
-  }
-
-  function onScreen(x) {
-    return x > viewLeft() && x < camera + playClipW() + 36;
-  }
-
-  function inAggroView(x) {
-    const wake = camera + Math.min(playClipW() * 0.64, 540);
-    return x > camera + 36 && x < wake;
   }
 
   function followCamera(dt) {
@@ -1125,7 +1117,8 @@
       type,
       def,
       wave,
-      aggro: false,
+      aggro: true,
+      plantX: null,
       x,
       hp: def.hp * sc.hp,
       maxHp: def.hp * sc.hp,
@@ -1155,9 +1148,16 @@
     return run.stage || 1;
   }
 
+  function liveBossHoldX(e) {
+    if (run.bossHoldX != null && Number.isFinite(run.bossHoldX)) return run.bossHoldX;
+    if (run.gateX != null && Number.isFinite(run.gateX)) return run.gateX - BOSS_GATE_PAD;
+    return bossHoldX(foeStage(e));
+  }
+
   function holdBossToGate(e) {
     if (!e || !e.def || !e.def.boss) return e;
-    e.x = clampBossWorldX(e.x, foeStage(e));
+    const cap = liveBossHoldX(e);
+    if (Number.isFinite(e.x) && Number.isFinite(cap)) e.x = Math.min(e.x, cap);
     return e;
   }
 
@@ -1165,22 +1165,6 @@
     if (!e || !dx) return e;
     e.x += dx;
     return holdBossToGate(e);
-  }
-
-  function placePack(wave) {
-    const stage = stageIndex(wave);
-    const base = packWorldX(stage, wave);
-    waveRoster(wave).forEach((type, i) => {
-      run.enemies.push(makeFoe(type, wave, base + i * ROAD.packSpread));
-    });
-  }
-
-  function placeStage(stage) {
-    const s = Math.max(1, stage);
-    if (run.placed[s]) return;
-    run.placed[s] = true;
-    syncWolfVitals(true);
-    for (let i = 1; i <= STAGE_LEN; i++) placePack((s - 1) * STAGE_LEN + i);
   }
 
   function announceWave(n) {
@@ -1213,50 +1197,61 @@
     if (firstBuyPending()) nudgeFirstBuy(true);
   }
 
+  function markGate(stage, x) {
+    const s = Math.max(1, stage || 1);
+    const gx = Number(x);
+    if (!Number.isFinite(gx)) return;
+    run.gates = (run.gates || []).filter((g) => g.stage !== s);
+    run.gates.push({ stage: s, x: gx });
+    run.gateX = gx;
+  }
+
   function openGate() {
     run.gateOpen = true;
     const next = (run.stage || 1) + 1;
-    placeStage(next);
+    const h = run.hero;
+    const ahead = (h ? h.x : HOME_X) + ROAD.afterBoss;
+    markGate(run.stage || 1, ahead);
+    run.bossHoldX = ahead - BOSS_GATE_PAD;
     toast("The road opens — " + biomeForStage(next).name);
     sfx(180, 0.2, "triangle", 0.05);
   }
 
-  function stageAtHero() {
-    const h = run.hero;
-    if (!h) return 1;
-    return Math.max(1, Math.floor((h.x - HOME_X + 8) / stageSpan()) + 1);
-  }
-
   function maybeAdvanceStage() {
-    const next = stageAtHero();
-    if (next > (run.stage || 1) && run.gateOpen) {
-      run.stage = next;
-      run.gateOpen = false;
-      run.biomeFlash = 1.15;
-      run.wave = Math.max(run.wave, (next - 1) * STAGE_LEN + 1);
-      toast(biomeForStage(next).name);
-      sfx(240, 0.16, "sine", 0.05);
-      buildShop();
-    }
+    const h = run.hero;
+    if (!h || !run.gateOpen) return;
+    const gx = run.gateX != null ? run.gateX : gateWorldX(run.stage || 1);
+    if (h.x < gx) return;
+    const next = (run.stage || 1) + 1;
+    run.stage = next;
+    run.gateOpen = false;
+    run.biomeFlash = 1.15;
+    toast(biomeForStage(next).name);
+    sfx(240, 0.16, "sine", 0.05);
+    buildShop();
   }
 
   function tryAggro(e) {
     if (firstBuyPending()) return;
-    if (e.aggro || e.hp <= 0) return;
-    if (!inAggroView(e.x)) return;
+    if (!e || e.hp <= 0) return;
     e.aggro = true;
-    if (e.wave > run.wave) {
-      run.wave = e.wave;
-      announceWave(e.wave);
-    }
   }
 
   function fightBlocking() {
     const h = run.hero;
     if (!h) return false;
     const c = classDef(h.klass);
-    const stop = c.style === "melee" ? ROAD.stopMelee : ROAD.stopRanged;
-    return run.enemies.some((e) => e.aggro && e.hp > 0 && e.x - h.x < stop && e.x > h.x - 100);
+    const meleeHero = c.style === "melee";
+    const stop = meleeHero ? ROAD.stopMelee : ROAD.stopRanged;
+    return run.enemies.some((e) => {
+      if (!e.aggro || e.hp <= 0) return false;
+      if (e.x <= h.x - 100) return false;
+      const gap = e.x - h.x;
+      if (meleeHero && (e.def.projectile || e.def.heal)) {
+        return gap < meleeReach() - 6;
+      }
+      return gap < stop;
+    });
   }
 
   function shouldMarch() {
@@ -1273,15 +1268,16 @@
   function jumpToWave(dest, opts) {
     const n = Math.max(1, Math.floor(dest || 1));
     const stage = stageIndex(n);
+    jumpDest = n;
     run.enemies = [];
     run.placed = {};
+    run.gates = [];
     run.gateOpen = false;
-    placeStage(stage);
-    run.enemies = run.enemies.filter((e) => e.wave >= n);
-    run.wave = n;
+    run.gateX = null;
+    run.bossHoldX = null;
     run.stage = stage;
     if (run.hero) {
-      run.hero.x = packWorldX(stage, n) - 240;
+      run.hero.x = stageOriginX(stage);
       run.hero.mode = "march";
       run.hero.homeX = run.hero.x;
     }
@@ -1296,13 +1292,50 @@
     }
     followCamera(0);
     syncWolfVitals(false);
-    announceWave(n);
-    jumpDest = 0;
+    beginWave(n);
+  }
+
+  function spawnLineX() {
+    const h = run.hero;
+    return spawnEdgeX(h ? h.x : HOME_X, playRight());
   }
 
   function spawnWave() {
-    placePack(run.wave);
-    announceWave(run.wave);
+    const n = run.wave;
+    syncWolfVitals(true);
+    const roster = waveRoster(n);
+    const far = spawnLineX();
+    roster.forEach((type, i) => {
+      const e = makeFoe(type, n, far + i * ROAD.packSpread);
+      e.aggro = !firstBuyPending();
+      e.anim = "walk";
+      run.enemies.push(e);
+    });
+    if (isBossWave(n)) {
+      const h = run.hero;
+      const hold = Math.min(playRight() - 40, (h ? h.x : HOME_X) + RANGE.spawnGap + 48);
+      run.bossHoldX = hold;
+      markGate(stageIndex(n), hold + BOSS_GATE_PAD);
+      for (const e of run.enemies) holdBossToGate(e);
+    }
+    announceWave(n);
+  }
+
+  function beginWave(n) {
+    run.wave = Math.max(1, n);
+    spawnWave();
+    run.waveTimer = isBossWave(run.wave) ? 1e9 : nextWaveDelay(run.wave);
+  }
+
+  function tickWaves(dt) {
+    if (firstBuyPending() || bossAlive()) return;
+    const live = run.enemies.filter((e) => e.hp > 0).length;
+    if (live >= liveCap()) {
+      run.waveTimer = Math.max(run.waveTimer, 1.8);
+      return;
+    }
+    run.waveTimer -= dt;
+    if (run.waveTimer <= 0) beginWave((run.wave || 0) + 1);
   }
 
   function defTitle(n) {
@@ -1895,6 +1928,7 @@
     run.biomeFlash = Math.max(0, (run.biomeFlash || 0) - dt);
     followCamera(dt);
     maybeAdvanceStage();
+    tickWaves(dt);
     for (const e of run.enemies) tryAggro(e);
     if (firstBuyPending()) {
       if ((run.firstBuyHold || 0) > 0) {
@@ -2029,7 +2063,7 @@
       const dx = e.x - tgt.x;
       e.facing = dx >= 0 ? -1 : 1;
       if (ranged) {
-        const keep = e.def.keep;
+        const keep = rangedKeepFor(e.def);
         const healRange = e.def.healRange || 0;
         let desired = Math.min(h.x + keep, playRight() - 36);
         if (e.def.heal) {
@@ -2038,17 +2072,16 @@
             (o) => o !== e && o.hp < o.maxHp * 0.92
           );
           if (wounded && Math.abs(wounded.x - e.x) > healRange) {
-            desired = Math.max(h.x + 130, Math.min(wounded.x + 28, h.x + keep));
+            desired = Math.max(h.x + ROAD.kiteFace, Math.min(wounded.x + 28, h.x + keep));
           }
         }
-        const maxCamp = h.x + keep + 36;
-        if (e.x > maxCamp) {
+        if (e.plantX == null && e.x <= desired + 12) e.plantX = e.x;
+        const leash = (e.plantX != null ? e.plantX : desired) + ROAD.kiteLeash;
+        desired = Math.min(desired, leash);
+        if (e.x > desired + 8) {
           e.x -= spd * dt;
           e.anim = "walk";
-        } else if (e.x > desired + 8) {
-          e.x -= spd * dt;
-          e.anim = "walk";
-        } else if (e.x < h.x + 110) {
+        } else if (e.x < h.x + ROAD.kiteFace && e.x + 4 < leash) {
           e.x += spd * dt;
           e.anim = "walk";
         } else {
@@ -2359,7 +2392,6 @@
     ctx.fillRect(0, gy + 4, W, H - gy);
     ctx.fillStyle = biome.fog;
     ctx.fillRect(0, gy - 86, W, 94);
-    drawSilhouettes(biome, gy);
     drawWeather();
     if ((run.biomeFlash || 0) > 0) {
       ctx.fillStyle = "rgba(8,6,4," + run.biomeFlash * 0.55 + ")";
@@ -2367,154 +2399,14 @@
     }
   }
 
-  function treePalette(biome) {
-    if (biome.id === "duskwood") {
-      return {
-        ink: "#0a0806",
-        trunk: "#5a3a1c",
-        bark: "#8a5a28",
-        canopy: "#3a5a28",
-        canopyHi: "#5a7a38",
-        fire: true,
-        ember: "#ff6a22",
-        flame: "#ffb040",
-        core: "#fff4a8",
-      };
-    }
-    if (biome.id === "ember") {
-      return {
-        ink: "#0a0402",
-        trunk: "#5a2814",
-        bark: "#8a3a18",
-        canopy: "#6a3218",
-        canopyHi: "#b04a20",
-        fire: true,
-        ember: "#ff4a12",
-        flame: "#ff8a2a",
-        core: "#ffe27a",
-      };
-    }
-    if (biome.id === "rime") {
-      return {
-        ink: "#061018",
-        trunk: "#3a5060",
-        bark: "#6a88a0",
-        canopy: "#5a7a8c",
-        canopyHi: "#c8e8f6",
-        frost: true,
-      };
-    }
-    if (biome.id === "storm") {
-      return {
-        ink: "#080610",
-        trunk: "#3a2a58",
-        bark: "#6a4a88",
-        canopy: "#4a3080",
-        canopyHi: "#8a64d0",
-        spark: true,
-      };
-    }
-    return {
-      ink: "#140c06",
-      trunk: "#5a3a18",
-      bark: "#8a5a20",
-      canopy: "#6a4a1c",
-      canopyHi: "#e6c15a",
-      gilt: true,
-    };
-  }
-
-  function fillBlock(x, y, w, h, fill, ink) {
-    ctx.fillStyle = ink;
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = fill;
-    ctx.fillRect(x, y, w, h);
-  }
-
-  function drawRoadTree(x, gy, seed, pal) {
-    const lean = (seed % 3) - 1;
-    const scale = 1.28 + (seed % 3) * 0.12;
-    const cx = Math.round(x + 22 + lean * 8);
-    const trunkW = Math.max(10, Math.round(12 * scale));
-    const trunkH = Math.round(46 * scale);
-    const massW = Math.round(64 * scale);
-    const massH = Math.round(36 * scale);
-    const capW = Math.round(48 * scale);
-    const capH = Math.round(16 * scale);
-    const trunkTop = gy - trunkH;
-    const massY = trunkTop - Math.round(massH * 0.62);
-    const capY = massY - Math.round(capH * 0.45);
-    fillBlock(cx - Math.floor(trunkW / 2), trunkTop, trunkW, trunkH, pal.trunk, pal.ink);
-    ctx.fillStyle = pal.bark;
-    ctx.fillRect(cx - Math.floor(trunkW / 2) + 3, trunkTop + 8, 3, trunkH - 14);
-    fillBlock(cx - Math.floor(massW / 2), massY, massW, massH, pal.canopy, pal.ink);
-    fillBlock(cx - Math.floor(capW / 2), capY, capW, capH, pal.canopy, pal.ink);
-    fillBlock(cx - Math.floor(massW / 2) - 10, massY + 8, 16, massH - 14, pal.canopy, pal.ink);
-    fillBlock(cx + Math.floor(massW / 2) - 6, massY + 6, 18, massH - 12, pal.canopy, pal.ink);
-    ctx.fillStyle = pal.canopyHi;
-    ctx.fillRect(cx - 14, massY + 8, 22, 6);
-    ctx.fillRect(cx + 8, massY + 14, 16, 5);
-    if (pal.frost) {
-      ctx.fillStyle = "#e8f6ff";
-      ctx.fillRect(cx - Math.floor(capW / 2), capY - 2, capW, 4);
-      ctx.fillRect(cx - Math.floor(massW / 2) + 6, massY + 2, massW - 12, 3);
-    }
-    if (pal.spark) {
-      ctx.fillStyle = "#d8c4ff";
-      ctx.fillRect(cx + Math.floor(massW / 2) - 4, capY - 4, 2, 14);
-      ctx.fillRect(cx + Math.floor(massW / 2) - 8, capY + 4, 10, 2);
-    }
-    if (pal.gilt) {
-      ctx.fillStyle = pal.canopyHi;
-      ctx.fillRect(cx - Math.floor(capW / 2) + 4, capY, capW - 8, 3);
-      ctx.fillRect(cx + 12, massY + 12, 6, 6);
-    }
-    if (pal.fire) {
-      ctx.fillStyle = "rgba(255, 90, 20, 0.28)";
-      ctx.beginPath();
-      ctx.ellipse(cx, massY + massH * 0.45, massW * 0.42, massH * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = pal.ember;
-      ctx.fillRect(cx - 16, massY + 10, 10, 8);
-      ctx.fillRect(cx + 6, massY + 16, 12, 8);
-      ctx.fillRect(cx - 4, capY + 4, 8, 6);
-      ctx.fillStyle = pal.flame;
-      ctx.fillRect(cx - 13, massY + 12, 5, 4);
-      ctx.fillRect(cx + 9, massY + 18, 6, 4);
-      ctx.fillStyle = pal.core;
-      ctx.fillRect(cx - 2, capY + 6, 3, 3);
-      ctx.fillStyle = pal.ember;
-      ctx.fillRect(cx - 6, trunkTop + 12, 4, 4);
-      ctx.fillRect(cx + 2, trunkTop + 22, 3, 3);
-      ctx.fillRect(cx - 4, gy - 8, 3, 3);
-      ctx.fillStyle = pal.flame;
-      ctx.fillRect(cx + Math.floor(massW / 2) - 2, massY + 10, 5, 7);
-      ctx.fillRect(cx - Math.floor(massW / 2) + 2, massY + 14, 5, 6);
-    }
-  }
-
-  // Roadside deco: oak-shaped trees (wide canopy + trunk), never a chevron.
-  // Duskwood / Ember add ember cores and side flame; other biomes keep the same grammar.
-  function drawSilhouettes(biome, gy) {
-    const span = 220;
-    const start = Math.floor(camera / span) - 1;
-    const pal = treePalette(biome);
-    ctx.save();
-    ctx.globalAlpha = 0.94;
-    for (let i = 0; i < 8; i++) {
-      const n = start + i;
-      drawRoadTree(sx(n * span + 40), gy, Math.abs(n), pal);
-    }
-    ctx.restore();
-  }
-
   function drawGates(gy) {
-    const maxStage = Math.max(run.stage || 1, ...Object.keys(run.placed || {}).map(Number), 1);
-    for (let s = 1; s <= maxStage; s++) {
-      const gx = gateWorldX(s);
+    const listed = (run.gates || []).slice();
+    if (!listed.length && run.gateX != null) listed.push({ stage: run.stage || 1, x: run.gateX });
+    for (const g of listed) {
+      const gx = g.x;
       const x = sx(gx);
       if (x < -80 || x > W + 80) continue;
-      const next = biomeForStage(s + 1);
+      const next = biomeForStage((g.stage || run.stage || 1) + 1);
       ctx.save();
       ctx.fillStyle = next.accent;
       ctx.globalAlpha = 0.85;
@@ -3100,22 +2992,12 @@
       const lunge = e.anim === "atk" && e.animT < 0.2 ? 14 * face : 0;
       const hgt = 150 * (e.def.scale || 1);
       ctx.save();
-      if (!e.aggro) ctx.globalAlpha = 0.72;
       drawImg(spr, sx(e.x) + lunge, gy + 6 + bob, hgt, {
         flash: e.flash > 0 || e.cc > 0 || e.igniteFlash > 0,
         flip: face > 0,
         hue: e.cc > 0 ? 180 : e.igniteFlash > 0 ? 20 : 0,
       });
       ctx.restore();
-      if (!e.aggro && onScreen(e.x)) {
-        drawStamp("WAIT", sx(e.x), gy + 20, {
-          color: "#d8e0c8",
-          bg: "rgba(8,10,8,0.72)",
-          border: "#6a7a58",
-          font: "bold 14px VT323, monospace",
-          h: 16,
-        });
-      }
       if (e.igniteFlash > 0) {
         ctx.save();
         ctx.globalAlpha = Math.min(1, e.igniteFlash * 1.2);
@@ -3599,6 +3481,7 @@
     run.firstBuyHold = 0;
     run.shopFreeze = 0;
     run.shopNudgeAt = 0;
+    if ((run.wave || 0) < 1) run.waveTimer = Math.min(run.waveTimer || 99, 0.4);
     const shopEl = document.getElementById("shop");
     if (shopEl) shopEl.classList.remove("nudge");
     const title = document.getElementById("shop-title");
@@ -3949,6 +3832,17 @@
           ranger: shopList("ranger").map((u) => u.name),
         },
         road: ROAD,
+        spawn: {
+          gap: RANGE.spawnGap,
+          edge: spawnEdgeX(h ? h.x : HOME_X, playRight()),
+        },
+        kite: {
+          rangedKeep: ROAD.rangedKeep,
+          kiteFace: ROAD.kiteFace,
+          kiteLeash: ROAD.kiteLeash,
+          archer: rangedKeepFor(ENEMIES.archer),
+          mage: rangedKeepFor(ENEMIES.mage),
+        },
         biomes: BIOMES.map((b) => b.name),
         stageLen: STAGE_LEN,
         scale: [1, 8, 10, 16, 20].map((n) => ({ wave: n, ...waveScale(n) })),
@@ -3964,22 +3858,28 @@
         stage: run.stage,
         biome: biomeForStage(run.stage || 1).name,
         wave: run.wave,
+        waveTimer: Math.round((run.waveTimer || 0) * 10) / 10,
+        spawnX: Math.round(spawnLineX()),
         heroX: h ? Math.round(h.x) : 0,
         camera: Math.round(camera),
         marching: !!(h && shouldMarch()),
         mode: h ? h.mode : "",
         gateOpen: !!run.gateOpen,
+        gateX: run.gateX != null ? Math.round(run.gateX) : null,
         idle: run.enemies.filter((e) => !e.aggro && e.hp > 0).length,
         aggro: run.enemies.filter((e) => e.aggro && e.hp > 0).length,
         packs: run.enemies.map((e) => ({
           type: e.type,
           wave: e.wave,
           x: Math.round(e.x),
+          dx: Math.round(e.x - (h ? h.x : 0)),
+          keep: e.def.projectile || e.def.heal ? rangedKeepFor(e.def) : null,
+          plantX: e.plantX != null ? Math.round(e.plantX) : null,
           aggro: !!e.aggro,
           hp: Math.round(e.hp),
           boss: !!e.def.boss,
-          hold: e.def.boss ? Math.round(bossHoldX(stageIndex(e.wave))) : null,
-          gate: e.def.boss ? Math.round(gateWorldX(stageIndex(e.wave))) : null,
+          hold: e.def.boss ? Math.round(liveBossHoldX(e)) : null,
+          gate: e.def.boss ? Math.round(run.gateX != null ? run.gateX : gateWorldX(stageIndex(e.wave))) : null,
         })),
         drops: fx.drops.map((d) => d.kind),
       };
@@ -4055,8 +3955,8 @@
         out.push({
           name: e.def.name,
           x: Math.round(e.x),
-          hold: Math.round(bossHoldX(foeStage(e))),
-          gate: Math.round(gateWorldX(foeStage(e))),
+          hold: Math.round(liveBossHoldX(e)),
+          gate: Math.round(run.gateX != null ? run.gateX : gateWorldX(foeStage(e))),
         });
       }
       return out;

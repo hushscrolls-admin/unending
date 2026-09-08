@@ -1,6 +1,6 @@
 # Unending
 
-A 2D sidescrolling idle fighter. One mercenary walks the road. Camps wait at fixed distances and only move when they come on screen. Gold buys steel. Death buys Glory.
+A 2D sidescrolling idle fighter. One mercenary walks the road. Packs enter from the right of the screen on a timer. Gold buys steel. Death buys Glory.
 
 Pick **Warrior**, **Fire Mage**, or **Ranger** on the title screen (or after a death). Auto-attacks and skills stay idle-fighter; the camera scrolls with the hero’s forward march. After each area boss the road opens into a new biome.
 
@@ -17,7 +17,7 @@ Open `http://localhost:8765`.
 ## Loop
 
 - The fighter **walks forward**. The camera follows. You do not steer — you spend, strike, and use skills.
-- Enemies sit at **static camps** along the road. They idle (WAIT) until they enter the wake line, then they aggro and fight.
+- Trash packs **enter from the right of the screen** at set intervals, walk in, and fight. They are not parked camps waiting on the path. A boss still caps each 10-wave biome; walk through the gate into the next area.
 - Wave 1–2 are a single raider. Waves 3–6 stay two grunts. Shields and the first 3-pack wait until 7; berserkers until 9. Healers only patch allies in range with a modest drip (not a full-pack reset).
 - Every **10th wave** is a unique boss at the **end of the area**: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle). Camp and boss HP chips show real `hp/max`. The hero HUD still clamps at 900.
 - After the boss falls, walk through the gate into a **new biome** (Duskwood Road → Ember Wastes → Rime Pass → Storm Flats → Sunken Court). Living bosses cannot be knocked past that gate (Power Strike / Charge / Whirl).
@@ -110,7 +110,7 @@ New ranks live under `trees.warrior` / `trees.mage` / `trees.ranger`.
 
 The S cooldown pip is always shown. 1 / 2 / 3 pips and Armory skill buttons stay locked until that class tree grants the slot.
 
-Roadside deco is the same tree grammar in every biome: a trunk, a wide blocky canopy, then a theme accent. Duskwood and Ember add ember/flame tongues so the trees read as **on fire**, not as up-arrow chevrons. Rime gets snow caps, Storm a lightning tick, Sunken a gilt edge. WAIT stamps and HEAL RANGE are unchanged.
+Biomes are sky, wash, ground, fog, and weather only. There is no procedural roadside tree/silhouette deco.
 
 ## Art
 
