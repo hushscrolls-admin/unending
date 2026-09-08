@@ -32,9 +32,9 @@ assert(isBossWave(20) && bossTypeFor(20) === "ironhide", "wave 20 is Ironhide");
 assert(isBossWave(30) && bossTypeFor(30) === "skycleaver", "wave 30 is Skycleaver");
 
 const spawnGap = 390;
-const maxReach = novaReachFor(14 * 3);
-const maxFreeze = novaFreezeFor(0.12 * 3 + 0.28);
-const minCd = novaCdFor(0.08 * 12 + 0.06 * 3);
+const maxReach = novaReachFor(8 * 3);
+const maxFreeze = novaFreezeFor(0.08 * 3 + 0.35);
+const minCd = novaCdFor(0.08 * 12);
 
 assert(NOVA.reach < spawnGap * 0.55, "base Nova reach must stay pack-scale, not spawn-line");
 assert(maxReach <= NOVA.reachCap, "tree Nova reach must respect the cap");
@@ -64,10 +64,16 @@ assert(clampCombatRange(CLASSES.mage.range + 24 * 8, 728) > CLASSES.mage.range, 
 for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
   const rows = tree.nodes.map((n) => n.row || 0);
   const deep = Math.max(...rows);
-  const forks = tree.nodes.filter((n) => n.row === 5).length;
-  assert(deep >= 7, id + " tree should reach row 7");
-  assert(forks >= 6, id + " tree should fork at row 5 (two choices per branch)");
+  const unlocks = tree.nodes.filter((n) => n.unlockSkill != null);
+  const choices = new Set(tree.nodes.filter((n) => n.choice).map((n) => n.choice));
+  assert(deep >= 6, id + " tree should reach row 6");
+  assert(unlocks.length === 3, id + " grants abilities 1/2/3 as unlock nodes");
+  assert(choices.size === 3, id + " has one mutually exclusive choice per branch");
   assert(tree.nodes.filter((n) => n.root).length === 1, id + " keeps a single root");
+  assert(
+    unlocks.every((n) => (n.req || []).length > 0 && !n.root),
+    id + " unlocks sit after the root passive"
+  );
 }
 
 const bars = [

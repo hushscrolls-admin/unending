@@ -84,9 +84,11 @@ ok(CLASSES.ranger.skills[2].cd >= 12, "Sic 'em revive CD leaves a down window");
 ok(CLASSES.ranger.skills[0].id === "dress", "Ranger 1 stays Field Dress");
 
 for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
-  ok(tree.nodes.length >= 31, id + " tree is 31 nodes");
+  ok(tree.nodes.length >= 31, id + " tree stays deep");
   ok(tree.branches.length === 3, id + " still has three branches");
-  ok(Math.max(...tree.nodes.map((n) => n.row || 0)) >= 7, id + " reaches row 7");
+  ok(Math.max(...tree.nodes.map((n) => n.row || 0)) >= 6, id + " climbs past the unlock row");
+  ok(tree.nodes.filter((n) => n.unlockSkill != null).length === 3, id + " unlocks all three skills");
+  ok(tree.nodes.some((n) => n.choice), id + " has mutually exclusive choice nodes");
   const shop = RUN_UPGRADES.filter((u) => u.klass === id);
   ok(shop.length >= 12, id + " has a full Armory pool");
 }

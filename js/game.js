@@ -136,7 +136,14 @@
     const h = run.hero;
     const s = classDef(h && h.klass).skills[slot];
     if (!s || !s.cd) return 0;
-    return cdScale(s.cd, s.cdMin);
+    const mult = (h && h.skillCdMult && h.skillCdMult[slot]) || 1;
+    return cdScale(s.cd * Math.max(0.35, mult), s.cdMin);
+  }
+
+  function hasSkill(slot) {
+    const h = run.hero;
+    if (!h) return treeGrantsSkill(activeKlass(), slot, treeBag(activeKlass()));
+    return !!(h.skillUnlock && h.skillUnlock[slot]);
   }
 
   function readDisk() {
@@ -149,26 +156,9 @@
   }
 
   function migrateRaw(raw) {
-    const src = raw && typeof raw === "object" ? raw : {};
-    const klass = validClass(src.klass);
-    const already = src.saveVersion >= SAVE_VERSION && src.trees;
-    if (already) {
-      return {
-        glory: src.glory || 0,
-        bestWave: src.bestWave || 0,
-        klass,
-        trees: normalizeTrees(src.trees),
-        refundNote: src.refundNote || 0,
-      };
-    }
-    const refund = isLegacyPrest(src.prest) ? glorySpentLegacy(src.prest) : 0;
-    return {
-      glory: (src.glory || 0) + refund,
-      bestWave: src.bestWave || 0,
-      klass,
-      trees: normalizeTrees(src.trees),
-      refundNote: refund,
-    };
+    const next = migrateSave(raw);
+    next.klass = validClass(next.klass);
+    return next;
   }
 
   function loadSave() {
@@ -351,6 +341,26 @@
       maxMana: c.maxMana,
       manaRegen: c.manaRegen,
       skillHaste: 0,
+      skillUnlock: [false, false, false],
+      skillCdMult: [1, 1, 1],
+      skillManaOff: [0, 0, 0],
+      whirlDmg: 1,
+      whirlStun: 0,
+      whirlSlow: 0,
+      whirlKnock: 0,
+      chargeDmg: 0,
+      chargeStun: 0,
+      chargeSpd: 0,
+      chargeKnock: 0,
+      chargeSlow: 0,
+      mendPulse: 0,
+      mendBleed: 0,
+      cautAmp: 0,
+      cautIgnite: 0,
+      infernoStun: 0,
+      volleyDmg: 1,
+      volleySlow: 0,
+      dressAmp: 0,
       strikeMult: 1,
       cinder: 0,
       echo: 0,
@@ -601,7 +611,7 @@
       const held = treeHeldText();
       if (held.indexOf("held:") >= 0) toast(held, 2.2);
       if (persist.refundNote > 0) {
-        toast("Old Blood Tree ranks refunded as " + persist.refundNote + " Glory", 3.4);
+        toast("Class trees rebuilt — " + persist.refundNote + " Glory refunded from old ranks", 3.8);
         persist.refundNote = 0;
         save();
       }
@@ -1219,6 +1229,7 @@
       pierce: opts.pierce || 0,
       aoe: opts.aoe || 0,
       burn: opts.burn || null,
+      slow: opts.slow || 0,
       maxX: opts.maxX != null ? opts.maxX : boltLimitX(dir),
       hit: [],
     });
@@ -1350,7 +1361,10 @@
 
   function skillManaCost(slot) {
     const s = classDef().skills[slot];
-    return (s && s.mana) || 0;
+    const h = run.hero;
+    const base = (s && s.mana) || 0;
+    const off = (h && h.skillManaOff && h.skillManaOff[slot]) || 0;
+    return Math.max(0, base - off);
   }
 
   function mend() {
@@ -1362,13 +1376,24 @@
     if (h.mendArmor) h.mendArmorT = 3 * h.mendArmor;
     if (h.mendDR) h.mendDRHits = 3;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
+    if (h.mendPulse) {
+      const pulse = h.dmg * h.mendPulse * autoDmgMult();
+      for (const e of [...run.enemies]) {
+        if (Math.abs(e.x - h.x) < 160) {
+          hitEnemy(e, pulse, false);
+          if (h.mendBleed) {
+            applyDot(e, { kind: "bleed", dps: h.dmg * 0.2 * h.mendBleed, dur: 2.0 });
+          }
+        }
+      }
+    }
     sfx(480, 0.12, "sine", 0.05);
   }
 
   function cauterize() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(skillManaCost(0) || 22)) return;
-    const heal = h.maxHp * 0.32;
+    const heal = h.maxHp * (0.32 + (h.cautAmp || 0));
     const got = healHero(heal);
     h.cauterizeT = 1.15;
     h.cauterizeWard = 2.4 + (h.cautWardExtra || 0);
@@ -1380,8 +1405,8 @@
     let ignited = 0;
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < igniteR) {
-        hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
-        applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.32, dur: 2.8 }));
+        hitEnemy(e, h.dmg * (0.45 + (h.cautIgnite || 0)) * autoDmgMult(), false);
+        applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * (0.32 + (h.cautIgnite || 0) * 0.4), dur: 2.8 }));
         e.igniteFlash = 1.05;
         ignited += 1;
         floatText(e.x, groundY() - 188, "IGNITE", "#ff6a22");
@@ -1416,7 +1441,7 @@
   function fieldDress() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(skillManaCost(0) || 22)) return;
-    const heal = h.maxHp * 0.2;
+    const heal = h.maxHp * (0.2 + (h.dressAmp || 0));
     const got = healHero(heal);
     h.healFlash = 0.7;
     if (h.dressWard) h.dressWardT = 1.6 * h.dressWard;
@@ -1460,9 +1485,14 @@
 
   function whirlHit() {
     const h = run.hero;
-    const dmg = h.dmg * 0.85 * autoDmgMult();
+    const dmg = h.dmg * 0.85 * (h.whirlDmg || 1) * autoDmgMult();
     const targets = run.enemies.filter((e) => Math.abs(e.x - h.x) < WHIRL_RANGE);
-    for (const e of targets) hitEnemy(e, dmg, false);
+    for (const e of targets) {
+      hitEnemy(e, dmg, false);
+      if (h.whirlStun) applyCc(e, h.whirlStun);
+      if (h.whirlSlow) e.slow = Math.max(e.slow || 0, h.whirlSlow);
+      if (h.whirlKnock) e.x += (e.x >= h.x ? 1 : -1) * h.whirlKnock;
+    }
     shake = 7;
     sfx(170, 0.08, "sawtooth", 0.045);
   }
@@ -1471,7 +1501,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0 || h.whirl) return;
-    h.skillCd[1] = cdScale(spec.cd || 6);
+    h.skillCd[1] = skillCdScaled(1);
     h.whirl = { t: 0, next: 0, left: 3 + (h.whirlExtra || 0) };
     h.anim = "atk";
     h.animT = 0;
@@ -1481,7 +1511,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0) return;
-    h.skillCd[1] = cdScale(spec.cd);
+    h.skillCd[1] = skillCdScaled(1);
     h.inferno = { t: 0, next: 0, left: 3 + (h.infernoExtra || 0), x: h.x + 150 };
     h.anim = "atk";
     h.animT = 0;
@@ -1496,6 +1526,7 @@
       if (e.x > h.x + 20 && e.x < infernoEnd()) {
         hitEnemy(e, dmg, false);
         applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.38, dur: 2.6 }));
+        if (h.infernoStun) applyCc(e, h.infernoStun);
       }
     }
     fx.rings.push({ x: x, t: 0.4, color: "rgba(255,90,20,0.75)", r: 30 });
@@ -1514,8 +1545,9 @@
   function frostNova() {
     const h = run.hero;
     const spec = classDef(h.klass).skills[2];
-    if (state !== "fight" || h.skillCd[2] > 0 || h.mana < spec.mana) return;
-    h.mana -= spec.mana;
+    const mana = skillManaCost(2) || spec.mana;
+    if (state !== "fight" || h.skillCd[2] > 0 || h.mana < mana) return;
+    h.mana -= mana;
     h.skillCd[2] = skillCdScaled(2);
     h.novaT = 0.45;
     if (h.iceLance) h.iceLanceHits = 2;
@@ -1544,7 +1576,7 @@
       .filter((e) => Math.abs(e.x - h.x) < reach)
       .sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
     if (!targets.length) return;
-    h.skillCd[1] = cdScale(c.skills[1].cd);
+    h.skillCd[1] = skillCdScaled(1);
     h.anim = "atk";
     h.animT = 0;
     const n = 5 + (h.volleyExtra || 0);
@@ -1552,7 +1584,7 @@
       const t = targets[i % targets.length];
       const dir = t.x >= h.x ? 1 : -1;
       const crit = Math.random() < h.crit * 0.6;
-      let dmg = h.dmg * 0.74 * autoDmgMult();
+      let dmg = h.dmg * 0.74 * (h.volleyDmg || 1) * autoDmgMult();
       if (crit) dmg *= 2;
       shoot({
         kind: "arrow",
@@ -1561,6 +1593,7 @@
         crit,
         speed: 540,
         y: groundY() - 70 - (i - 2) * 14,
+        slow: h.volleySlow || 0,
       });
     }
     shake = 5;
@@ -1575,7 +1608,7 @@
       toast("Wolf is up");
       return;
     }
-    h.skillCd[2] = cdScale(spec.cd);
+    h.skillCd[2] = skillCdScaled(2);
     const at = run.wolf ? run.wolf.x : h.x + 56;
     const fresh = makeWolf();
     fresh.x = at || h.x + 56;
@@ -1592,6 +1625,7 @@
 
   function useSkill(slot) {
     if (state !== "fight" || firstBuyPending()) return;
+    if (!hasSkill(slot)) return;
     const c = classDef(run.hero.klass);
     const id = c.skills[slot].id;
     if (id === "mend") mend();
@@ -1728,14 +1762,17 @@
     const melee = livingInRange(h.reach + 16, false);
 
     if (h.mode === "charge") {
-      h.x += CHARGE_SPEED * dt;
+      h.x += CHARGE_SPEED * (1 + (h.chargeSpd || 0)) * dt;
       h.anim = "atk";
       h.animT = 0.12;
       for (const e of [...run.enemies]) {
         if (!e.charged && Math.abs(e.x - h.x) < 42) {
           e.charged = true;
           e.aggro = true;
-          hitEnemy(e, h.dmg * 0.8 * autoDmgMult(), false);
+          hitEnemy(e, h.dmg * (0.8 + (h.chargeDmg || 0)) * autoDmgMult(), false);
+          if (h.chargeStun) applyCc(e, h.chargeStun);
+          if (h.chargeSlow) e.slow = Math.max(e.slow || 0, h.chargeSlow);
+          if (h.chargeKnock) e.x += (e.x >= h.x ? 1 : -1) * h.chargeKnock;
         }
       }
       if (h.x >= (h.chargeTo || h.x)) {
@@ -1743,7 +1780,7 @@
         h.mode = "march";
       }
     } else if (h.mode === "return") {
-      h.x -= RETURN_SPEED * dt;
+      h.x -= RETURN_SPEED * (1 + (h.chargeSpd || 0)) * dt;
       h.anim = "walk";
       h.animT += dt;
       if (h.x <= (h.returnTo || h.x)) {
@@ -1948,6 +1985,7 @@
           if (Math.abs(b.x - e.x) < 30 && b.hit.indexOf(e) < 0) {
             hitEnemy(e, b.dmg, b.crit);
             if (b.burn) applyDot(e, b.burn);
+            if (b.slow) e.slow = Math.max(e.slow || 0, b.slow);
             if (b.aoe) {
               for (const o of [...run.enemies]) {
                 if (o !== e && o.hp > 0 && Math.abs(o.x - e.x) < b.aoe) {
@@ -2183,16 +2221,25 @@
     const start = Math.floor(camera / span) - 1;
     ctx.save();
     ctx.fillStyle = biome.accent;
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = biome.id === "duskwood" ? 0.28 : 0.55;
     for (let i = 0; i < 8; i++) {
       const wx = (start + i) * span + 40;
       const x = sx(wx);
       const hgt = 90 + ((start + i) % 5) * 16;
       if (biome.id === "duskwood") {
+        const lean = ((start + i) % 3) - 1;
+        const cx = x + 18 + lean * 3;
+        ctx.fillStyle = "#1a2414";
+        ctx.fillRect(cx - 3, gy - 20, 7, 20);
+        ctx.fillStyle = biome.accent;
         ctx.beginPath();
-        ctx.moveTo(x, gy);
-        ctx.lineTo(x + 18, gy - hgt);
-        ctx.lineTo(x + 36, gy);
+        ctx.ellipse(cx, gy - 32, 16 + ((start + i) % 3), 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx - 2, gy - 48, 13, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx + 1, gy - 62, 9, 10, 0, 0, Math.PI * 2);
         ctx.fill();
       } else if (biome.id === "ember") {
         ctx.fillRect(x + 8, gy - hgt * 0.45, 22, hgt * 0.45);
@@ -2323,9 +2370,9 @@
 
   function healSkillReady() {
     const h = run.hero;
-    if (!h || state !== "fight") return false;
+    if (!h || state !== "fight" || !hasSkill(0)) return false;
     const s = classDef(h.klass).skills[0];
-    if (s.mana && h.mana < s.mana) return false;
+    if (s.mana && h.mana < skillManaCost(0)) return false;
     if (s.cd && (h.skillCd[0] || 0) > 0) return false;
     return true;
   }
@@ -2348,7 +2395,7 @@
 
   function sicReady() {
     const h = run.hero;
-    if (!h || h.klass !== "ranger" || state !== "fight") return false;
+    if (!h || h.klass !== "ranger" || state !== "fight" || !hasSkill(2)) return false;
     if ((h.skillCd[2] || 0) > 0) return false;
     return !!(run.wolf && run.wolf.hp <= 0);
   }
@@ -2551,10 +2598,10 @@
     const accent = cdef.color || "#e6c15a";
     const slots = [
       { lab: "S", frac: Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), color: "#e6c15a" },
-      { lab: "1", frac: skillCdFrac(0), color: "#7ad0ff" },
-      { lab: "2", frac: skillCdFrac(1), color: "#7ad0ff" },
-      { lab: "3", frac: skillCdFrac(2), color: "#7ad0ff" },
     ];
+    if (hasSkill(0)) slots.push({ lab: "1", frac: skillCdFrac(0), color: "#7ad0ff" });
+    if (hasSkill(1)) slots.push({ lab: "2", frac: skillCdFrac(1), color: "#7ad0ff" });
+    if (hasSkill(2)) slots.push({ lab: "3", frac: skillCdFrac(2), color: "#7ad0ff" });
     const r = 13;
     const gap = 12;
     const padX = 16;
@@ -2986,6 +3033,7 @@
     const h = run.hero;
     const c = classDef(h ? h.klass : persist.klass);
     const s = c.skills[slot];
+    if (!hasSkill(slot)) return (slot + 1) + " LOCKED";
     if (s.toggle) {
       if (h && h.mode === "charge") return "Return";
       return s.name;
@@ -2996,14 +3044,14 @@
     if (s.cd && h && h.skillCd[slot] > 0) {
       return s.name + " (" + Math.ceil(h.skillCd[slot]) + "s)";
     }
-    if (s.mana) return s.name + " (" + s.mana + ")";
+    if (s.mana) return s.name + " (" + skillManaCost(slot) + ")";
     if (s.cd) return s.name + " (" + s.cd + "s)";
     return s.name;
   }
 
   function skillDisabled(slot) {
     const h = run.hero;
-    if (!h) return true;
+    if (!h || !hasSkill(slot)) return true;
     const s = classDef(h.klass).skills[slot];
     if (s.mana && h.mana < s.mana) return true;
     if (s.cd && (Number(h.skillCd[slot]) || 0) > 0) return true;
@@ -3023,15 +3071,12 @@
     syncFirstBuyCopy(c);
     const keys = document.getElementById("keys");
     if (keys) {
-      keys.textContent =
-        "Click / Space: " +
-        c.strikeName +
-        " · 1 " +
-        c.skills[0].name +
-        " · 2 " +
-        c.skills[1].name +
-        " · 3 " +
-        c.skills[2].name;
+      const bits = ["Click / Space: " + c.strikeName];
+      for (let i = 0; i < 3; i++) {
+        if (hasSkill(i)) bits.push(i + 1 + " " + c.skills[i].name);
+      }
+      if (bits.length === 1) bits.push("1 / 2 / 3 locked until the class tree grants them");
+      keys.textContent = bits.join(" · ");
     }
   }
 
@@ -3041,10 +3086,12 @@
       const btn = document.getElementById("btn-s" + (i + 1));
       if (!btn) continue;
       const lab = btn.querySelector("b") || btn;
+      const locked = !hasSkill(i);
       lab.textContent = skillLabel(i);
       const dead = skillDisabled(i);
       btn.disabled = dead;
-      btn.classList.toggle("ready", !dead && !!h && state === "fight");
+      btn.classList.toggle("locked", locked);
+      btn.classList.toggle("ready", !locked && !dead && !!h && state === "fight");
       const frac = h ? skillCdFrac(i) : 0;
       btn.style.setProperty("--cd", String(Math.round((Number.isFinite(frac) ? frac : 0) * 100)));
     }
@@ -3124,7 +3171,7 @@
       if (wolfAlive()) {
         const tag = run.wolf.taunt > 0 ? "Taunt" : "Guard";
         buffs.push("Wolf " + fmt(run.wolf.hp) + "/" + fmt(run.wolf.maxHp) + " " + tag);
-      } else buffs.push("Wolf down — press 3");
+      } else buffs.push(hasSkill(2) ? "Wolf down — press 3" : "Wolf down");
     }
     if (lastStanding()) buffs.push("Last Stand");
     if (h.secondWind > 0) buffs.push("Wind " + h.secondWind);
@@ -3326,6 +3373,7 @@
     const lv = bag[u.id] || 0;
     if (lv >= (u.max || 8)) return false;
     if (!prestReqMet(u, bag, klass) && lv === 0) return false;
+    if (lv === 0 && choiceRival(u, bag, klass)) return false;
     const c = u.cost(lv);
     if (persist.glory < c) return false;
     persist.glory -= c;
@@ -3353,12 +3401,14 @@
     const maxed = lv >= (u.max || 8);
     const c = u.cost(lv);
     const st = lv > 0 ? "owned" : open ? "open" : "locked";
-    const req = prestReqText(u, klass);
-    const btnLabel = maxed ? "MAX" : c + " glory";
+    const req = prestReqText(u, klass, bag);
+    const rival = choiceRival(u, bag, klass);
+    const badge = u.unlockSkill != null ? "UNLOCK" : u.choice ? "PICK ONE" : u.kind === "passive" ? "PASSIVE" : "";
+    const btnLabel = maxed ? "MAX" : rival ? "LOCKED" : c + " glory";
     const step = document.createElement("div");
-    step.className = "tree-step depth-" + (u.root ? 0 : u.row) + " " + st;
-    step.innerHTML = `<div class="tree-node ${st}">
-      <div class="name">${u.name} <span>${lv}/${u.max}</span></div>
+    step.className = "tree-step depth-" + (u.root ? 0 : u.row) + " " + st + (u.choice ? " choice-node" : "") + (u.unlockSkill != null ? " unlock-node" : "");
+    step.innerHTML = `<div class="tree-node ${st}${u.choice ? " choice" : ""}${u.unlockSkill != null ? " unlock" : ""}">
+      <div class="name">${badge ? `<em>${badge}</em>` : ""}${u.name} <span>${lv}/${u.max}</span></div>
       <div class="desc">${u.desc}</div>
       ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
       <button type="button">${btnLabel}</button>
@@ -3385,7 +3435,7 @@
     if (note) {
       note.textContent =
         tree.blurb +
-        " Fill every rank on a node before its children unlock. Deeper nodes cost more Glory.";
+        " Fill every rank on a node before its children unlock. Choice nodes are mutually exclusive. Deeper nodes cost more Glory.";
     }
     syncTreeHeld();
     const root = prestigeRoot(klass);
@@ -3419,8 +3469,18 @@
         if (group.length === 1) trunk.appendChild(renderTreeNode(klass, group[0], bag));
         else {
           const fork = document.createElement("div");
-          fork.className = "tree-fork";
-          group.forEach((u) => fork.appendChild(renderTreeNode(klass, u, bag)));
+          const picks = group.some((n) => n.choice);
+          fork.className = "tree-fork" + (picks ? " choice-fork" : "") + (group.length > 2 ? " triple" : "");
+          if (picks) {
+            const lab = document.createElement("div");
+            lab.className = "choice-label";
+            lab.textContent = "Pick one";
+            fork.appendChild(lab);
+          }
+          const row = document.createElement("div");
+          row.className = "choice-row";
+          group.forEach((u) => row.appendChild(renderTreeNode(klass, u, bag)));
+          fork.appendChild(row);
           trunk.appendChild(fork);
         }
       });
@@ -3571,6 +3631,15 @@
     tree() {
       return snapshotPersist();
     },
+    skills() {
+      const c = classDef(run.hero ? run.hero.klass : persist.klass);
+      return [0, 1, 2].map((slot) => ({
+        slot,
+        id: c.skills[slot].id,
+        name: c.skills[slot].name,
+        unlocked: hasSkill(slot),
+      }));
+    },
     shop() {
       return shopList(activeKlass()).map((u) => ({
         id: u.id,
@@ -3601,6 +3670,11 @@
               playSpan: playSpan(),
             }
           : { baseMage: RANGE.mage, baseRanger: RANGE.ranger },
+        skills: [0, 1, 2].map((slot) => ({
+          slot,
+          id: classDef(h && h.klass).skills[slot].id,
+          unlocked: hasSkill(slot),
+        })),
         trees: Object.fromEntries(
           Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
         ),
