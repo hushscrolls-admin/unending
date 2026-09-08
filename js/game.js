@@ -2081,7 +2081,7 @@
         if (e.x > desired + 8) {
           e.x -= spd * dt;
           e.anim = "walk";
-        } else if (e.x < h.x + ROAD.kiteFace && e.x + 4 < leash) {
+        } else if (e.def.heal && e.x < h.x + ROAD.kiteFace && e.x + 4 < leash) {
           e.x += spd * dt;
           e.anim = "walk";
         } else {
@@ -4002,6 +4002,17 @@
       run.hero.x += px || 200;
       followCamera(0);
       for (const e of run.enemies) tryAggro(e);
+      return window.unending.road();
+    },
+    step(seconds) {
+      const total = Math.max(0, Number(seconds) || 0);
+      let left = total;
+      while (left > 0) {
+        const dt = Math.min(0.05, left);
+        if (state === "fight" && !paused) update(dt);
+        left -= dt;
+      }
+      render();
       return window.unending.road();
     },
     hurt(n) {

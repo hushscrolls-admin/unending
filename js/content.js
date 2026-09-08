@@ -44,11 +44,11 @@ const ROAD = {
   heroWalk: 124,
   stopMelee: 110,
   stopRanged: 172,
-  // Ranged plant inside a gap Warrior can walk into. Kite face/leash
-  // stop endless backpedal off the fight (Charge must not be required).
-  rangedKeep: 168,
-  kiteFace: 70,
-  kiteLeash: 36,
+  // Plant inside Warrior melee (~108) even when a shield parks the
+  // fighter. Charge must not be required to tag the archer.
+  rangedKeep: 100,
+  kiteFace: 56,
+  kiteLeash: 8,
 };
 
 function spawnEdgeX(heroX, playRightX) {
@@ -333,7 +333,7 @@ const ENEMIES = {
     speed: 62,
     atkRate: 0.7,
     reach: 78,
-    keep: 168,
+    keep: 100,
     gold: 13,
     magic: 4,
     color: "#4a6a3a",
@@ -350,7 +350,7 @@ const ENEMIES = {
     speed: 50,
     atkRate: 0.42,
     reach: 78,
-    keep: 168,
+    keep: 100,
     gold: 16,
     magic: 8,
     color: "#3a4aaa",
@@ -367,7 +367,7 @@ const ENEMIES = {
     speed: 58,
     atkRate: 0.55,
     reach: 78,
-    keep: 148,
+    keep: 96,
     gold: 15,
     magic: 7,
     color: "#c9a227",

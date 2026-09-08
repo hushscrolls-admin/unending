@@ -54,8 +54,8 @@ assert(CLASSES.mage.range < RANGE.spawnGap, "Mage base range must sit short of t
 assert(CLASSES.ranger.range < RANGE.spawnGap, "Ranger base range must sit short of the spawn line");
 assert(CLASSES.mage.range > 240, "Mage base range should still hit W8 archers");
 assert(CLASSES.ranger.range >= 250, "Ranger base range should still contest W8 archers");
-assert(ENEMIES.archer.keep <= 168, "archer keep stays inside Warrior close range");
-assert(ENEMIES.mage.keep <= 168, "enemy mage keep stays inside Warrior close range");
+assert(ENEMIES.archer.keep <= CLASSES.warrior.reach + 16, "archer keep stays inside Warrior melee");
+assert(ENEMIES.mage.keep <= CLASSES.warrior.reach + 16, "enemy mage keep stays inside Warrior melee");
 assert(CLASSES.ranger.skills[2].id === "sic", "Ranger 3 stays Sic 'em");
 assert(CLASSES.ranger.skills[2].cd >= 12, "Sic 'em revive CD should leave a real down window");
 const sicMaster = PRESTIGE_TREES.ranger.nodes.find((n) => n.id === "sicmaster");

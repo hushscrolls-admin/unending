@@ -71,15 +71,15 @@ ok(waveCount(1) >= 1 && waveCount(8) <= 4, "Pass 10 pack growth stays modest");
 ok(ROAD.heroWalk >= 100, "hero march speed is a walk, not a sprint");
 ok(ROAD.stopMelee < ROAD.stopRanged, "ranged holds farther than melee");
 ok(ROAD.packGap > ROAD.firstGap, "stage span still spaces later waves farther than the first");
-ok(ROAD.rangedKeep <= 168, "ranged keep is tight enough for Warrior to close");
+ok(ROAD.rangedKeep <= CLASSES.warrior.reach + 16, "ranged keep sits inside Warrior melee");
 ok(ROAD.kiteFace <= 80, "kite face-step stays inside melee");
-ok(ROAD.kiteLeash <= 40, "kite leash cannot walk the fight off screen");
+ok(ROAD.kiteLeash <= 12, "kite leash cannot walk the fight off the pile");
 ok(ENEMIES.archer.keep <= ROAD.rangedKeep, "archer keep is capped");
 ok(ENEMIES.mage.keep <= ROAD.rangedKeep, "enemy mage keep is capped");
 ok(rangedKeepFor(ENEMIES.archer) <= ROAD.rangedKeep, "archer keep helper matches the cap");
 ok(
-  ROAD.rangedKeep + ROAD.kiteLeash < CLASSES.warrior.reach + 16 + 100,
-  "even a full kite leash stays inside a Warrior walk-up"
+  ROAD.rangedKeep + ROAD.kiteLeash <= CLASSES.warrior.reach + 16,
+  "even a full kite leash stays inside Warrior melee"
 );
 ok(ROAD.heroWalk > ENEMIES.archer.speed, "Warrior walk outpaces archer backpedal");
 ok(spawnEdgeX(80, 808) === 80 + RANGE.spawnGap, "wide playfield still caps at the spawn gap");
@@ -123,24 +123,26 @@ for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
 ok(CLASSES.warrior.style === "melee", "Warrior is melee");
 ok(CLASSES.mage.style === "ranged" && CLASSES.ranger.style === "ranged", "Mage/Ranger stay ranged");
 
-// Walk-up sim: Warrior must enter melee vs an archer without Charge.
+// Walk-up sim: shield parks Warrior; archer must still sit in melee.
 {
   let hx = 80;
-  let ex = spawnEdgeX(hx, hx + 728);
+  let ax = spawnEdgeX(hx, hx + 728) + 56;
+  let sx = spawnEdgeX(hx, hx + 728);
   let plant = null;
   const keep = rangedKeepFor(ENEMIES.archer);
   const reach = CLASSES.warrior.reach + 16;
   const dt = 1 / 60;
   for (let t = 0; t < 10; t += dt) {
+    if (Math.abs(sx - hx) > 56) sx += Math.sign(hx + 70 - sx) * ENEMIES.shield.speed * dt;
     let desired = Math.min(hx + keep, hx + 728 - 36);
-    if (plant == null && ex <= desired + 12) plant = ex;
+    if (plant == null && ax <= desired + 12) plant = ax;
     const leash = (plant != null ? plant : desired) + ROAD.kiteLeash;
     desired = Math.min(desired, leash);
-    if (ex > desired + 8) ex -= ENEMIES.archer.speed * dt;
-    else if (ex < hx + ROAD.kiteFace && ex + 4 < leash) ex += ENEMIES.archer.speed * dt;
-    if (!(ex - hx < reach - 6)) hx += ROAD.heroWalk * dt;
+    if (ax > desired + 8) ax -= ENEMIES.archer.speed * dt;
+    const blocked = sx - hx < ROAD.stopMelee || ax - hx < reach - 6;
+    if (!blocked) hx += ROAD.heroWalk * dt;
   }
-  ok(ex - hx <= reach, "Warrior walks into archer melee without Charge (gap " + Math.round(ex - hx) + ")");
+  ok(ax - hx <= reach, "shield-parked Warrior still reaches the archer (gap " + Math.round(ax - hx) + ")");
 }
 
 if (FAIL.length) {
