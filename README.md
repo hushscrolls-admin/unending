@@ -17,7 +17,7 @@ Open `http://localhost:8765`.
 ## Loop
 
 - The fighter **walks forward**. The camera follows. You do not steer — you spend, strike, and use skills.
-- Trash packs **enter from the right of the screen** at set intervals, walk in, and fight. They are not parked camps waiting on the path. A boss still caps each 10-wave biome; walk through the gate into the next area.
+- Trash packs **spawn past the camera’s right edge** (true off-screen) at set intervals, then walk left onto the road. They are not parked camps and they do not pop in beside the hero. A boss still caps each 10-wave biome; walk through the gate into the next area.
 - Wave 1–2 are a single raider. Waves 3–6 stay two grunts. Shields and the first 3-pack wait until 7; berserkers until 9. Healers only patch allies in range with a modest drip (not a full-pack reset).
 - Every **10th wave** is a unique boss at the **end of the area**: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle). Camp and boss HP chips show real `hp/max`. The hero HUD still clamps at 900.
 - After the boss falls, walk through the gate into a **new biome** (Duskwood Road → Ember Wastes → Rime Pass → Storm Flats → Sunken Court). Living bosses cannot be knocked past that gate (Power Strike / Charge / Whirl).
