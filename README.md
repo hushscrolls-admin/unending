@@ -52,7 +52,7 @@ Design reach (Warrior is the floor; Mage / Ranger should also hit these without 
 | 0 | Stage 1, waves 6–8 |
 | 1 (root filled after the first death) | 1st boss (wave 10) |
 | 2 | mid Stage 2 (waves 14–16) |
-| 3 | 2nd boss (wave 20) |
+| 3 | 2nd boss (wave 20) — struggle there or die soon after, not a stroll to wave 40 |
 
 Frost Nova is a panic CC: pack-scale radius (capped well short of the spawn line), ~1.35s freeze, 9s cooldown with a 7s floor so Tempest / tree haste cannot make it spamable.
 

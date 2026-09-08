@@ -109,13 +109,19 @@ ok(s8.hp >= 1.8 && s8.hp <= 2.2, "wave 8 HP is in the Pass 15 struggle band");
 ok(s8.dmg >= 1.45 && s8.dmg <= 1.72, "wave 8 damage is in the Pass 15 struggle band");
 ok(waveScale(10).hp >= 2.2 && waveScale(10).hp <= 3.2, "first boss sits in the 1-prestige band");
 ok(waveScale(20).hp >= 6.4 && waveScale(20).hp <= 9.2, "second boss sits in the 3-prestige band");
+ok(waveScale(24).hp >= 18 && waveScale(24).hp <= 32, "post-Ironhide HP kicks harder than mid Stage 2");
+ok(waveScale(24).hp > waveScale(16).hp * 3, "Stage 3 HP is a real step up from mid Stage 2");
 ok(nextWaveDelay(8) < nextWaveDelay(2), "later Stage 1 packs arrive faster than the opener");
+ok(nextWaveDelay(21) < nextWaveDelay(16), "Stage 3 tempo is tighter than mid Stage 2");
 ok(liveCap(6) >= 5, "mid Stage 1 can stack packs");
+ok(liveCap(21) >= 10, "Stage 3 live cap allows piled packs");
+ok(waveCount(21) >= 6, "Stage 3 packs grow past the Stage 2 cap of 5");
 
 ok(ENEMIES.grunt.hp >= 38 && ENEMIES.grunt.dmg >= 8.5, "raider base is Pass-15 strong");
 ok(ENEMIES.shield.armor >= 6 && ENEMIES.shield.dmg >= 7, "shield is a real mid-S1 stopper");
 ok(ENEMIES.berserk.dmg >= 10, "berserker damage is a threat");
 ok(ENEMIES.butcher.dmg >= 13, "Butcher hits hard enough to gate virgin runs");
+ok(ENEMIES.ironhide.hp >= 175 && ENEMIES.ironhide.dmg >= 16, "Ironhide is a 3-prestige wall");
 ok(ENEMIES.archer.keep === 100, "archer keep stays 100");
 
 ok(CLASSES.ranger.skills[2].id === "sic", "Ranger 3 stays Sic 'em");
