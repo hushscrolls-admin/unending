@@ -652,6 +652,7 @@
     save();
     state = "dead";
     shake = 0;
+    hideJumpBanner();
     document.getElementById("dead").classList.remove("hidden");
     document.getElementById("shop").classList.add("hidden");
     document.getElementById("keys").classList.add("hidden");
@@ -681,6 +682,7 @@
 
   function showTitle() {
     setPaused(false);
+    hideJumpBanner();
     state = "title";
     document.getElementById("title").classList.remove("hidden");
     document.getElementById("dead").classList.add("hidden");
@@ -789,6 +791,12 @@
     el.textContent = msg;
     el.classList.add("show");
     jumpBannerT = 3.6;
+  }
+
+  function hideJumpBanner() {
+    jumpBannerT = 0;
+    const el = document.getElementById("jump-banner");
+    if (el) el.classList.remove("show");
   }
 
   // --- combat helpers ---
