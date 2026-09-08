@@ -18,6 +18,7 @@ const {
   prestigeNodes,
   findPrestNode,
   glorySpentOn,
+  respecClassTrees,
 } = require("../js/content.js");
 
 const FAIL = [];
@@ -115,6 +116,20 @@ ok(!prestReqMet(child, early, "warrior"), "Mend stays locked until Hide is fille
 early.hide = 3;
 ok(prestReqMet(child, early, "warrior"), "full Hide unlocks the Mend node");
 ok(glorySpentOn("warrior", { oath: 1 }) === 2, "root still costs 2 Glory");
+
+const mixed = emptyTrees();
+mixed.warrior.oath = 3;
+mixed.warrior.hide = 3;
+mixed.mage.kindle = 3;
+const warriorSpent = glorySpentOn("warrior", mixed.warrior);
+const mageSpent = glorySpentOn("mage", mixed.mage);
+ok(warriorSpent > 0 && mageSpent > 0, "spent Glory is counted per class");
+const respecW = respecClassTrees(mixed, "warrior");
+ok(respecW.refund === warriorSpent, "respec refunds only the current class spend");
+ok(respecW.trees.warrior.oath === 0 && respecW.trees.warrior.hide === 0, "respec clears the current class");
+ok(respecW.trees.mage.kindle === 3, "respec leaves other class trees untouched");
+ok(!treeGrantsSkill("warrior", 0, respecW.trees.warrior), "respec returns the virgin kit on that class");
+ok(glorySpentOn("mage", respecW.trees.mage) === mageSpent, "other class spend is unchanged");
 
 if (FAIL.length) {
   console.error("tree_check failed:\n - " + FAIL.join("\n - "));

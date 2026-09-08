@@ -181,21 +181,33 @@
       persist.trees = normalizeTrees(persist.trees);
     }
     persist.bestWave = Math.max(persist.bestWave || 0, (disk && disk.bestWave) || 0);
+    writeDisk(diskPayload());
+    syncTreeHeld();
+  }
+
+  function diskPayload() {
+    return {
+      glory: persist.glory,
+      bestWave: persist.bestWave,
+      trees: persist.trees,
+      klass: persist.klass,
+      saveVersion: SAVE_VERSION,
+      refundNote: persist.refundNote || 0,
+    };
+  }
+
+  function writeDisk(payload) {
     try {
-      localStorage.setItem(
-        SAVE_KEY,
-        JSON.stringify({
-          glory: persist.glory,
-          bestWave: persist.bestWave,
-          trees: persist.trees,
-          klass: persist.klass,
-          saveVersion: SAVE_VERSION,
-          refundNote: persist.refundNote || 0,
-        })
-      );
+      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+      return true;
     } catch (e) {
-      /* quota / private mode — keep memory ranks */
+      return false;
     }
+  }
+
+  function saveExact() {
+    persist.trees = normalizeTrees(persist.trees);
+    writeDisk(diskPayload());
     syncTreeHeld();
   }
 
@@ -306,6 +318,7 @@
     save();
     buildClassPick();
     if (state === "dead") buildPrestige();
+    syncRespecLabel();
   }
 
   function makeHero() {
@@ -589,6 +602,7 @@
       followCamera(0);
       toast(biomeForStage(1).name);
     }
+    setPaused(false);
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
     document.getElementById("hud").classList.remove("hidden");
@@ -621,6 +635,16 @@
   }
 
   function die() {
+    retireRun("death");
+  }
+
+  function endRun() {
+    return retireRun("end");
+  }
+
+  function retireRun(kind) {
+    if (state !== "fight") return false;
+    setPaused(false);
     hydratePersist();
     const g = gloryFor(run.wave, run.kills);
     persist.glory += g;
@@ -632,12 +656,98 @@
     document.getElementById("shop").classList.add("hidden");
     document.getElementById("keys").classList.add("hidden");
     document.getElementById("hud").classList.add("hidden");
+    document.getElementById("title").classList.add("hidden");
     document.getElementById("dead-summary").textContent =
-      `${biomeForStage(run.stage).name}  ·  Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
+      `${biomeForStage(run.stage || 1).name}  ·  Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
     document.getElementById("dead-glory").textContent = fmt(g);
     buildPrestige();
     buildClassPick();
-    sfx(70, 0.5, "sawtooth", 0.06);
+    syncRespecLabel();
+    sfx(kind === "end" ? 160 : 70, 0.5, kind === "end" ? "triangle" : "sawtooth", 0.06);
+    return { glory: g, wave: run.wave, kills: run.kills, kind: kind || "death" };
+  }
+
+  function setPaused(on) {
+    paused = !!on && state === "fight";
+    const el = document.getElementById("pause");
+    if (el) el.classList.toggle("hidden", !paused);
+    return paused;
+  }
+
+  function togglePause() {
+    if (state !== "fight") return false;
+    return setPaused(!paused);
+  }
+
+  function showTitle() {
+    setPaused(false);
+    state = "title";
+    document.getElementById("title").classList.remove("hidden");
+    document.getElementById("dead").classList.add("hidden");
+    document.getElementById("hud").classList.add("hidden");
+    document.getElementById("shop").classList.add("hidden");
+    document.getElementById("keys").classList.add("hidden");
+    buildClassPick();
+  }
+
+  function respecCurrentClass(opts) {
+    const o = opts || {};
+    const klass = validClass(persist.klass);
+    const tree = prestigeTree(klass);
+    const spent = glorySpentOn(klass, treeBag(klass));
+    if (spent <= 0) {
+      if (!o.silent) toast("No " + tree.name + " ranks to refund");
+      return { refund: 0, klass, glory: persist.glory };
+    }
+    if (!o.force && !window.confirm("Reset " + tree.name + " and refund " + spent + " Glory? Other class trees stay.")) {
+      return { refund: 0, cancelled: true, klass, glory: persist.glory };
+    }
+    const out = respecClassTrees(persist.trees, klass);
+    persist.trees = out.trees;
+    persist.glory += out.refund;
+    saveExact();
+    syncRespecLabel();
+    if (state === "dead") buildPrestige();
+    syncHud();
+    toast(tree.name + " reset — " + out.refund + " Glory refunded");
+    return { refund: out.refund, klass, glory: persist.glory, trees: persist.trees };
+  }
+
+  function wipeAll(opts) {
+    const o = opts || {};
+    if (
+      !o.force &&
+      !window.confirm("Wipe ALL progress?\n\nThis erases Glory, every class tree, and the saved run. This cannot be undone.")
+    ) {
+      return { wiped: false, cancelled: true };
+    }
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (e) {
+      /* private mode */
+    }
+    persist.glory = 0;
+    persist.bestWave = 0;
+    persist.klass = "warrior";
+    persist.trees = emptyTrees();
+    persist.refundNote = 0;
+    jumpDest = 0;
+    Object.assign(run, emptyRun());
+    showTitle();
+    toast("All progress wiped");
+    return { wiped: true, glory: 0, trees: persist.trees, disk: readDisk() };
+  }
+
+  function syncRespecLabel() {
+    const btn = document.getElementById("btn-respec");
+    if (!btn) return;
+    const klass = validClass(persist.klass);
+    const tree = prestigeTree(klass);
+    const spent = glorySpentOn(klass, treeBag(klass));
+    btn.textContent = spent
+      ? "Respec " + tree.name + " — refund " + spent + " Glory"
+      : "Respec " + tree.name + " — no ranks";
+    btn.disabled = spent <= 0;
   }
 
   // --- audio ---
@@ -3179,6 +3289,7 @@
         if (hasSkill(i)) bits.push(i + 1 + " " + c.skills[i].name);
       }
       if (bits.length === 1) bits.push("1 / 2 / 3 locked until the class tree grants them");
+      bits.push("P Pause · End run opens prestige");
       keys.textContent = bits.join(" · ");
     }
   }
@@ -3541,6 +3652,7 @@
         " Fill every rank on a node before its children unlock. Choice nodes are mutually exclusive. Deeper nodes cost more Glory.";
     }
     syncTreeHeld();
+    syncRespecLabel();
     const root = prestigeRoot(klass);
     if (root) {
       const rootWrap = document.createElement("div");
@@ -3659,23 +3771,39 @@
     startRun();
   };
   document.getElementById("btn-again").onclick = () => startRun();
+  const endRunBtn = document.getElementById("btn-end-run");
+  if (endRunBtn) endRunBtn.onclick = () => endRun();
+  const endRunPause = document.getElementById("btn-end-run-pause");
+  if (endRunPause) endRunPause.onclick = () => endRun();
+  const resumeBtn = document.getElementById("btn-resume");
+  if (resumeBtn) resumeBtn.onclick = () => setPaused(false);
+  const respecBtn = document.getElementById("btn-respec");
+  if (respecBtn) respecBtn.onclick = () => respecCurrentClass();
+  const wipeBtn = document.getElementById("btn-wipe");
+  if (wipeBtn) wipeBtn.onclick = () => wipeAll();
+  const wipeTitle = document.getElementById("btn-wipe-title");
+  if (wipeTitle) wipeTitle.onclick = () => wipeAll();
   document.getElementById("btn-s1").onclick = () => useSkill(0);
   document.getElementById("btn-s2").onclick = () => useSkill(1);
   document.getElementById("btn-s3").onclick = () => useSkill(2);
   canvas.addEventListener("pointerdown", (ev) => {
     if (state === "title") return;
-    if (state === "fight") powerStrike();
+    if (state === "fight" && !paused) powerStrike();
   });
   window.addEventListener("keydown", (ev) => {
     if (ev.code === "Space") {
       ev.preventDefault();
       if (state === "title") startRun();
-      else powerStrike();
+      else if (state === "fight" && !paused) powerStrike();
+    }
+    if (paused) {
+      if (ev.key === "p" || ev.key === "P") togglePause();
+      return;
     }
     if (ev.key === "1") useSkill(0);
     if (ev.key === "2") useSkill(1);
     if (ev.key === "3") useSkill(2);
-    if (ev.key === "p" || ev.key === "P") paused = !paused;
+    if (ev.key === "p" || ev.key === "P") togglePause();
   });
   window.addEventListener("resize", resize);
 
@@ -3688,6 +3816,10 @@
     },
     startRun,
     die,
+    endRun,
+    respec: (opts) => respecCurrentClass(opts || { force: true }),
+    wipe: (opts) => wipeAll(opts || { force: true }),
+    pause: (on) => (on == null ? togglePause() : setPaused(!!on)),
     pickClass,
     buyPrestige,
     glory(n) {

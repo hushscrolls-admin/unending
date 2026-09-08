@@ -2840,6 +2840,14 @@ function glorySpentOn(klass, bag) {
   return glorySpentCatalog(bag, prestigeNodes(klass));
 }
 
+function respecClassTrees(trees, klass) {
+  const k = PRESTIGE_TREES[klass] ? klass : "warrior";
+  const next = normalizeTrees(trees);
+  const refund = glorySpentOn(k, next[k]);
+  next[k] = emptyTrees()[k];
+  return { trees: next, refund, klass: k };
+}
+
 function glorySpentLegacy(prest) {
   if (!prest || typeof prest !== "object") return 0;
   let spent = 0;
@@ -3164,6 +3172,7 @@ if (typeof module !== "undefined" && module.exports) {
     migrateV2Trees,
     glorySpentOn,
     glorySpentCatalog,
+    respecClassTrees,
     treeGrantsSkill,
     skillUnlockNode,
     prestReqMet,

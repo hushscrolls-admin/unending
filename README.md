@@ -25,7 +25,9 @@ Open `http://localhost:8765`.
 - Spend gold in the Armory during the fight. A run starts with **24g**, and the opening crate is **8 / 8 / 9g**, so Mage can buy Ember and Ward before Wave 1 lands. Later crates still open at 5 / 9 / 13 / 17. **Each class has its own Armory pool** — Warrior steel, Mage fire/mana, Ranger bow/wolf. There are no shared/tagged cross-class rows.
 - **Click** the battlefield or press **Space** for the class strike. Mend / Cauterize / Field Dress flash when you (or a living wolf) are low and the heal is ready. Ranger **Sic 'em** flashes when the wolf is DOWN. Cauterize shows a scorch, `CAUTERIZE` heal, and `IGNITE` on nearby foes.
 - A virgin run has only the class **auto-attack** and **super** (Click / Space). Abilities 1 / 2 / 3 stay locked until that class tree grants them.
-- On death you keep Glory and spend it on **that class's prestige tree**. Then rise again as any class. Gold and run upgrades reset. Glory is shared; ranks are per class.
+- **End run** (Armory, or Pause) opens Fallen / prestige without dying. Glory banks from current wave and kills, same as a death.
+- On Fallen you spend Glory on **that class's prestige tree**. **Respec** clears the class you are viewing and refunds its spent Glory; other classes stay. **Wipe all progress** erases the whole save after a confirm.
+- Then rise again as any class. Gold and run upgrades reset. Glory is shared; ranks are per class.
 
 ## Classes
 
@@ -103,7 +105,8 @@ New ranks live under `trees.warrior` / `trees.mage` / `trees.ranger`.
 |---|---|
 | Click / Space | Class strike |
 | 1 / 2 / 3 | Class skills, once the class tree has unlocked that slot |
-| P | Pause |
+| P | Pause (Resume, or End run → prestige) |
+| End run | Bank Glory for this run and open the class tree |
 
 The S cooldown pip is always shown. 1 / 2 / 3 pips and Armory skill buttons stay locked until that class tree grants the slot.
 
