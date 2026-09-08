@@ -2227,20 +2227,7 @@
       const x = sx(wx);
       const hgt = 90 + ((start + i) % 5) * 16;
       if (biome.id === "duskwood") {
-        const lean = ((start + i) % 3) - 1;
-        const cx = x + 18 + lean * 3;
-        ctx.fillStyle = "#1a2414";
-        ctx.fillRect(cx - 3, gy - 20, 7, 20);
-        ctx.fillStyle = biome.accent;
-        ctx.beginPath();
-        ctx.ellipse(cx, gy - 32, 16 + ((start + i) % 3), 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(cx - 2, gy - 48, 13, 11, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(cx + 1, gy - 62, 9, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
+        continue;
       } else if (biome.id === "ember") {
         ctx.fillRect(x + 8, gy - hgt * 0.45, 22, hgt * 0.45);
         ctx.beginPath();
@@ -3786,6 +3773,7 @@
       run.wolf.leap = null;
       run.wolf.deadT = 12;
       floatText(run.wolf.x, groundY() - 150, "WOLF DOWN", "#c07040");
+      syncHud();
       return wolfSnapshot();
     },
   };
