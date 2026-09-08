@@ -18,7 +18,7 @@ Open `http://localhost:8765`.
 
 - The fighter **walks forward**. The camera follows. You do not steer — you spend, strike, and use skills.
 - Trash packs **spawn past the camera’s right edge** (true off-screen) at set intervals, then walk left onto the road. They are not parked camps and they do not pop in beside the hero. A boss still caps each 10-wave biome; walk through the gate into the next area.
-- Wave 1–2 are a single raider. Waves 3–6 stay two grunts. Shields and the first 3-pack wait until 7; berserkers until 9. Healers only patch allies in range with a modest drip (not a full-pack reset).
+- Wave 1–2 are a single raider with a long gap. Tempo tightens after that so packs **overlap by mid Stage 1**. Shields and the first 3-pack wait until 7; berserkers until 9. Healers only patch allies in range with a modest drip (not a full-pack reset). A virgin run should struggle around waves 6–8 — Armory steel alone should not stroll to Storm Flats.
 - Every **10th wave** is a unique boss at the **end of the area**: The Butcher, Ironhide, Skycleaver, Stormcaller, The Sunfallen (then they cycle). Camp and boss HP chips show real `hp/max`. The hero HUD still clamps at 900.
 - After the boss falls, walk through the gate into a **new biome** (Duskwood Road → Ember Wastes → Rime Pass → Storm Flats → Sunken Court). Living bosses cannot be knocked past that gate (Power Strike / Charge / Whirl).
 - Kills grant gold immediately (it is not a walk-over). Hearts, mana, and short buffs (rage / haste) pop on the road, then magnet to the fighter — or to the wolf if it is closer — so Mage and Ranger collect them without walking. Warrior still picks them up by charging through, but is no longer the only class that benefits.

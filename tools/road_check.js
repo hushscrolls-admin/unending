@@ -34,6 +34,8 @@ const {
   bossTypeFor,
   waveRoster,
   waveScale,
+  nextWaveDelay,
+  liveCap,
 } = require("../js/content.js");
 
 const FAIL = [];
@@ -100,16 +102,21 @@ const firstIron = goldCost(18, 1.38, 0, 8);
 ok(firstIron === 8, "opening Iron crate is 8g");
 ok(firstIron + goldCost(22, 1.36, 0, 9) <= 24, "24g still buys damage + Ward before wave 1");
 
+const s3 = waveScale(3);
 const s8 = waveScale(8);
-const oldHp = Math.pow(1.17, 7);
-ok(s8.hp < oldHp * 0.7, "wave 8 HP is well below the old 1.17^n curve");
-ok(s8.hp <= 1.55, "wave 8 stays inside the 0-prestige reach bar");
-ok(waveScale(10).hp <= 1.85, "first boss stays inside the 1-prestige bar");
-ok(waveScale(20).hp <= 4.9, "second boss stays inside the 3-prestige bar");
+ok(s3.hp <= 1.12 && s3.dmg <= 1.08, "wave 3 stays learnable");
+ok(s8.hp >= 1.8 && s8.hp <= 2.2, "wave 8 HP is in the Pass 15 struggle band");
+ok(s8.dmg >= 1.45 && s8.dmg <= 1.72, "wave 8 damage is in the Pass 15 struggle band");
+ok(waveScale(10).hp >= 2.2 && waveScale(10).hp <= 3.2, "first boss sits in the 1-prestige band");
+ok(waveScale(20).hp >= 6.4 && waveScale(20).hp <= 9.2, "second boss sits in the 3-prestige band");
+ok(nextWaveDelay(8) < nextWaveDelay(2), "later Stage 1 packs arrive faster than the opener");
+ok(liveCap(6) >= 5, "mid Stage 1 can stack packs");
 
-ok(ENEMIES.shield.armor <= 5.5, "shield armor is softened");
-ok(ENEMIES.berserk.dmg <= 8, "berserker damage is softened");
-ok(ENEMIES.butcher.dmg <= 12, "Butcher damage is softened");
+ok(ENEMIES.grunt.hp >= 38 && ENEMIES.grunt.dmg >= 8.5, "raider base is Pass-15 strong");
+ok(ENEMIES.shield.armor >= 6 && ENEMIES.shield.dmg >= 7, "shield is a real mid-S1 stopper");
+ok(ENEMIES.berserk.dmg >= 10, "berserker damage is a threat");
+ok(ENEMIES.butcher.dmg >= 13, "Butcher hits hard enough to gate virgin runs");
+ok(ENEMIES.archer.keep === 100, "archer keep stays 100");
 
 ok(CLASSES.ranger.skills[2].id === "sic", "Ranger 3 stays Sic 'em");
 ok(CLASSES.ranger.skills[2].cd >= 12, "Sic 'em revive CD leaves a down window");
@@ -171,6 +178,7 @@ console.log(
       stage2Origin: stageOriginX(2),
       wave8: waveScale(8),
       wave20: waveScale(20),
+      tempo: { w2: nextWaveDelay(2), w8: nextWaveDelay(8), cap6: liveCap(6) },
       nova: NOVA,
       firstIron,
     },
