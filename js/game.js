@@ -13,7 +13,7 @@
   const START_GOLD = 24;
   const DROP_PICK_R = 160;
   const DROP_MAGNET_AGE = 0.32;
-  const VITAL_CAP = 900;
+  const VITAL_CAP = HERO_VITAL_CAP;
   const HEAL_GOLD = "#ffe27a";
   const HEAL_GOLD_HOT = "#fff4a8";
   const HEAL_GOLD_INK = "#1a1208";
@@ -136,7 +136,14 @@
     const h = run.hero;
     const s = classDef(h && h.klass).skills[slot];
     if (!s || !s.cd) return 0;
-    return cdScale(s.cd, s.cdMin);
+    const mult = (h && h.skillCdMult && h.skillCdMult[slot]) || 1;
+    return cdScale(s.cd * Math.max(0.35, mult), s.cdMin);
+  }
+
+  function hasSkill(slot) {
+    const h = run.hero;
+    if (!h) return treeGrantsSkill(activeKlass(), slot, treeBag(activeKlass()));
+    return !!(h.skillUnlock && h.skillUnlock[slot]);
   }
 
   function readDisk() {
@@ -149,26 +156,9 @@
   }
 
   function migrateRaw(raw) {
-    const src = raw && typeof raw === "object" ? raw : {};
-    const klass = validClass(src.klass);
-    const already = src.saveVersion >= SAVE_VERSION && src.trees;
-    if (already) {
-      return {
-        glory: src.glory || 0,
-        bestWave: src.bestWave || 0,
-        klass,
-        trees: normalizeTrees(src.trees),
-        refundNote: src.refundNote || 0,
-      };
-    }
-    const refund = isLegacyPrest(src.prest) ? glorySpentLegacy(src.prest) : 0;
-    return {
-      glory: (src.glory || 0) + refund,
-      bestWave: src.bestWave || 0,
-      klass,
-      trees: normalizeTrees(src.trees),
-      refundNote: refund,
-    };
+    const next = migrateSave(raw);
+    next.klass = validClass(next.klass);
+    return next;
   }
 
   function loadSave() {
@@ -191,21 +181,33 @@
       persist.trees = normalizeTrees(persist.trees);
     }
     persist.bestWave = Math.max(persist.bestWave || 0, (disk && disk.bestWave) || 0);
+    writeDisk(diskPayload());
+    syncTreeHeld();
+  }
+
+  function diskPayload() {
+    return {
+      glory: persist.glory,
+      bestWave: persist.bestWave,
+      trees: persist.trees,
+      klass: persist.klass,
+      saveVersion: SAVE_VERSION,
+      refundNote: persist.refundNote || 0,
+    };
+  }
+
+  function writeDisk(payload) {
     try {
-      localStorage.setItem(
-        SAVE_KEY,
-        JSON.stringify({
-          glory: persist.glory,
-          bestWave: persist.bestWave,
-          trees: persist.trees,
-          klass: persist.klass,
-          saveVersion: SAVE_VERSION,
-          refundNote: persist.refundNote || 0,
-        })
-      );
+      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+      return true;
     } catch (e) {
-      /* quota / private mode — keep memory ranks */
+      return false;
     }
+  }
+
+  function saveExact() {
+    persist.trees = normalizeTrees(persist.trees);
+    writeDisk(diskPayload());
     syncTreeHeld();
   }
 
@@ -255,14 +257,7 @@
   }
 
   function hpPair(hp, max) {
-    const cap = VITAL_CAP;
-    let m = Math.floor(Number(max));
-    if (!Number.isFinite(m) || m < 1) m = 1;
-    if (m > cap) m = cap;
-    let n = Math.floor(Number(hp));
-    if (!Number.isFinite(n) || n < 0) n = 0;
-    if (n > m) n = m;
-    return { hp: n, max: m, text: n + "/" + m };
+    return heroHpPair(hp, max);
   }
 
   function heroFallbackMax() {
@@ -323,6 +318,7 @@
     save();
     buildClassPick();
     if (state === "dead") buildPrestige();
+    syncRespecLabel();
   }
 
   function makeHero() {
@@ -351,6 +347,26 @@
       maxMana: c.maxMana,
       manaRegen: c.manaRegen,
       skillHaste: 0,
+      skillUnlock: [false, false, false],
+      skillCdMult: [1, 1, 1],
+      skillManaOff: [0, 0, 0],
+      whirlDmg: 1,
+      whirlStun: 0,
+      whirlSlow: 0,
+      whirlKnock: 0,
+      chargeDmg: 0,
+      chargeStun: 0,
+      chargeSpd: 0,
+      chargeKnock: 0,
+      chargeSlow: 0,
+      mendPulse: 0,
+      mendBleed: 0,
+      cautAmp: 0,
+      cautIgnite: 0,
+      infernoStun: 0,
+      volleyDmg: 1,
+      volleySlow: 0,
+      dressAmp: 0,
       strikeMult: 1,
       cinder: 0,
       echo: 0,
@@ -586,6 +602,7 @@
       followCamera(0);
       toast(biomeForStage(1).name);
     }
+    setPaused(false);
     document.getElementById("title").classList.add("hidden");
     document.getElementById("dead").classList.add("hidden");
     document.getElementById("hud").classList.remove("hidden");
@@ -601,7 +618,7 @@
       const held = treeHeldText();
       if (held.indexOf("held:") >= 0) toast(held, 2.2);
       if (persist.refundNote > 0) {
-        toast("Old Blood Tree ranks refunded as " + persist.refundNote + " Glory", 3.4);
+        toast("Class trees rebuilt — " + persist.refundNote + " Glory refunded from old ranks", 3.8);
         persist.refundNote = 0;
         save();
       }
@@ -618,6 +635,16 @@
   }
 
   function die() {
+    retireRun("death");
+  }
+
+  function endRun() {
+    return retireRun("end");
+  }
+
+  function retireRun(kind) {
+    if (state !== "fight") return false;
+    setPaused(false);
     hydratePersist();
     const g = gloryFor(run.wave, run.kills);
     persist.glory += g;
@@ -625,16 +652,104 @@
     save();
     state = "dead";
     shake = 0;
+    hideJumpBanner();
     document.getElementById("dead").classList.remove("hidden");
     document.getElementById("shop").classList.add("hidden");
     document.getElementById("keys").classList.add("hidden");
     document.getElementById("hud").classList.add("hidden");
+    document.getElementById("title").classList.add("hidden");
     document.getElementById("dead-summary").textContent =
-      `${biomeForStage(run.stage).name}  ·  Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
+      `${biomeForStage(run.stage || 1).name}  ·  Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
     document.getElementById("dead-glory").textContent = fmt(g);
     buildPrestige();
     buildClassPick();
-    sfx(70, 0.5, "sawtooth", 0.06);
+    syncRespecLabel();
+    sfx(kind === "end" ? 160 : 70, 0.5, kind === "end" ? "triangle" : "sawtooth", 0.06);
+    return { glory: g, wave: run.wave, kills: run.kills, kind: kind || "death" };
+  }
+
+  function setPaused(on) {
+    paused = !!on && state === "fight";
+    const el = document.getElementById("pause");
+    if (el) el.classList.toggle("hidden", !paused);
+    return paused;
+  }
+
+  function togglePause() {
+    if (state !== "fight") return false;
+    return setPaused(!paused);
+  }
+
+  function showTitle() {
+    setPaused(false);
+    hideJumpBanner();
+    state = "title";
+    document.getElementById("title").classList.remove("hidden");
+    document.getElementById("dead").classList.add("hidden");
+    document.getElementById("hud").classList.add("hidden");
+    document.getElementById("shop").classList.add("hidden");
+    document.getElementById("keys").classList.add("hidden");
+    buildClassPick();
+  }
+
+  function respecCurrentClass(opts) {
+    const o = opts || {};
+    const klass = validClass(persist.klass);
+    const tree = prestigeTree(klass);
+    const spent = glorySpentOn(klass, treeBag(klass));
+    if (spent <= 0) {
+      if (!o.silent) toast("No " + tree.name + " ranks to refund");
+      return { refund: 0, klass, glory: persist.glory };
+    }
+    if (!o.force && !window.confirm("Reset " + tree.name + " and refund " + spent + " Glory? Other class trees stay.")) {
+      return { refund: 0, cancelled: true, klass, glory: persist.glory };
+    }
+    const out = respecClassTrees(persist.trees, klass);
+    persist.trees = out.trees;
+    persist.glory += out.refund;
+    saveExact();
+    syncRespecLabel();
+    if (state === "dead") buildPrestige();
+    syncHud();
+    toast(tree.name + " reset — " + out.refund + " Glory refunded");
+    return { refund: out.refund, klass, glory: persist.glory, trees: persist.trees };
+  }
+
+  function wipeAll(opts) {
+    const o = opts || {};
+    if (
+      !o.force &&
+      !window.confirm("Wipe ALL progress?\n\nThis erases Glory, every class tree, and the saved run. This cannot be undone.")
+    ) {
+      return { wiped: false, cancelled: true };
+    }
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (e) {
+      /* private mode */
+    }
+    persist.glory = 0;
+    persist.bestWave = 0;
+    persist.klass = "warrior";
+    persist.trees = emptyTrees();
+    persist.refundNote = 0;
+    jumpDest = 0;
+    Object.assign(run, emptyRun());
+    showTitle();
+    toast("All progress wiped");
+    return { wiped: true, glory: 0, trees: persist.trees, disk: readDisk() };
+  }
+
+  function syncRespecLabel() {
+    const btn = document.getElementById("btn-respec");
+    if (!btn) return;
+    const klass = validClass(persist.klass);
+    const tree = prestigeTree(klass);
+    const spent = glorySpentOn(klass, treeBag(klass));
+    btn.textContent = spent
+      ? "Respec " + tree.name + " — refund " + spent + " Glory"
+      : "Respec " + tree.name + " — no ranks";
+    btn.disabled = spent <= 0;
   }
 
   // --- audio ---
@@ -676,6 +791,12 @@
     el.textContent = msg;
     el.classList.add("show");
     jumpBannerT = 3.6;
+  }
+
+  function hideJumpBanner() {
+    jumpBannerT = 0;
+    const el = document.getElementById("jump-banner");
+    if (el) el.classList.remove("show");
   }
 
   // --- combat helpers ---
@@ -1029,6 +1150,23 @@
     };
   }
 
+  function foeStage(e) {
+    if (e && e.wave) return stageIndex(e.wave);
+    return run.stage || 1;
+  }
+
+  function holdBossToGate(e) {
+    if (!e || !e.def || !e.def.boss) return e;
+    e.x = clampBossWorldX(e.x, foeStage(e));
+    return e;
+  }
+
+  function applyKnock(e, dx) {
+    if (!e || !dx) return e;
+    e.x += dx;
+    return holdBossToGate(e);
+  }
+
   function placePack(wave) {
     const stage = stageIndex(wave);
     const base = packWorldX(stage, wave);
@@ -1219,6 +1357,7 @@
       pierce: opts.pierce || 0,
       aoe: opts.aoe || 0,
       burn: opts.burn || null,
+      slow: opts.slow || 0,
       maxX: opts.maxX != null ? opts.maxX : boltLimitX(dir),
       hit: [],
     });
@@ -1237,7 +1376,7 @@
     if (targets[0]) {
       hitEnemy(targets[0], dmg, crit);
       if (extra && extra.stun) applyCc(targets[0], extra.stun);
-      if (extra && extra.knock) targets[0].x += extra.knock;
+      if (extra && extra.knock) applyKnock(targets[0], extra.knock);
       if (h.bleed) applyDot(targets[0], { kind: "bleed", dps: h.dmg * 0.22 * h.bleed, dur: 2.2 });
     }
     if (targets[1] && extra && extra.cleave) {
@@ -1350,7 +1489,10 @@
 
   function skillManaCost(slot) {
     const s = classDef().skills[slot];
-    return (s && s.mana) || 0;
+    const h = run.hero;
+    const base = (s && s.mana) || 0;
+    const off = (h && h.skillManaOff && h.skillManaOff[slot]) || 0;
+    return Math.max(0, base - off);
   }
 
   function mend() {
@@ -1362,13 +1504,24 @@
     if (h.mendArmor) h.mendArmorT = 3 * h.mendArmor;
     if (h.mendDR) h.mendDRHits = 3;
     floatText(h.x + 56, groundY() - 220, "+" + fmt(got || heal), "#8fd18f");
+    if (h.mendPulse) {
+      const pulse = h.dmg * h.mendPulse * autoDmgMult();
+      for (const e of [...run.enemies]) {
+        if (Math.abs(e.x - h.x) < 160) {
+          hitEnemy(e, pulse, false);
+          if (h.mendBleed) {
+            applyDot(e, { kind: "bleed", dps: h.dmg * 0.2 * h.mendBleed, dur: 2.0 });
+          }
+        }
+      }
+    }
     sfx(480, 0.12, "sine", 0.05);
   }
 
   function cauterize() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(skillManaCost(0) || 22)) return;
-    const heal = h.maxHp * 0.32;
+    const heal = h.maxHp * (0.32 + (h.cautAmp || 0));
     const got = healHero(heal);
     h.cauterizeT = 1.15;
     h.cauterizeWard = 2.4 + (h.cautWardExtra || 0);
@@ -1380,8 +1533,8 @@
     let ignited = 0;
     for (const e of [...run.enemies]) {
       if (Math.abs(e.x - h.x) < igniteR) {
-        hitEnemy(e, h.dmg * 0.45 * autoDmgMult(), false);
-        applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.32, dur: 2.8 }));
+        hitEnemy(e, h.dmg * (0.45 + (h.cautIgnite || 0)) * autoDmgMult(), false);
+        applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * (0.32 + (h.cautIgnite || 0) * 0.4), dur: 2.8 }));
         e.igniteFlash = 1.05;
         ignited += 1;
         floatText(e.x, groundY() - 188, "IGNITE", "#ff6a22");
@@ -1416,7 +1569,7 @@
   function fieldDress() {
     const h = run.hero;
     if (state !== "fight" || !spendMana(skillManaCost(0) || 22)) return;
-    const heal = h.maxHp * 0.2;
+    const heal = h.maxHp * (0.2 + (h.dressAmp || 0));
     const got = healHero(heal);
     h.healFlash = 0.7;
     if (h.dressWard) h.dressWardT = 1.6 * h.dressWard;
@@ -1460,9 +1613,14 @@
 
   function whirlHit() {
     const h = run.hero;
-    const dmg = h.dmg * 0.85 * autoDmgMult();
+    const dmg = h.dmg * 0.85 * (h.whirlDmg || 1) * autoDmgMult();
     const targets = run.enemies.filter((e) => Math.abs(e.x - h.x) < WHIRL_RANGE);
-    for (const e of targets) hitEnemy(e, dmg, false);
+    for (const e of targets) {
+      hitEnemy(e, dmg, false);
+      if (h.whirlStun) applyCc(e, h.whirlStun);
+      if (h.whirlSlow) e.slow = Math.max(e.slow || 0, h.whirlSlow);
+      if (h.whirlKnock) applyKnock(e, (e.x >= h.x ? 1 : -1) * h.whirlKnock);
+    }
     shake = 7;
     sfx(170, 0.08, "sawtooth", 0.045);
   }
@@ -1471,7 +1629,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0 || h.whirl) return;
-    h.skillCd[1] = cdScale(spec.cd || 6);
+    h.skillCd[1] = skillCdScaled(1);
     h.whirl = { t: 0, next: 0, left: 3 + (h.whirlExtra || 0) };
     h.anim = "atk";
     h.animT = 0;
@@ -1481,7 +1639,7 @@
     const h = run.hero;
     const spec = classDef(h.klass).skills[1];
     if (state !== "fight" || h.skillCd[1] > 0) return;
-    h.skillCd[1] = cdScale(spec.cd);
+    h.skillCd[1] = skillCdScaled(1);
     h.inferno = { t: 0, next: 0, left: 3 + (h.infernoExtra || 0), x: h.x + 150 };
     h.anim = "atk";
     h.animT = 0;
@@ -1496,6 +1654,7 @@
       if (e.x > h.x + 20 && e.x < infernoEnd()) {
         hitEnemy(e, dmg, false);
         applyDot(e, ampBurn({ kind: "burn", dps: h.dmg * 0.38, dur: 2.6 }));
+        if (h.infernoStun) applyCc(e, h.infernoStun);
       }
     }
     fx.rings.push({ x: x, t: 0.4, color: "rgba(255,90,20,0.75)", r: 30 });
@@ -1514,8 +1673,9 @@
   function frostNova() {
     const h = run.hero;
     const spec = classDef(h.klass).skills[2];
-    if (state !== "fight" || h.skillCd[2] > 0 || h.mana < spec.mana) return;
-    h.mana -= spec.mana;
+    const mana = skillManaCost(2) || spec.mana;
+    if (state !== "fight" || h.skillCd[2] > 0 || h.mana < mana) return;
+    h.mana -= mana;
     h.skillCd[2] = skillCdScaled(2);
     h.novaT = 0.45;
     if (h.iceLance) h.iceLanceHits = 2;
@@ -1544,7 +1704,7 @@
       .filter((e) => Math.abs(e.x - h.x) < reach)
       .sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
     if (!targets.length) return;
-    h.skillCd[1] = cdScale(c.skills[1].cd);
+    h.skillCd[1] = skillCdScaled(1);
     h.anim = "atk";
     h.animT = 0;
     const n = 5 + (h.volleyExtra || 0);
@@ -1552,7 +1712,7 @@
       const t = targets[i % targets.length];
       const dir = t.x >= h.x ? 1 : -1;
       const crit = Math.random() < h.crit * 0.6;
-      let dmg = h.dmg * 0.74 * autoDmgMult();
+      let dmg = h.dmg * 0.74 * (h.volleyDmg || 1) * autoDmgMult();
       if (crit) dmg *= 2;
       shoot({
         kind: "arrow",
@@ -1561,6 +1721,7 @@
         crit,
         speed: 540,
         y: groundY() - 70 - (i - 2) * 14,
+        slow: h.volleySlow || 0,
       });
     }
     shake = 5;
@@ -1575,7 +1736,7 @@
       toast("Wolf is up");
       return;
     }
-    h.skillCd[2] = cdScale(spec.cd);
+    h.skillCd[2] = skillCdScaled(2);
     const at = run.wolf ? run.wolf.x : h.x + 56;
     const fresh = makeWolf();
     fresh.x = at || h.x + 56;
@@ -1592,6 +1753,7 @@
 
   function useSkill(slot) {
     if (state !== "fight" || firstBuyPending()) return;
+    if (!hasSkill(slot)) return;
     const c = classDef(run.hero.klass);
     const id = c.skills[slot].id;
     if (id === "mend") mend();
@@ -1728,14 +1890,17 @@
     const melee = livingInRange(h.reach + 16, false);
 
     if (h.mode === "charge") {
-      h.x += CHARGE_SPEED * dt;
+      h.x += CHARGE_SPEED * (1 + (h.chargeSpd || 0)) * dt;
       h.anim = "atk";
       h.animT = 0.12;
       for (const e of [...run.enemies]) {
         if (!e.charged && Math.abs(e.x - h.x) < 42) {
           e.charged = true;
           e.aggro = true;
-          hitEnemy(e, h.dmg * 0.8 * autoDmgMult(), false);
+          hitEnemy(e, h.dmg * (0.8 + (h.chargeDmg || 0)) * autoDmgMult(), false);
+          if (h.chargeStun) applyCc(e, h.chargeStun);
+          if (h.chargeSlow) e.slow = Math.max(e.slow || 0, h.chargeSlow);
+          if (h.chargeKnock) applyKnock(e, (e.x >= h.x ? 1 : -1) * h.chargeKnock);
         }
       }
       if (h.x >= (h.chargeTo || h.x)) {
@@ -1743,7 +1908,7 @@
         h.mode = "march";
       }
     } else if (h.mode === "return") {
-      h.x -= RETURN_SPEED * dt;
+      h.x -= RETURN_SPEED * (1 + (h.chargeSpd || 0)) * dt;
       h.anim = "walk";
       h.animT += dt;
       if (h.x <= (h.returnTo || h.x)) {
@@ -1938,6 +2103,7 @@
           }
         }
       }
+      holdBossToGate(e);
     }
 
     for (const b of fx.bolts) {
@@ -1948,6 +2114,7 @@
           if (Math.abs(b.x - e.x) < 30 && b.hit.indexOf(e) < 0) {
             hitEnemy(e, b.dmg, b.crit);
             if (b.burn) applyDot(e, b.burn);
+            if (b.slow) e.slow = Math.max(e.slow || 0, b.slow);
             if (b.aoe) {
               for (const o of [...run.enemies]) {
                 if (o !== e && o.hp > 0 && Math.abs(o.x - e.x) < b.aoe) {
@@ -2178,43 +2345,143 @@
     }
   }
 
+  function treePalette(biome) {
+    if (biome.id === "duskwood") {
+      return {
+        ink: "#0a0806",
+        trunk: "#5a3a1c",
+        bark: "#8a5a28",
+        canopy: "#3a5a28",
+        canopyHi: "#5a7a38",
+        fire: true,
+        ember: "#ff6a22",
+        flame: "#ffb040",
+        core: "#fff4a8",
+      };
+    }
+    if (biome.id === "ember") {
+      return {
+        ink: "#0a0402",
+        trunk: "#5a2814",
+        bark: "#8a3a18",
+        canopy: "#6a3218",
+        canopyHi: "#b04a20",
+        fire: true,
+        ember: "#ff4a12",
+        flame: "#ff8a2a",
+        core: "#ffe27a",
+      };
+    }
+    if (biome.id === "rime") {
+      return {
+        ink: "#061018",
+        trunk: "#3a5060",
+        bark: "#6a88a0",
+        canopy: "#5a7a8c",
+        canopyHi: "#c8e8f6",
+        frost: true,
+      };
+    }
+    if (biome.id === "storm") {
+      return {
+        ink: "#080610",
+        trunk: "#3a2a58",
+        bark: "#6a4a88",
+        canopy: "#4a3080",
+        canopyHi: "#8a64d0",
+        spark: true,
+      };
+    }
+    return {
+      ink: "#140c06",
+      trunk: "#5a3a18",
+      bark: "#8a5a20",
+      canopy: "#6a4a1c",
+      canopyHi: "#e6c15a",
+      gilt: true,
+    };
+  }
+
+  function fillBlock(x, y, w, h, fill, ink) {
+    ctx.fillStyle = ink;
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  function drawRoadTree(x, gy, seed, pal) {
+    const lean = (seed % 3) - 1;
+    const scale = 1.28 + (seed % 3) * 0.12;
+    const cx = Math.round(x + 22 + lean * 8);
+    const trunkW = Math.max(10, Math.round(12 * scale));
+    const trunkH = Math.round(46 * scale);
+    const massW = Math.round(64 * scale);
+    const massH = Math.round(36 * scale);
+    const capW = Math.round(48 * scale);
+    const capH = Math.round(16 * scale);
+    const trunkTop = gy - trunkH;
+    const massY = trunkTop - Math.round(massH * 0.62);
+    const capY = massY - Math.round(capH * 0.45);
+    fillBlock(cx - Math.floor(trunkW / 2), trunkTop, trunkW, trunkH, pal.trunk, pal.ink);
+    ctx.fillStyle = pal.bark;
+    ctx.fillRect(cx - Math.floor(trunkW / 2) + 3, trunkTop + 8, 3, trunkH - 14);
+    fillBlock(cx - Math.floor(massW / 2), massY, massW, massH, pal.canopy, pal.ink);
+    fillBlock(cx - Math.floor(capW / 2), capY, capW, capH, pal.canopy, pal.ink);
+    fillBlock(cx - Math.floor(massW / 2) - 10, massY + 8, 16, massH - 14, pal.canopy, pal.ink);
+    fillBlock(cx + Math.floor(massW / 2) - 6, massY + 6, 18, massH - 12, pal.canopy, pal.ink);
+    ctx.fillStyle = pal.canopyHi;
+    ctx.fillRect(cx - 14, massY + 8, 22, 6);
+    ctx.fillRect(cx + 8, massY + 14, 16, 5);
+    if (pal.frost) {
+      ctx.fillStyle = "#e8f6ff";
+      ctx.fillRect(cx - Math.floor(capW / 2), capY - 2, capW, 4);
+      ctx.fillRect(cx - Math.floor(massW / 2) + 6, massY + 2, massW - 12, 3);
+    }
+    if (pal.spark) {
+      ctx.fillStyle = "#d8c4ff";
+      ctx.fillRect(cx + Math.floor(massW / 2) - 4, capY - 4, 2, 14);
+      ctx.fillRect(cx + Math.floor(massW / 2) - 8, capY + 4, 10, 2);
+    }
+    if (pal.gilt) {
+      ctx.fillStyle = pal.canopyHi;
+      ctx.fillRect(cx - Math.floor(capW / 2) + 4, capY, capW - 8, 3);
+      ctx.fillRect(cx + 12, massY + 12, 6, 6);
+    }
+    if (pal.fire) {
+      ctx.fillStyle = "rgba(255, 90, 20, 0.28)";
+      ctx.beginPath();
+      ctx.ellipse(cx, massY + massH * 0.45, massW * 0.42, massH * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = pal.ember;
+      ctx.fillRect(cx - 16, massY + 10, 10, 8);
+      ctx.fillRect(cx + 6, massY + 16, 12, 8);
+      ctx.fillRect(cx - 4, capY + 4, 8, 6);
+      ctx.fillStyle = pal.flame;
+      ctx.fillRect(cx - 13, massY + 12, 5, 4);
+      ctx.fillRect(cx + 9, massY + 18, 6, 4);
+      ctx.fillStyle = pal.core;
+      ctx.fillRect(cx - 2, capY + 6, 3, 3);
+      ctx.fillStyle = pal.ember;
+      ctx.fillRect(cx - 6, trunkTop + 12, 4, 4);
+      ctx.fillRect(cx + 2, trunkTop + 22, 3, 3);
+      ctx.fillRect(cx - 4, gy - 8, 3, 3);
+      ctx.fillStyle = pal.flame;
+      ctx.fillRect(cx + Math.floor(massW / 2) - 2, massY + 10, 5, 7);
+      ctx.fillRect(cx - Math.floor(massW / 2) + 2, massY + 14, 5, 6);
+    }
+  }
+
+  // Roadside deco: oak-shaped trees (wide canopy + trunk), never a chevron.
+  // Duskwood / Ember add ember cores and side flame; other biomes keep the same grammar.
   function drawSilhouettes(biome, gy) {
     const span = 220;
     const start = Math.floor(camera / span) - 1;
+    const pal = treePalette(biome);
     ctx.save();
-    ctx.fillStyle = biome.accent;
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.94;
     for (let i = 0; i < 8; i++) {
-      const wx = (start + i) * span + 40;
-      const x = sx(wx);
-      const hgt = 90 + ((start + i) % 5) * 16;
-      if (biome.id === "duskwood") {
-        ctx.beginPath();
-        ctx.moveTo(x, gy);
-        ctx.lineTo(x + 18, gy - hgt);
-        ctx.lineTo(x + 36, gy);
-        ctx.fill();
-      } else if (biome.id === "ember") {
-        ctx.fillRect(x + 8, gy - hgt * 0.45, 22, hgt * 0.45);
-        ctx.beginPath();
-        ctx.moveTo(x, gy - hgt * 0.45);
-        ctx.lineTo(x + 19, gy - hgt);
-        ctx.lineTo(x + 38, gy - hgt * 0.45);
-        ctx.fill();
-      } else if (biome.id === "rime") {
-        ctx.beginPath();
-        ctx.moveTo(x + 16, gy);
-        ctx.lineTo(x + 6, gy - hgt);
-        ctx.lineTo(x + 26, gy - hgt * 0.7);
-        ctx.lineTo(x + 36, gy);
-        ctx.fill();
-      } else if (biome.id === "storm") {
-        ctx.fillRect(x + 10, gy - hgt * 0.35, 28, hgt * 0.35);
-        ctx.fillRect(x + 18, gy - hgt, 8, hgt);
-      } else {
-        ctx.fillRect(x + 4, gy - hgt * 0.6, 34, hgt * 0.6);
-        ctx.fillRect(x + 12, gy - hgt, 18, hgt * 0.4);
-      }
+      const n = start + i;
+      drawRoadTree(sx(n * span + 40), gy, Math.abs(n), pal);
     }
     ctx.restore();
   }
@@ -2281,7 +2548,7 @@
     ctx.strokeStyle = o.urgent ? "#ffe27a" : low ? "#ff8a6a" : "#1a120c";
     ctx.lineWidth = o.urgent ? 2.2 : 1.4;
     ctx.strokeRect(left + 0.5, y + 0.5, w - 1, hgt - 1);
-    const pair = hpPair(hp, max);
+    const pair = o.hero ? hpPair(hp, max) : worldHpPair(hp, max);
     const label = o.label ? o.label + " " + pair.text : pair.text;
     ctx.font = "bold 13px VT323, monospace";
     ctx.textAlign = "center";
@@ -2323,9 +2590,9 @@
 
   function healSkillReady() {
     const h = run.hero;
-    if (!h || state !== "fight") return false;
+    if (!h || state !== "fight" || !hasSkill(0)) return false;
     const s = classDef(h.klass).skills[0];
-    if (s.mana && h.mana < s.mana) return false;
+    if (s.mana && h.mana < skillManaCost(0)) return false;
     if (s.cd && (h.skillCd[0] || 0) > 0) return false;
     return true;
   }
@@ -2348,7 +2615,7 @@
 
   function sicReady() {
     const h = run.hero;
-    if (!h || h.klass !== "ranger" || state !== "fight") return false;
+    if (!h || h.klass !== "ranger" || state !== "fight" || !hasSkill(2)) return false;
     if ((h.skillCd[2] || 0) > 0) return false;
     return !!(run.wolf && run.wolf.hp <= 0);
   }
@@ -2396,6 +2663,7 @@
         h: 13,
         label: "YOU",
         urgent: healUrgent(),
+        hero: true,
       });
     }
   }
@@ -2551,10 +2819,10 @@
     const accent = cdef.color || "#e6c15a";
     const slots = [
       { lab: "S", frac: Math.min(1, h.strikeCd / Math.max(0.01, cdScale(cdef.strikeCd))), color: "#e6c15a" },
-      { lab: "1", frac: skillCdFrac(0), color: "#7ad0ff" },
-      { lab: "2", frac: skillCdFrac(1), color: "#7ad0ff" },
-      { lab: "3", frac: skillCdFrac(2), color: "#7ad0ff" },
     ];
+    if (hasSkill(0)) slots.push({ lab: "1", frac: skillCdFrac(0), color: "#7ad0ff" });
+    if (hasSkill(1)) slots.push({ lab: "2", frac: skillCdFrac(1), color: "#7ad0ff" });
+    if (hasSkill(2)) slots.push({ lab: "3", frac: skillCdFrac(2), color: "#7ad0ff" });
     const r = 13;
     const gap = 12;
     const padX = 16;
@@ -2986,6 +3254,7 @@
     const h = run.hero;
     const c = classDef(h ? h.klass : persist.klass);
     const s = c.skills[slot];
+    if (!hasSkill(slot)) return (slot + 1) + " LOCKED";
     if (s.toggle) {
       if (h && h.mode === "charge") return "Return";
       return s.name;
@@ -2996,14 +3265,14 @@
     if (s.cd && h && h.skillCd[slot] > 0) {
       return s.name + " (" + Math.ceil(h.skillCd[slot]) + "s)";
     }
-    if (s.mana) return s.name + " (" + s.mana + ")";
+    if (s.mana) return s.name + " (" + skillManaCost(slot) + ")";
     if (s.cd) return s.name + " (" + s.cd + "s)";
     return s.name;
   }
 
   function skillDisabled(slot) {
     const h = run.hero;
-    if (!h) return true;
+    if (!h || !hasSkill(slot)) return true;
     const s = classDef(h.klass).skills[slot];
     if (s.mana && h.mana < s.mana) return true;
     if (s.cd && (Number(h.skillCd[slot]) || 0) > 0) return true;
@@ -3023,15 +3292,13 @@
     syncFirstBuyCopy(c);
     const keys = document.getElementById("keys");
     if (keys) {
-      keys.textContent =
-        "Click / Space: " +
-        c.strikeName +
-        " · 1 " +
-        c.skills[0].name +
-        " · 2 " +
-        c.skills[1].name +
-        " · 3 " +
-        c.skills[2].name;
+      const bits = ["Click / Space: " + c.strikeName];
+      for (let i = 0; i < 3; i++) {
+        if (hasSkill(i)) bits.push(i + 1 + " " + c.skills[i].name);
+      }
+      if (bits.length === 1) bits.push("1 / 2 / 3 locked until the class tree grants them");
+      bits.push("P Pause · End run opens prestige");
+      keys.textContent = bits.join(" · ");
     }
   }
 
@@ -3041,10 +3308,12 @@
       const btn = document.getElementById("btn-s" + (i + 1));
       if (!btn) continue;
       const lab = btn.querySelector("b") || btn;
+      const locked = !hasSkill(i);
       lab.textContent = skillLabel(i);
       const dead = skillDisabled(i);
       btn.disabled = dead;
-      btn.classList.toggle("ready", !dead && !!h && state === "fight");
+      btn.classList.toggle("locked", locked);
+      btn.classList.toggle("ready", !locked && !dead && !!h && state === "fight");
       const frac = h ? skillCdFrac(i) : 0;
       btn.style.setProperty("--cd", String(Math.round((Number.isFinite(frac) ? frac : 0) * 100)));
     }
@@ -3124,7 +3393,7 @@
       if (wolfAlive()) {
         const tag = run.wolf.taunt > 0 ? "Taunt" : "Guard";
         buffs.push("Wolf " + fmt(run.wolf.hp) + "/" + fmt(run.wolf.maxHp) + " " + tag);
-      } else buffs.push("Wolf down — press 3");
+      } else buffs.push(hasSkill(2) ? "Wolf down — press 3" : "Wolf down");
     }
     if (lastStanding()) buffs.push("Last Stand");
     if (h.secondWind > 0) buffs.push("Wind " + h.secondWind);
@@ -3326,6 +3595,7 @@
     const lv = bag[u.id] || 0;
     if (lv >= (u.max || 8)) return false;
     if (!prestReqMet(u, bag, klass) && lv === 0) return false;
+    if (lv === 0 && choiceRival(u, bag, klass)) return false;
     const c = u.cost(lv);
     if (persist.glory < c) return false;
     persist.glory -= c;
@@ -3353,12 +3623,14 @@
     const maxed = lv >= (u.max || 8);
     const c = u.cost(lv);
     const st = lv > 0 ? "owned" : open ? "open" : "locked";
-    const req = prestReqText(u, klass);
-    const btnLabel = maxed ? "MAX" : c + " glory";
+    const req = prestReqText(u, klass, bag);
+    const rival = choiceRival(u, bag, klass);
+    const badge = u.unlockSkill != null ? "UNLOCK" : u.choice ? "PICK ONE" : u.kind === "passive" ? "PASSIVE" : "";
+    const btnLabel = maxed ? "MAX" : rival ? "LOCKED" : c + " glory";
     const step = document.createElement("div");
-    step.className = "tree-step depth-" + (u.root ? 0 : u.row) + " " + st;
-    step.innerHTML = `<div class="tree-node ${st}">
-      <div class="name">${u.name} <span>${lv}/${u.max}</span></div>
+    step.className = "tree-step depth-" + (u.root ? 0 : u.row) + " " + st + (u.choice ? " choice-node" : "") + (u.unlockSkill != null ? " unlock-node" : "");
+    step.innerHTML = `<div class="tree-node ${st}${u.choice ? " choice" : ""}${u.unlockSkill != null ? " unlock" : ""}">
+      <div class="name">${badge ? `<em>${badge}</em>` : ""}${u.name} <span>${lv}/${u.max}</span></div>
       <div class="desc">${u.desc}</div>
       ${req && !open ? `<div class="req">Needs ${req}</div>` : ""}
       <button type="button">${btnLabel}</button>
@@ -3385,9 +3657,10 @@
     if (note) {
       note.textContent =
         tree.blurb +
-        " Fill every rank on a node before its children unlock. Deeper nodes cost more Glory.";
+        " Fill every rank on a node before its children unlock. Choice nodes are mutually exclusive. Deeper nodes cost more Glory.";
     }
     syncTreeHeld();
+    syncRespecLabel();
     const root = prestigeRoot(klass);
     if (root) {
       const rootWrap = document.createElement("div");
@@ -3419,8 +3692,18 @@
         if (group.length === 1) trunk.appendChild(renderTreeNode(klass, group[0], bag));
         else {
           const fork = document.createElement("div");
-          fork.className = "tree-fork";
-          group.forEach((u) => fork.appendChild(renderTreeNode(klass, u, bag)));
+          const picks = group.some((n) => n.choice);
+          fork.className = "tree-fork" + (picks ? " choice-fork" : "") + (group.length > 2 ? " triple" : "");
+          if (picks) {
+            const lab = document.createElement("div");
+            lab.className = "choice-label";
+            lab.textContent = "Pick one";
+            fork.appendChild(lab);
+          }
+          const row = document.createElement("div");
+          row.className = "choice-row";
+          group.forEach((u) => row.appendChild(renderTreeNode(klass, u, bag)));
+          fork.appendChild(row);
           trunk.appendChild(fork);
         }
       });
@@ -3496,23 +3779,39 @@
     startRun();
   };
   document.getElementById("btn-again").onclick = () => startRun();
+  const endRunBtn = document.getElementById("btn-end-run");
+  if (endRunBtn) endRunBtn.onclick = () => endRun();
+  const endRunPause = document.getElementById("btn-end-run-pause");
+  if (endRunPause) endRunPause.onclick = () => endRun();
+  const resumeBtn = document.getElementById("btn-resume");
+  if (resumeBtn) resumeBtn.onclick = () => setPaused(false);
+  const respecBtn = document.getElementById("btn-respec");
+  if (respecBtn) respecBtn.onclick = () => respecCurrentClass();
+  const wipeBtn = document.getElementById("btn-wipe");
+  if (wipeBtn) wipeBtn.onclick = () => wipeAll();
+  const wipeTitle = document.getElementById("btn-wipe-title");
+  if (wipeTitle) wipeTitle.onclick = () => wipeAll();
   document.getElementById("btn-s1").onclick = () => useSkill(0);
   document.getElementById("btn-s2").onclick = () => useSkill(1);
   document.getElementById("btn-s3").onclick = () => useSkill(2);
   canvas.addEventListener("pointerdown", (ev) => {
     if (state === "title") return;
-    if (state === "fight") powerStrike();
+    if (state === "fight" && !paused) powerStrike();
   });
   window.addEventListener("keydown", (ev) => {
     if (ev.code === "Space") {
       ev.preventDefault();
       if (state === "title") startRun();
-      else powerStrike();
+      else if (state === "fight" && !paused) powerStrike();
+    }
+    if (paused) {
+      if (ev.key === "p" || ev.key === "P") togglePause();
+      return;
     }
     if (ev.key === "1") useSkill(0);
     if (ev.key === "2") useSkill(1);
     if (ev.key === "3") useSkill(2);
-    if (ev.key === "p" || ev.key === "P") paused = !paused;
+    if (ev.key === "p" || ev.key === "P") togglePause();
   });
   window.addEventListener("resize", resize);
 
@@ -3525,6 +3824,10 @@
     },
     startRun,
     die,
+    endRun,
+    respec: (opts) => respecCurrentClass(opts || { force: true }),
+    wipe: (opts) => wipeAll(opts || { force: true }),
+    pause: (on) => (on == null ? togglePause() : setPaused(!!on)),
     pickClass,
     buyPrestige,
     glory(n) {
@@ -3571,6 +3874,15 @@
     tree() {
       return snapshotPersist();
     },
+    skills() {
+      const c = classDef(run.hero ? run.hero.klass : persist.klass);
+      return [0, 1, 2].map((slot) => ({
+        slot,
+        id: c.skills[slot].id,
+        name: c.skills[slot].name,
+        unlocked: hasSkill(slot),
+      }));
+    },
     shop() {
       return shopList(activeKlass()).map((u) => ({
         id: u.id,
@@ -3601,6 +3913,11 @@
               playSpan: playSpan(),
             }
           : { baseMage: RANGE.mage, baseRanger: RANGE.ranger },
+        skills: [0, 1, 2].map((slot) => ({
+          slot,
+          id: classDef(h && h.klass).skills[slot].id,
+          unlocked: hasSkill(slot),
+        })),
         trees: Object.fromEntries(
           Object.keys(PRESTIGE_TREES).map((k) => [k, { name: PRESTIGE_TREES[k].name, branches: PRESTIGE_TREES[k].branches }])
         ),
@@ -3638,6 +3955,9 @@
           x: Math.round(e.x),
           aggro: !!e.aggro,
           hp: Math.round(e.hp),
+          boss: !!e.def.boss,
+          hold: e.def.boss ? Math.round(bossHoldX(stageIndex(e.wave))) : null,
+          gate: e.def.boss ? Math.round(gateWorldX(stageIndex(e.wave))) : null,
         })),
         drops: fx.drops.map((d) => d.kind),
       };
@@ -3688,6 +4008,37 @@
         wave: run.wave,
       };
     },
+    hpLabels() {
+      const h = run.hero;
+      const hud = document.getElementById("hp-text");
+      return {
+        heroHud: hud ? hud.textContent : "",
+        heroPair: h ? hpPair(h.hp, h.maxHp).text : "",
+        foes: run.enemies
+          .filter((e) => e.hp > 0)
+          .map((e) => ({
+            name: e.def.name,
+            boss: !!e.def.boss,
+            hp: e.hp,
+            maxHp: e.maxHp,
+            label: worldHpPair(e.hp, e.maxHp).text,
+          })),
+      };
+    },
+    knockBoss(dx) {
+      const out = [];
+      for (const e of run.enemies) {
+        if (!e.def.boss || e.hp <= 0) continue;
+        applyKnock(e, dx == null ? 18 : dx);
+        out.push({
+          name: e.def.name,
+          x: Math.round(e.x),
+          hold: Math.round(bossHoldX(foeStage(e))),
+          gate: Math.round(gateWorldX(foeStage(e))),
+        });
+      }
+      return out;
+    },
     smite() {
       [...run.enemies].forEach(killEnemy);
     },
@@ -3712,6 +4063,7 @@
       run.wolf.leap = null;
       run.wolf.deadT = 12;
       floatText(run.wolf.x, groundY() - 150, "WOLF DOWN", "#c07040");
+      syncHud();
       return wolfSnapshot();
     },
   };

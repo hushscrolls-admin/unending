@@ -21,6 +21,9 @@ const {
   stageOriginX,
   packWorldX,
   gateWorldX,
+  BOSS_GATE_PAD,
+  bossHoldX,
+  clampBossWorldX,
   RUN_UPGRADES,
   PRESTIGE_TREES,
   goldCost,
@@ -45,6 +48,15 @@ ok(biomeForStage(3).name === "Rime Pass", "stage 3 is Rime Pass");
 ok(packWorldX(1, 1) > stageOriginX(1), "first pack sits ahead of the origin");
 ok(packWorldX(1, 10) > packWorldX(1, 9), "boss sits past wave 9");
 ok(gateWorldX(1) > packWorldX(1, 10), "gate sits past the boss");
+ok(BOSS_GATE_PAD >= 40, "boss hold pad keeps the body off the portal");
+ok(bossHoldX(1) < gateWorldX(1), "boss hold sits before the gate");
+ok(bossHoldX(1) > packWorldX(1, 10), "boss camp is still behind the hold");
+ok(
+  clampBossWorldX(packWorldX(1, 10) + 18 * 40, 1) === bossHoldX(1),
+  "repeated Power Strike knock stops at the hold, not past the gate"
+);
+ok(clampBossWorldX(gateWorldX(3) + 200, 3) === bossHoldX(3), "Charge shove cannot cross a later gate");
+ok(clampBossWorldX(packWorldX(2, 20), 2) === packWorldX(2, 20), "Ironhide camp is not pulled backward");
 ok(stageOriginX(2) === stageOriginX(1) + stageSpan(), "stage 2 starts after stage 1 span");
 ok(stageIndex(10) === 1 && stageIndex(11) === 2, "stage index splits on 10/11");
 ok(waveInStage(10) === 10 && waveInStage(11) === 1, "wave-in-stage wraps after the boss");
@@ -84,9 +96,11 @@ ok(CLASSES.ranger.skills[2].cd >= 12, "Sic 'em revive CD leaves a down window");
 ok(CLASSES.ranger.skills[0].id === "dress", "Ranger 1 stays Field Dress");
 
 for (const [id, tree] of Object.entries(PRESTIGE_TREES)) {
-  ok(tree.nodes.length >= 31, id + " tree is 31 nodes");
+  ok(tree.nodes.length >= 31, id + " tree stays deep");
   ok(tree.branches.length === 3, id + " still has three branches");
-  ok(Math.max(...tree.nodes.map((n) => n.row || 0)) >= 7, id + " reaches row 7");
+  ok(Math.max(...tree.nodes.map((n) => n.row || 0)) >= 6, id + " climbs past the unlock row");
+  ok(tree.nodes.filter((n) => n.unlockSkill != null).length === 3, id + " unlocks all three skills");
+  ok(tree.nodes.some((n) => n.choice), id + " has mutually exclusive choice nodes");
   const shop = RUN_UPGRADES.filter((u) => u.klass === id);
   ok(shop.length >= 12, id + " has a full Armory pool");
 }
@@ -106,6 +120,7 @@ console.log(
       biomes: BIOMES.map((b) => b.name),
       firstPack: packWorldX(1, 1),
       bossX: packWorldX(1, 10),
+      hold: bossHoldX(1),
       gate: gateWorldX(1),
       stage2Origin: stageOriginX(2),
       wave8: waveScale(8),

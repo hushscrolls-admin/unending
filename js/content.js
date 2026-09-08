@@ -154,12 +154,28 @@ function gateWorldX(stage) {
   return packWorldX(stage, STAGE_LEN) + ROAD.afterBoss;
 }
 
+// Keep a living boss on this side of the biome gate. Power Strike
+// always knocks +x; Charge / Whirl can too. Without a hold they slide
+// through the portal into the next stage.
+const BOSS_GATE_PAD = 56;
+
+function bossHoldX(stage) {
+  return gateWorldX(stage) - BOSS_GATE_PAD;
+}
+
+function clampBossWorldX(x, stage) {
+  const n = Number(x);
+  const cap = bossHoldX(stage);
+  if (!Number.isFinite(n)) return cap;
+  return Math.min(n, cap);
+}
+
 const CLASSES = {
   warrior: {
     id: "warrior",
     name: "Warrior",
     tag: "Steel and grit",
-    blurb: "Melee cleave. Charge the back line and stay there.",
+    blurb: "Melee cleave and Power Strike. Unlock Mend, Whirlwind, and Charge on the Iron Pact.",
     color: "#c9a227",
     sprite: "hero",
     anims: true,
@@ -187,7 +203,7 @@ const CLASSES = {
     id: "mage",
     name: "Fire Mage",
     tag: "Flame and frost",
-    blurb: "Ranged bolts. Burn them down, then freeze the pack.",
+    blurb: "Firebolts and Fireball. Unlock Cauterize, Inferno, and Frost Nova on the Ember Court.",
     color: "#ff6a3a",
     sprite: "heroMage",
     anims: false,
@@ -217,7 +233,7 @@ const CLASSES = {
     id: "ranger",
     name: "Ranger",
     tag: "Bow and wolf",
-    blurb: "Ranged burst. Your wolf holds the road — until it falls.",
+    blurb: "Bow and Aimed Shot. Unlock Field Dress, Volley, and Sic 'em on the Wild Hunt.",
     color: "#7aaf4a",
     sprite: "heroRanger",
     anims: false,
@@ -952,24 +968,37 @@ function deepCost(depth, lv) {
   return base + lv * step;
 }
 
+function grantSkill(slot) {
+  return (h, lv) => {
+    if (lv > 0) {
+      h.skillUnlock = h.skillUnlock || [false, false, false];
+      h.skillUnlock[slot] = true;
+    }
+  };
+}
+
 function node(spec) {
   const depth = spec.root ? 0 : spec.row;
-  return Object.assign(
+  const gated = spec.unlockSkill != null || !!spec.choice;
+  const built = Object.assign(
     {
-      max: 3,
+      max: gated ? 1 : 3,
       req: spec.root ? [] : spec.req || [],
       cost: spec.cost || ((lv) => deepCost(depth, lv)),
     },
     spec
   );
+  if (built.unlockSkill != null && !spec.apply) built.apply = grantSkill(built.unlockSkill);
+  return built;
 }
 
 const PRESTIGE_TREES = {
   warrior: {
     id: "warrior",
     name: "Iron Pact",
-    blurb: "One oath, then Shield, Blade, and Spoils. Each path forks after the old leaf.",
-    branches: ["Shield", "Blade", "Spoils"],
+    blurb:
+      "Start with steel and an Oath. Passives open each branch. Unlock Mend, Whirlwind, and Charge, then pick one mutation.",
+    branches: ["Shield", "Blade", "Vanguard"],
     nodes: [
       node({
         id: "oath",
@@ -979,6 +1008,7 @@ const PRESTIGE_TREES = {
         row: 0,
         root: true,
         max: 3,
+        kind: "passive",
         desc: "+18 starting HP and +1 damage each run",
         apply: (h, lv) => {
           h.maxHp += lv * 18;
@@ -993,6 +1023,7 @@ const PRESTIGE_TREES = {
         branch: "Shield",
         col: 0,
         row: 1,
+        kind: "passive",
         req: ["oath"],
         desc: "+1.2 armor each run",
         apply: (h, lv) => {
@@ -1000,79 +1031,75 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "secondwind",
-        name: "Second Wind",
+        id: "unlockmend",
+        name: "Mend",
         branch: "Shield",
         col: 0,
         row: 2,
-        max: 2,
+        kind: "unlock",
+        unlockSkill: 0,
         req: ["hide"],
-        desc: "At 30% HP, heal 26% (charges = ranks)",
-        apply: (h, lv) => {
-          h.secondWind = lv;
-        },
+        desc: "Unlocks Mend — heal yourself for mana",
       }),
       node({
-        id: "thorns",
-        name: "Thorns",
+        id: "suture",
+        name: "Suture",
         branch: "Shield",
         col: 0,
         row: 3,
-        req: ["secondwind"],
-        desc: "Reflect 10% of melee hits per rank",
+        kind: "alter",
+        req: ["unlockmend"],
+        desc: "Mend heals +4% of max HP per rank",
         apply: (h, lv) => {
-          h.thorns = lv;
+          h.mendAmp = (h.mendAmp || 0) + lv * 0.04;
         },
       }),
       node({
-        id: "laststand",
-        name: "Last Stand",
+        id: "ironmend",
+        name: "Iron Mend",
         branch: "Shield",
         col: 0,
         row: 4,
-        max: 1,
-        req: ["thorns"],
-        desc: "Below 28% HP: +25% damage and +20% speed",
-        apply: (h, lv) => {
-          if (lv > 0) h.lastStand = true;
-        },
-      }),
-      node({
-        id: "bulwark",
-        name: "Bulwark",
-        branch: "Shield",
-        col: 0,
-        row: 5,
         fork: 0,
-        req: ["laststand"],
-        desc: "First 2 hits each wave deal 16% less per rank",
-        apply: (h, lv) => {
-          h.waveWard = lv;
-        },
-      }),
-      node({
-        id: "aegis",
-        name: "Aegis",
-        branch: "Shield",
-        col: 0,
-        row: 5,
-        fork: 1,
-        req: ["laststand"],
-        desc: "Mend grants +1.4 armor for 3s per rank",
+        choice: "warrior-mend",
+        kind: "choice",
+        req: ["suture"],
+        desc: "CHOICE · Mend grants +1.4 armor for 3s (defense)",
         apply: (h, lv) => {
           h.mendArmor = lv;
         },
       }),
       node({
-        id: "fortress",
-        name: "Fortress",
+        id: "rallymend",
+        name: "Rally Mend",
         branch: "Shield",
         col: 0,
-        row: 6,
-        req: ["bulwark"],
-        desc: "Below 45% HP, +1.6 armor per rank",
+        row: 4,
+        fork: 1,
+        choice: "warrior-mend",
+        kind: "choice",
+        req: ["suture"],
+        desc: "CHOICE · Mend also pulses 55% damage to nearby foes",
         apply: (h, lv) => {
-          h.lowHpArmor = lv;
+          if (lv > 0) h.mendPulse = 0.55;
+        },
+      }),
+      node({
+        id: "swiftmend",
+        name: "Swift Mend",
+        branch: "Shield",
+        col: 0,
+        row: 4,
+        fork: 2,
+        choice: "warrior-mend",
+        kind: "choice",
+        req: ["suture"],
+        desc: "CHOICE · Mend costs 8 less mana",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillManaOff = h.skillManaOff || [0, 0, 0];
+            h.skillManaOff[0] += 8;
+          }
         },
       }),
       node({
@@ -1080,12 +1107,42 @@ const PRESTIGE_TREES = {
         name: "Ironclad",
         branch: "Shield",
         col: 0,
-        row: 6,
-        fork: 1,
-        req: ["aegis"],
+        row: 5,
+        fork: 0,
+        kind: "alter",
+        req: ["ironmend"],
         desc: "After Mend, the next 3 hits deal 12% less per rank",
         apply: (h, lv) => {
           h.mendDR = lv;
+        },
+      }),
+      node({
+        id: "mendbrand",
+        name: "Brand",
+        branch: "Shield",
+        col: 0,
+        row: 5,
+        fork: 1,
+        kind: "alter",
+        req: ["rallymend"],
+        desc: "Mend pulse also applies a short bleed",
+        apply: (h, lv) => {
+          h.mendBleed = lv;
+        },
+      }),
+      node({
+        id: "secondwind",
+        name: "Second Wind",
+        branch: "Shield",
+        col: 0,
+        row: 5,
+        fork: 2,
+        max: 2,
+        kind: "alter",
+        req: ["swiftmend"],
+        desc: "At 30% HP, heal 26% (charges = ranks)",
+        apply: (h, lv) => {
+          h.secondWind = lv;
         },
       }),
       node({
@@ -1093,9 +1150,11 @@ const PRESTIGE_TREES = {
         name: "Unbreakable",
         branch: "Shield",
         col: 0,
-        row: 7,
+        row: 6,
+        fork: 0,
         max: 1,
-        req: ["fortress"],
+        kind: "alter",
+        req: ["ironclad"],
         desc: "Once per run, a killing blow leaves you at 12% HP",
         apply: (h, lv) => {
           if (lv > 0) h.cheatDeath = true;
@@ -1106,13 +1165,29 @@ const PRESTIGE_TREES = {
         name: "Bastion",
         branch: "Shield",
         col: 0,
-        row: 7,
+        row: 6,
         fork: 1,
         max: 1,
-        req: ["ironclad"],
+        kind: "alter",
+        req: ["mendbrand"],
         desc: "Mend heals an extra 10% of max HP",
         apply: (h, lv) => {
-          if (lv > 0) h.mendAmp = 0.1;
+          if (lv > 0) h.mendAmp = (h.mendAmp || 0) + 0.1;
+        },
+      }),
+      node({
+        id: "laststand",
+        name: "Last Stand",
+        branch: "Shield",
+        col: 0,
+        row: 6,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["secondwind"],
+        desc: "Below 28% HP: +25% damage and +20% speed",
+        apply: (h, lv) => {
+          if (lv > 0) h.lastStand = true;
         },
       }),
       node({
@@ -1121,6 +1196,7 @@ const PRESTIGE_TREES = {
         branch: "Blade",
         col: 1,
         row: 1,
+        kind: "passive",
         req: ["oath"],
         desc: "+5% attack speed each run",
         apply: (h, lv) => {
@@ -1128,67 +1204,90 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "execute",
-        name: "Execute",
+        id: "unlockwhirl",
+        name: "Whirlwind",
         branch: "Blade",
         col: 1,
         row: 2,
+        kind: "unlock",
+        unlockSkill: 1,
         req: ["tempo"],
-        desc: "+18% damage to foes below 40% HP",
-        apply: (h, lv) => {
-          h.execute = lv;
-        },
+        desc: "Unlocks Whirlwind — three hits on both sides",
       }),
       node({
-        id: "overkill",
-        name: "Overkill",
+        id: "sweep",
+        name: "Sweep",
         branch: "Blade",
         col: 1,
         row: 3,
-        max: 2,
-        req: ["execute"],
-        desc: "Wasted damage splashes to the nearest foe",
+        kind: "alter",
+        req: ["unlockwhirl"],
+        desc: "Whirlwind damage +12% per rank",
         apply: (h, lv) => {
-          h.overkill = lv;
+          h.whirlDmg = (h.whirlDmg || 1) * Math.pow(1.12, lv);
         },
       }),
       node({
-        id: "bloodlust",
-        name: "Bloodlust",
+        id: "shockwave",
+        name: "Shockwave",
         branch: "Blade",
         col: 1,
         row: 4,
-        max: 2,
-        req: ["overkill"],
-        desc: "Kills grant Rage (1.6s per rank)",
+        fork: 0,
+        choice: "warrior-whirl",
+        kind: "choice",
+        req: ["sweep"],
+        desc: "CHOICE · Whirlwind stuns 0.5s",
         apply: (h, lv) => {
-          h.bloodlust = lv;
+          if (lv > 0) h.whirlStun = (h.whirlStun || 0) + 0.5;
         },
       }),
       node({
-        id: "cleaveform",
-        name: "Cleave Form",
+        id: "maelstrom",
+        name: "Maelstrom",
+        branch: "Blade",
+        col: 1,
+        row: 4,
+        fork: 1,
+        choice: "warrior-whirl",
+        kind: "choice",
+        req: ["sweep"],
+        desc: "CHOICE · Whirlwind +1 hit",
+        apply: (h, lv) => {
+          if (lv > 0) h.whirlExtra = (h.whirlExtra || 0) + 1;
+        },
+      }),
+      node({
+        id: "tempestwhirl",
+        name: "Tempest",
+        branch: "Blade",
+        col: 1,
+        row: 4,
+        fork: 2,
+        choice: "warrior-whirl",
+        kind: "choice",
+        req: ["sweep"],
+        desc: "CHOICE · Whirlwind cooldown −18%",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillCdMult = h.skillCdMult || [1, 1, 1];
+            h.skillCdMult[1] *= 0.82;
+          }
+        },
+      }),
+      node({
+        id: "aftershock",
+        name: "Aftershock",
         branch: "Blade",
         col: 1,
         row: 5,
         fork: 0,
-        req: ["bloodlust"],
-        desc: "Second-target cleave +22% per rank",
+        kind: "alter",
+        req: ["shockwave"],
+        desc: "Whirlwind stun +0.25s and a short slow",
         apply: (h, lv) => {
-          h.cleaveBonus = (h.cleaveBonus || 0) + lv * 0.22;
-        },
-      }),
-      node({
-        id: "deepwounds",
-        name: "Deep Wounds",
-        branch: "Blade",
-        col: 1,
-        row: 5,
-        fork: 1,
-        req: ["bloodlust"],
-        desc: "Autos apply a short bleed (stronger per rank)",
-        apply: (h, lv) => {
-          h.bleed = lv;
+          h.whirlStun = (h.whirlStun || 0) + lv * 0.25;
+          h.whirlSlow = (h.whirlSlow || 0) + lv * 0.8;
         },
       }),
       node({
@@ -1196,25 +1295,13 @@ const PRESTIGE_TREES = {
         name: "Whirl Master",
         branch: "Blade",
         col: 1,
-        row: 6,
-        req: ["cleaveform"],
+        row: 5,
+        fork: 1,
+        kind: "alter",
+        req: ["maelstrom"],
         desc: "Whirlwind +1 hit per rank",
         apply: (h, lv) => {
-          h.whirlExtra = lv;
-        },
-      }),
-      node({
-        id: "heavyhand",
-        name: "Heavy Hand",
-        branch: "Blade",
-        col: 1,
-        row: 6,
-        fork: 1,
-        req: ["deepwounds"],
-        desc: "Power Strike +12% damage and +0.18s stun per rank",
-        apply: (h, lv) => {
-          h.strikeMult = (h.strikeMult || 1) * Math.pow(1.12, lv);
-          h.strikeStun = (h.strikeStun || 0) + lv * 0.18;
+          h.whirlExtra = (h.whirlExtra || 0) + lv;
         },
       }),
       node({
@@ -1222,34 +1309,67 @@ const PRESTIGE_TREES = {
         name: "War Master",
         branch: "Blade",
         col: 1,
-        row: 7,
+        row: 5,
+        fork: 2,
         max: 1,
-        req: ["whirlmaster"],
+        kind: "alter",
+        req: ["tempestwhirl"],
         desc: "Kills refund 0.45s of Whirlwind cooldown",
         apply: (h, lv) => {
           if (lv > 0) h.whirlRefund = 0.45;
         },
       }),
       node({
-        id: "reaper",
-        name: "Reaper",
+        id: "earthquake",
+        name: "Earthquake",
         branch: "Blade",
         col: 1,
-        row: 7,
-        fork: 1,
+        row: 6,
+        fork: 0,
         max: 1,
-        req: ["heavyhand"],
-        desc: "Execute starts at 52% HP instead of 40%",
+        kind: "alter",
+        req: ["aftershock"],
+        desc: "Whirlwind knocks foes back",
         apply: (h, lv) => {
-          if (lv > 0) h.executeHp = 0.52;
+          if (lv > 0) h.whirlKnock = 28;
+        },
+      }),
+      node({
+        id: "bloodlust",
+        name: "Bloodlust",
+        branch: "Blade",
+        col: 1,
+        row: 6,
+        fork: 1,
+        max: 2,
+        kind: "alter",
+        req: ["whirlmaster"],
+        desc: "Kills grant Rage (1.6s per rank)",
+        apply: (h, lv) => {
+          h.bloodlust = lv;
+        },
+      }),
+      node({
+        id: "execute",
+        name: "Execute",
+        branch: "Blade",
+        col: 1,
+        row: 6,
+        fork: 2,
+        kind: "alter",
+        req: ["warmaster"],
+        desc: "+18% damage to foes below 40% HP",
+        apply: (h, lv) => {
+          h.execute = lv;
         },
       }),
       node({
         id: "purse",
         name: "Purse",
-        branch: "Spoils",
+        branch: "Vanguard",
         col: 2,
         row: 1,
+        kind: "passive",
         req: ["oath"],
         desc: "+18 starting gold each run",
         apply: (h, lv) => {
@@ -1257,119 +1377,160 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "greed",
-        name: "Greed",
-        branch: "Spoils",
+        id: "unlockcharge",
+        name: "Charge",
+        branch: "Vanguard",
         col: 2,
         row: 2,
+        kind: "unlock",
+        unlockSkill: 2,
         req: ["purse"],
-        desc: "+12% gold find each run",
+        desc: "Unlocks Charge / Return — trampling dash",
+      }),
+      node({
+        id: "trample",
+        name: "Trample",
+        branch: "Vanguard",
+        col: 2,
+        row: 3,
+        kind: "alter",
+        req: ["unlockcharge"],
+        desc: "Charge damage +25% per rank",
         apply: (h, lv) => {
-          h.goldFind += lv * 0.12;
+          h.chargeDmg = (h.chargeDmg || 0) + lv * 0.25;
         },
       }),
       node({
-        id: "sanguine",
-        name: "Sanguine",
-        branch: "Spoils",
+        id: "stampede",
+        name: "Stampede",
+        branch: "Vanguard",
         col: 2,
-        row: 3,
-        req: ["greed"],
-        desc: "+2% lifesteal each run",
+        row: 4,
+        fork: 0,
+        choice: "warrior-charge",
+        kind: "choice",
+        req: ["trample"],
+        desc: "CHOICE · Charge stuns 0.55s",
         apply: (h, lv) => {
-          h.leech += lv * 0.02;
+          if (lv > 0) h.chargeStun = (h.chargeStun || 0) + 0.55;
+        },
+      }),
+      node({
+        id: "breaker",
+        name: "Breaker",
+        branch: "Vanguard",
+        col: 2,
+        row: 4,
+        fork: 1,
+        choice: "warrior-charge",
+        kind: "choice",
+        req: ["trample"],
+        desc: "CHOICE · Charge +50% damage",
+        apply: (h, lv) => {
+          if (lv > 0) h.chargeDmg = (h.chargeDmg || 0) + 0.5;
+        },
+      }),
+      node({
+        id: "reckless",
+        name: "Reckless",
+        branch: "Vanguard",
+        col: 2,
+        row: 4,
+        fork: 2,
+        choice: "warrior-charge",
+        kind: "choice",
+        req: ["trample"],
+        desc: "CHOICE · Charge and Return 22% faster",
+        apply: (h, lv) => {
+          if (lv > 0) h.chargeSpd = (h.chargeSpd || 0) + 0.22;
+        },
+      }),
+      node({
+        id: "bullrush",
+        name: "Bull Rush",
+        branch: "Vanguard",
+        col: 2,
+        row: 5,
+        fork: 0,
+        kind: "alter",
+        req: ["stampede"],
+        desc: "Charge also knocks foes back",
+        apply: (h, lv) => {
+          h.chargeKnock = (h.chargeKnock || 0) + lv * 22;
+        },
+      }),
+      node({
+        id: "cleaveform",
+        name: "Cleave Form",
+        branch: "Vanguard",
+        col: 2,
+        row: 5,
+        fork: 1,
+        kind: "alter",
+        req: ["breaker"],
+        desc: "Second-target cleave +22% per rank",
+        apply: (h, lv) => {
+          h.cleaveBonus = (h.cleaveBonus || 0) + lv * 0.22;
         },
       }),
       node({
         id: "heirloom",
         name: "Heirloom",
-        branch: "Spoils",
+        branch: "Vanguard",
         col: 2,
-        row: 4,
+        row: 5,
+        fork: 2,
         max: 1,
-        req: ["sanguine"],
+        kind: "alter",
+        req: ["reckless"],
         desc: "Each run starts with Iron I already forged",
         apply: (h, lv) => {
           if (lv > 0) h.heirloom = true;
         },
       }),
       node({
-        id: "warchest",
-        name: "War Chest",
-        branch: "Spoils",
+        id: "warlord",
+        name: "Warlord",
+        branch: "Vanguard",
         col: 2,
-        row: 5,
+        row: 6,
         fork: 0,
-        req: ["heirloom"],
-        desc: "Bosses and elites drop +22% gold per rank",
+        max: 1,
+        kind: "alter",
+        req: ["bullrush"],
+        desc: "Charge leaves a 1.1s slow",
         apply: (h, lv) => {
-          h.eliteGold = lv;
+          if (lv > 0) h.chargeSlow = 1.1;
         },
       }),
       node({
-        id: "scavenger",
-        name: "Scavenger",
-        branch: "Spoils",
-        col: 2,
-        row: 5,
-        fork: 1,
-        req: ["heirloom"],
-        desc: "Heart drops +8% more often per rank",
-        apply: (h, lv) => {
-          h.heartFind = (h.heartFind || 0) + lv * 0.08;
-        },
-      }),
-      node({
-        id: "quartermaster",
-        name: "Quartermaster",
-        branch: "Spoils",
-        col: 2,
-        row: 6,
-        req: ["warchest"],
-        desc: "+14 starting gold and +6% gold find per rank",
-        apply: (h, lv) => {
-          h.startGold = (h.startGold || 0) + lv * 14;
-          h.goldFind += lv * 0.06;
-        },
-      }),
-      node({
-        id: "fieldmedic",
-        name: "Field Medic",
-        branch: "Spoils",
+        id: "reaper",
+        name: "Reaper",
+        branch: "Vanguard",
         col: 2,
         row: 6,
         fork: 1,
-        req: ["scavenger"],
-        desc: "Hearts heal +7% of max HP per rank",
+        max: 1,
+        kind: "alter",
+        req: ["cleaveform"],
+        desc: "Execute starts at 52% HP instead of 40%",
         apply: (h, lv) => {
-          h.heartAmp = (h.heartAmp || 0) + lv * 0.07;
+          if (lv > 0) h.executeHp = 0.52;
         },
       }),
       node({
         id: "kingpin",
         name: "Kingpin",
-        branch: "Spoils",
+        branch: "Vanguard",
         col: 2,
-        row: 7,
+        row: 6,
+        fork: 2,
         max: 1,
-        req: ["quartermaster"],
+        kind: "alter",
+        req: ["heirloom"],
         desc: "Heirloom also starts the run with Swift I",
         apply: (h, lv) => {
           if (lv > 0) h.heirloomSwift = true;
-        },
-      }),
-      node({
-        id: "provisioner",
-        name: "Provisioner",
-        branch: "Spoils",
-        col: 2,
-        row: 7,
-        fork: 1,
-        max: 1,
-        req: ["fieldmedic"],
-        desc: "+1 Second Wind charge, or +10% max HP if you have none",
-        apply: (h, lv) => {
-          if (lv > 0) h.provisioner = true;
         },
       }),
     ],
@@ -1377,8 +1538,9 @@ const PRESTIGE_TREES = {
   mage: {
     id: "mage",
     name: "Ember Court",
-    blurb: "Kindle the root, then Pyre, Frost, and Well. Each path forks after the old leaf.",
-    branches: ["Pyre", "Frost", "Well"],
+    blurb:
+      "Kindle first. Passives open Well, Pyre, and Frost. Unlock Cauterize, Inferno, and Frost Nova, then pick one mutation.",
+    branches: ["Well", "Pyre", "Frost"],
     nodes: [
       node({
         id: "kindle",
@@ -1388,6 +1550,7 @@ const PRESTIGE_TREES = {
         row: 0,
         root: true,
         max: 3,
+        kind: "passive",
         desc: "+12 starting HP, +8 max mana, +0.35 mana regen",
         apply: (h, lv) => {
           h.maxHp += lv * 12;
@@ -1399,271 +1562,12 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "cinder",
-        name: "Cinder",
-        branch: "Pyre",
-        col: 0,
-        row: 1,
-        req: ["kindle"],
-        desc: "Hits apply a short burn (stronger per rank)",
-        apply: (h, lv) => {
-          h.cinder = lv;
-        },
-      }),
-      node({
-        id: "blaze",
-        name: "Blaze",
-        branch: "Pyre",
-        col: 0,
-        row: 2,
-        req: ["cinder"],
-        desc: "+18% burn damage and duration",
-        apply: (h, lv) => {
-          h.burnAmp = (h.burnAmp || 0) + lv * 0.18;
-        },
-      }),
-      node({
-        id: "overkill",
-        name: "Overkill",
-        branch: "Pyre",
-        col: 0,
-        row: 3,
-        max: 2,
-        req: ["blaze"],
-        desc: "Wasted damage splashes to the nearest foe",
-        apply: (h, lv) => {
-          h.overkill = lv;
-        },
-      }),
-      node({
-        id: "wildfire",
-        name: "Wildfire",
-        branch: "Pyre",
-        col: 0,
-        row: 4,
-        max: 1,
-        req: ["overkill"],
-        desc: "Kills spread a short burn to the nearest foe",
-        apply: (h, lv) => {
-          h.wildfire = lv;
-        },
-      }),
-      node({
-        id: "conflagrate",
-        name: "Conflagrate",
-        branch: "Pyre",
-        col: 0,
-        row: 5,
-        fork: 0,
-        req: ["wildfire"],
-        desc: "Burn DPS +16% per rank",
-        apply: (h, lv) => {
-          h.burnAmp = (h.burnAmp || 0) + lv * 0.16;
-        },
-      }),
-      node({
-        id: "immolate",
-        name: "Immolate",
-        branch: "Pyre",
-        col: 0,
-        row: 5,
-        fork: 1,
-        req: ["wildfire"],
-        desc: "Inferno +1 pulse per rank",
-        apply: (h, lv) => {
-          h.infernoExtra = lv;
-        },
-      }),
-      node({
-        id: "kindling",
-        name: "Kindling",
-        branch: "Pyre",
-        col: 0,
-        row: 6,
-        req: ["conflagrate"],
-        desc: "Killing a burning foe restores 4 mana per rank",
-        apply: (h, lv) => {
-          h.burnMana = lv;
-        },
-      }),
-      node({
-        id: "widerfire",
-        name: "Wider Fire",
-        branch: "Pyre",
-        col: 0,
-        row: 6,
-        fork: 1,
-        req: ["immolate"],
-        desc: "Inferno reaches +36 farther per rank (still on the road)",
-        apply: (h, lv) => {
-          h.infernoReach = (h.infernoReach || 0) + lv * 36;
-        },
-      }),
-      node({
-        id: "phoenix",
-        name: "Phoenix",
-        branch: "Pyre",
-        col: 0,
-        row: 7,
-        max: 1,
-        req: ["kindling"],
-        desc: "Once per run, a killing blow leaves you at 18% HP and ignites nearby foes",
-        apply: (h, lv) => {
-          if (lv > 0) h.phoenix = true;
-        },
-      }),
-      node({
-        id: "livingbomb",
-        name: "Living Bomb",
-        branch: "Pyre",
-        col: 0,
-        row: 7,
-        fork: 1,
-        max: 1,
-        req: ["widerfire"],
-        desc: "Wildfire also deals a burst equal to 30% of your damage",
-        apply: (h, lv) => {
-          if (lv > 0) h.livingBomb = true;
-        },
-      }),
-      node({
-        id: "chill",
-        name: "Chill",
-        branch: "Frost",
-        col: 1,
-        row: 1,
-        req: ["kindle"],
-        desc: "Hits slow foes (1.1s per rank)",
-        apply: (h, lv) => {
-          h.chill = lv;
-        },
-      }),
-      node({
-        id: "novadepth",
-        name: "Nova Depth",
-        branch: "Frost",
-        col: 1,
-        row: 2,
-        req: ["chill"],
-        desc: "Frost Nova +14 range and +0.12s freeze",
-        apply: (h, lv) => {
-          h.novaReach = (h.novaReach || 0) + lv * 14;
-          h.novaHold = (h.novaHold || 0) + lv * 0.12;
-        },
-      }),
-      node({
-        id: "shatter",
-        name: "Shatter",
-        branch: "Frost",
-        col: 1,
-        row: 3,
-        max: 2,
-        req: ["novadepth"],
-        desc: "+14% damage to frozen foes",
-        apply: (h, lv) => {
-          h.shatter = lv;
-        },
-      }),
-      node({
-        id: "permafrost",
-        name: "Permafrost",
-        branch: "Frost",
-        col: 1,
-        row: 4,
-        max: 1,
-        req: ["shatter"],
-        desc: "Frost Nova +0.28s freeze and +1 Shatter",
-        apply: (h, lv) => {
-          if (lv > 0) {
-            h.novaHold = (h.novaHold || 0) + 0.28;
-            h.shatter = (h.shatter || 0) + 1;
-          }
-        },
-      }),
-      node({
-        id: "frostbite",
-        name: "Frostbite",
-        branch: "Frost",
-        col: 1,
-        row: 5,
-        fork: 0,
-        req: ["permafrost"],
-        desc: "Slowed foes take +8% damage per rank",
-        apply: (h, lv) => {
-          h.frostbite = lv;
-        },
-      }),
-      node({
-        id: "icelance",
-        name: "Ice Lance",
-        branch: "Frost",
-        col: 1,
-        row: 5,
-        fork: 1,
-        req: ["permafrost"],
-        desc: "After Nova, the next 2 hits deal +28% per rank",
-        apply: (h, lv) => {
-          h.iceLance = lv;
-        },
-      }),
-      node({
-        id: "glacial",
-        name: "Glacial",
-        branch: "Frost",
-        col: 1,
-        row: 6,
-        req: ["frostbite"],
-        desc: "Chill lasts +0.35s per rank",
-        apply: (h, lv) => {
-          h.chillHold = (h.chillHold || 0) + lv * 0.35;
-        },
-      }),
-      node({
-        id: "coldsnap",
-        name: "Cold Snap",
-        branch: "Frost",
-        col: 1,
-        row: 6,
-        fork: 1,
-        req: ["icelance"],
-        desc: "Nova refunds 8 mana per rank (cooldown floor still holds)",
-        apply: (h, lv) => {
-          h.novaMana = lv;
-        },
-      }),
-      node({
-        id: "winterheart",
-        name: "Winterheart",
-        branch: "Frost",
-        col: 1,
-        row: 7,
-        max: 1,
-        req: ["glacial"],
-        desc: "Shatter also applies to slowed foes at half strength",
-        apply: (h, lv) => {
-          if (lv > 0) h.slowShatter = true;
-        },
-      }),
-      node({
-        id: "rime",
-        name: "Rime",
-        branch: "Frost",
-        col: 1,
-        row: 7,
-        fork: 1,
-        max: 1,
-        req: ["coldsnap"],
-        desc: "Killing a frozen foe restores 10 mana",
-        apply: (h, lv) => {
-          if (lv > 0) h.rime = true;
-        },
-      }),
-      node({
         id: "spark",
         name: "Spark",
         branch: "Well",
-        col: 2,
+        col: 0,
         row: 1,
+        kind: "passive",
         req: ["kindle"],
         desc: "+10 max mana and +0.7 mana regen",
         apply: (h, lv) => {
@@ -1673,77 +1577,145 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "tempest",
-        name: "Tempest",
+        id: "unlockcaut",
+        name: "Cauterize",
         branch: "Well",
-        col: 2,
+        col: 0,
         row: 2,
+        kind: "unlock",
+        unlockSkill: 0,
         req: ["spark"],
-        desc: "−6% skill cooldowns per rank",
-        apply: (h, lv) => {
-          h.skillHaste = (h.skillHaste || 0) + lv * 0.06;
-        },
+        desc: "Unlocks Cauterize — heal and ignite nearby foes",
       }),
       node({
-        id: "fate",
-        name: "Fate",
+        id: "brand",
+        name: "Brand",
         branch: "Well",
-        col: 2,
+        col: 0,
         row: 3,
-        req: ["tempest"],
-        desc: "+18% glory on death",
+        kind: "alter",
+        req: ["unlockcaut"],
+        desc: "Cauterize heal +4% and ignite +10% per rank",
         apply: (h, lv) => {
-          h.gloryBonus = lv;
+          h.cautAmp = (h.cautAmp || 0) + lv * 0.04;
+          h.cautIgnite = (h.cautIgnite || 0) + lv * 0.1;
         },
       }),
       node({
-        id: "phylactery",
-        name: "Phylactery",
+        id: "searing",
+        name: "Searing",
         branch: "Well",
-        col: 2,
+        col: 0,
         row: 4,
-        max: 1,
-        req: ["fate"],
-        desc: "Each run starts with Ember I already lit",
+        fork: 0,
+        choice: "mage-caut",
+        kind: "choice",
+        req: ["brand"],
+        desc: "CHOICE · Cauterize ignite +45% damage",
         apply: (h, lv) => {
-          if (lv > 0) h.heirloom = true;
+          if (lv > 0) h.cautIgnite = (h.cautIgnite || 0) + 0.45;
         },
       }),
       node({
-        id: "battery",
-        name: "Battery",
+        id: "mendingflame",
+        name: "Mending Flame",
         branch: "Well",
-        col: 2,
-        row: 5,
-        fork: 0,
-        req: ["phylactery"],
-        desc: "+12 max mana and kills restore 2 mana per rank",
+        col: 0,
+        row: 4,
+        fork: 1,
+        choice: "mage-caut",
+        kind: "choice",
+        req: ["brand"],
+        desc: "CHOICE · Cauterize heals +10% of max HP",
         apply: (h, lv) => {
-          h.maxMana += lv * 12;
-          h.mana += lv * 8;
-          h.killMana = (h.killMana || 0) + lv * 2;
+          if (lv > 0) h.cautAmp = (h.cautAmp || 0) + 0.1;
+        },
+      }),
+      node({
+        id: "emberflow",
+        name: "Emberflow",
+        branch: "Well",
+        col: 0,
+        row: 4,
+        fork: 2,
+        choice: "mage-caut",
+        kind: "choice",
+        req: ["brand"],
+        desc: "CHOICE · Cauterize costs 6 less mana",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillManaOff = h.skillManaOff || [0, 0, 0];
+            h.skillManaOff[0] += 6;
+          }
         },
       }),
       node({
         id: "evocation",
         name: "Evocation",
         branch: "Well",
-        col: 2,
+        col: 0,
         row: 5,
-        fork: 1,
-        req: ["phylactery"],
+        fork: 0,
+        kind: "alter",
+        req: ["searing"],
         desc: "Cauterize restores 10 mana per rank",
         apply: (h, lv) => {
           h.cautMana = lv;
         },
       }),
       node({
+        id: "ritualist",
+        name: "Ritualist",
+        branch: "Well",
+        col: 0,
+        row: 5,
+        fork: 1,
+        max: 1,
+        kind: "alter",
+        req: ["mendingflame"],
+        desc: "Cauterize ward lasts +1.1s",
+        apply: (h, lv) => {
+          if (lv > 0) h.cautWardExtra = 1.1;
+        },
+      }),
+      node({
+        id: "phylactery",
+        name: "Phylactery",
+        branch: "Well",
+        col: 0,
+        row: 5,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["emberflow"],
+        desc: "Each run starts with Ember I already lit",
+        apply: (h, lv) => {
+          if (lv > 0) h.heirloom = true;
+        },
+      }),
+      node({
+        id: "kindling",
+        name: "Kindling",
+        branch: "Well",
+        col: 0,
+        row: 6,
+        fork: 0,
+        kind: "alter",
+        req: ["evocation"],
+        desc: "Killing a burning foe restores 4 mana per rank",
+        apply: (h, lv) => {
+          h.burnMana = lv;
+        },
+      }),
+      node({
         id: "sage",
         name: "Sage",
         branch: "Well",
-        col: 2,
+        col: 0,
         row: 6,
-        req: ["battery"],
+        fork: 1,
+        kind: "alter",
+        req: ["ritualist"],
         desc: "+0.4 mana regen and +8% glory per rank",
         apply: (h, lv) => {
           h.manaRegen += lv * 0.4;
@@ -1751,43 +1723,372 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "spellweave",
-        name: "Spellweave",
-        branch: "Well",
-        col: 2,
-        row: 6,
-        fork: 1,
-        req: ["evocation"],
-        desc: "12% chance an Inferno pulse repeats (not Nova)",
-        apply: (h, lv) => {
-          h.infernoEcho = (h.infernoEcho || 0) + lv * 0.12;
-        },
-      }),
-      node({
         id: "archon",
         name: "Archon",
         branch: "Well",
-        col: 2,
-        row: 7,
+        col: 0,
+        row: 6,
+        fork: 2,
         max: 1,
-        req: ["sage"],
+        kind: "alter",
+        req: ["phylactery"],
         desc: "Start each run with 24 extra mana",
         apply: (h, lv) => {
           if (lv > 0) h.mana += 24;
         },
       }),
       node({
-        id: "ritualist",
-        name: "Ritualist",
-        branch: "Well",
-        col: 2,
-        row: 7,
+        id: "cinder",
+        name: "Cinder",
+        branch: "Pyre",
+        col: 1,
+        row: 1,
+        kind: "passive",
+        req: ["kindle"],
+        desc: "Hits apply a short burn (stronger per rank)",
+        apply: (h, lv) => {
+          h.cinder = lv;
+        },
+      }),
+      node({
+        id: "unlockinferno",
+        name: "Inferno",
+        branch: "Pyre",
+        col: 1,
+        row: 2,
+        kind: "unlock",
+        unlockSkill: 1,
+        req: ["cinder"],
+        desc: "Unlocks Inferno — three pulses of ground fire",
+      }),
+      node({
+        id: "blaze",
+        name: "Blaze",
+        branch: "Pyre",
+        col: 1,
+        row: 3,
+        kind: "alter",
+        req: ["unlockinferno"],
+        desc: "+18% burn damage and duration",
+        apply: (h, lv) => {
+          h.burnAmp = (h.burnAmp || 0) + lv * 0.18;
+        },
+      }),
+      node({
+        id: "wildflare",
+        name: "Wildflare",
+        branch: "Pyre",
+        col: 1,
+        row: 4,
+        fork: 0,
+        choice: "mage-inferno",
+        kind: "choice",
+        req: ["blaze"],
+        desc: "CHOICE · Inferno staggers foes for 0.4s",
+        apply: (h, lv) => {
+          if (lv > 0) h.infernoStun = (h.infernoStun || 0) + 0.4;
+        },
+      }),
+      node({
+        id: "immolate",
+        name: "Immolate",
+        branch: "Pyre",
+        col: 1,
+        row: 4,
+        fork: 1,
+        choice: "mage-inferno",
+        kind: "choice",
+        req: ["blaze"],
+        desc: "CHOICE · Inferno +1 pulse",
+        apply: (h, lv) => {
+          if (lv > 0) h.infernoExtra = (h.infernoExtra || 0) + 1;
+        },
+      }),
+      node({
+        id: "flashfire",
+        name: "Flashfire",
+        branch: "Pyre",
+        col: 1,
+        row: 4,
+        fork: 2,
+        choice: "mage-inferno",
+        kind: "choice",
+        req: ["blaze"],
+        desc: "CHOICE · Inferno cooldown −18%",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillCdMult = h.skillCdMult || [1, 1, 1];
+            h.skillCdMult[1] *= 0.82;
+          }
+        },
+      }),
+      node({
+        id: "widerfire",
+        name: "Wider Fire",
+        branch: "Pyre",
+        col: 1,
+        row: 5,
+        fork: 0,
+        kind: "alter",
+        req: ["wildflare"],
+        desc: "Inferno reaches +36 farther per rank (still on the road)",
+        apply: (h, lv) => {
+          h.infernoReach = (h.infernoReach || 0) + lv * 36;
+        },
+      }),
+      node({
+        id: "conflagrate",
+        name: "Conflagrate",
+        branch: "Pyre",
+        col: 1,
+        row: 5,
+        fork: 1,
+        kind: "alter",
+        req: ["immolate"],
+        desc: "Burn DPS +16% per rank",
+        apply: (h, lv) => {
+          h.burnAmp = (h.burnAmp || 0) + lv * 0.16;
+        },
+      }),
+      node({
+        id: "spellweave",
+        name: "Spellweave",
+        branch: "Pyre",
+        col: 1,
+        row: 5,
+        fork: 2,
+        kind: "alter",
+        req: ["flashfire"],
+        desc: "12% chance an Inferno pulse repeats (not Nova)",
+        apply: (h, lv) => {
+          h.infernoEcho = (h.infernoEcho || 0) + lv * 0.12;
+        },
+      }),
+      node({
+        id: "phoenix",
+        name: "Phoenix",
+        branch: "Pyre",
+        col: 1,
+        row: 6,
+        fork: 0,
+        max: 1,
+        kind: "alter",
+        req: ["widerfire"],
+        desc: "Once per run, a killing blow leaves you at 18% HP and ignites nearby foes",
+        apply: (h, lv) => {
+          if (lv > 0) h.phoenix = true;
+        },
+      }),
+      node({
+        id: "livingbomb",
+        name: "Living Bomb",
+        branch: "Pyre",
+        col: 1,
+        row: 6,
         fork: 1,
         max: 1,
-        req: ["spellweave"],
-        desc: "Cauterize ward lasts +1.1s",
+        kind: "alter",
+        req: ["conflagrate"],
+        desc: "Wildfire-style kill burst equal to 30% of your damage",
         apply: (h, lv) => {
-          if (lv > 0) h.cautWardExtra = 1.1;
+          if (lv > 0) {
+            h.wildfire = Math.max(h.wildfire || 0, 1);
+            h.livingBomb = true;
+          }
+        },
+      }),
+      node({
+        id: "wildfire",
+        name: "Wildfire",
+        branch: "Pyre",
+        col: 1,
+        row: 6,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["spellweave"],
+        desc: "Kills spread a short burn to the nearest foe",
+        apply: (h, lv) => {
+          if (lv > 0) h.wildfire = Math.max(h.wildfire || 0, 1);
+        },
+      }),
+      node({
+        id: "chill",
+        name: "Chill",
+        branch: "Frost",
+        col: 2,
+        row: 1,
+        kind: "passive",
+        req: ["kindle"],
+        desc: "Hits slow foes (1.1s per rank)",
+        apply: (h, lv) => {
+          h.chill = lv;
+        },
+      }),
+      node({
+        id: "unlocknova",
+        name: "Frost Nova",
+        branch: "Frost",
+        col: 2,
+        row: 2,
+        kind: "unlock",
+        unlockSkill: 2,
+        req: ["chill"],
+        desc: "Unlocks Frost Nova — pack-scale freeze (7s CD floor)",
+      }),
+      node({
+        id: "novadepth",
+        name: "Nova Depth",
+        branch: "Frost",
+        col: 2,
+        row: 3,
+        kind: "alter",
+        req: ["unlocknova"],
+        desc: "Frost Nova +8 range and +0.08s freeze per rank",
+        apply: (h, lv) => {
+          h.novaReach = (h.novaReach || 0) + lv * 8;
+          h.novaHold = (h.novaHold || 0) + lv * 0.08;
+        },
+      }),
+      node({
+        id: "deepfreeze",
+        name: "Deep Freeze",
+        branch: "Frost",
+        col: 2,
+        row: 4,
+        fork: 0,
+        choice: "mage-nova",
+        kind: "choice",
+        req: ["novadepth"],
+        desc: "CHOICE · Frost Nova +0.35s freeze",
+        apply: (h, lv) => {
+          if (lv > 0) h.novaHold = (h.novaHold || 0) + 0.35;
+        },
+      }),
+      node({
+        id: "shatter",
+        name: "Shatter",
+        branch: "Frost",
+        col: 2,
+        row: 4,
+        fork: 1,
+        choice: "mage-nova",
+        kind: "choice",
+        req: ["novadepth"],
+        desc: "CHOICE · +14% damage to frozen foes (2 Shatter)",
+        apply: (h, lv) => {
+          if (lv > 0) h.shatter = (h.shatter || 0) + 2;
+        },
+      }),
+      node({
+        id: "coldsnap",
+        name: "Cold Snap",
+        branch: "Frost",
+        col: 2,
+        row: 4,
+        fork: 2,
+        choice: "mage-nova",
+        kind: "choice",
+        req: ["novadepth"],
+        desc: "CHOICE · Nova cooldown −18% (7s floor still holds)",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillCdMult = h.skillCdMult || [1, 1, 1];
+            h.skillCdMult[2] *= 0.82;
+          }
+        },
+      }),
+      node({
+        id: "glacial",
+        name: "Glacial",
+        branch: "Frost",
+        col: 2,
+        row: 5,
+        fork: 0,
+        kind: "alter",
+        req: ["deepfreeze"],
+        desc: "Chill lasts +0.35s per rank",
+        apply: (h, lv) => {
+          h.chillHold = (h.chillHold || 0) + lv * 0.35;
+        },
+      }),
+      node({
+        id: "icelance",
+        name: "Ice Lance",
+        branch: "Frost",
+        col: 2,
+        row: 5,
+        fork: 1,
+        kind: "alter",
+        req: ["shatter"],
+        desc: "After Nova, the next 2 hits deal +28% per rank",
+        apply: (h, lv) => {
+          h.iceLance = lv;
+        },
+      }),
+      node({
+        id: "novamana",
+        name: "Rime Well",
+        branch: "Frost",
+        col: 2,
+        row: 5,
+        fork: 2,
+        kind: "alter",
+        req: ["coldsnap"],
+        desc: "Nova refunds 8 mana per rank (cooldown floor still holds)",
+        apply: (h, lv) => {
+          h.novaMana = lv;
+        },
+      }),
+      node({
+        id: "winterheart",
+        name: "Winterheart",
+        branch: "Frost",
+        col: 2,
+        row: 6,
+        fork: 0,
+        max: 1,
+        kind: "alter",
+        req: ["glacial"],
+        desc: "Shatter also applies to slowed foes at half strength",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.shatter = Math.max(h.shatter || 0, 1);
+            h.slowShatter = true;
+          }
+        },
+      }),
+      node({
+        id: "rime",
+        name: "Rime",
+        branch: "Frost",
+        col: 2,
+        row: 6,
+        fork: 1,
+        max: 1,
+        kind: "alter",
+        req: ["icelance"],
+        desc: "Killing a frozen foe restores 10 mana",
+        apply: (h, lv) => {
+          if (lv > 0) h.rime = true;
+        },
+      }),
+      node({
+        id: "permafrost",
+        name: "Permafrost",
+        branch: "Frost",
+        col: 2,
+        row: 6,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["novamana"],
+        desc: "Frost Nova +0.16s freeze and +1 Shatter",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.novaHold = (h.novaHold || 0) + 0.16;
+            h.shatter = (h.shatter || 0) + 1;
+          }
         },
       }),
     ],
@@ -1795,8 +2096,9 @@ const PRESTIGE_TREES = {
   ranger: {
     id: "ranger",
     name: "Wild Hunt",
-    blurb: "Mark the trail, then Bow, Wolf, and Stride. Each path forks after the old leaf.",
-    branches: ["Bow", "Wolf", "Stride"],
+    blurb:
+      "Mark the trail. Passives open Stride, Bow, and Wolf. Unlock Field Dress, Volley, and Sic 'em, then pick one mutation.",
+    branches: ["Stride", "Bow", "Wolf"],
     nodes: [
       node({
         id: "trail",
@@ -1806,6 +2108,7 @@ const PRESTIGE_TREES = {
         row: 0,
         root: true,
         max: 3,
+        kind: "passive",
         desc: "+12 starting HP, +1 damage, wolf +12 HP",
         apply: (h, lv) => {
           h.maxHp += lv * 12;
@@ -1816,11 +2119,186 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
+        id: "stride",
+        name: "Stride",
+        branch: "Stride",
+        col: 0,
+        row: 1,
+        kind: "passive",
+        req: ["trail"],
+        desc: "+5% attack speed and wolf +12% move speed",
+        apply: (h, lv) => {
+          h.atkRate *= Math.pow(1.05, lv);
+          h.wolfStride = (h.wolfStride || 0) + lv * 0.12;
+        },
+      }),
+      node({
+        id: "unlockdress",
+        name: "Field Dress",
+        branch: "Stride",
+        col: 0,
+        row: 2,
+        kind: "unlock",
+        unlockSkill: 0,
+        req: ["stride"],
+        desc: "Unlocks Field Dress — heal you and a living wolf",
+      }),
+      node({
+        id: "poulticebase",
+        name: "Poultice",
+        branch: "Stride",
+        col: 0,
+        row: 3,
+        kind: "alter",
+        req: ["unlockdress"],
+        desc: "Field Dress heals +5% of max HP per rank",
+        apply: (h, lv) => {
+          h.dressAmp = (h.dressAmp || 0) + lv * 0.05;
+        },
+      }),
+      node({
+        id: "trailward",
+        name: "Trail Ward",
+        branch: "Stride",
+        col: 0,
+        row: 4,
+        fork: 0,
+        choice: "ranger-dress",
+        kind: "choice",
+        req: ["poulticebase"],
+        desc: "CHOICE · Field Dress grants 1.6s of 18% damage reduction",
+        apply: (h, lv) => {
+          if (lv > 0) h.dressWard = Math.max(h.dressWard || 0, 1);
+        },
+      }),
+      node({
+        id: "poultice",
+        name: "Deep Poultice",
+        branch: "Stride",
+        col: 0,
+        row: 4,
+        fork: 1,
+        choice: "ranger-dress",
+        kind: "choice",
+        req: ["poulticebase"],
+        desc: "CHOICE · Field Dress heals +8% more",
+        apply: (h, lv) => {
+          if (lv > 0) h.dressAmp = (h.dressAmp || 0) + 0.08;
+        },
+      }),
+      node({
+        id: "quickhands",
+        name: "Quick Hands",
+        branch: "Stride",
+        col: 0,
+        row: 4,
+        fork: 2,
+        choice: "ranger-dress",
+        kind: "choice",
+        req: ["poulticebase"],
+        desc: "CHOICE · Field Dress costs 6 less mana",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillManaOff = h.skillManaOff || [0, 0, 0];
+            h.skillManaOff[0] += 6;
+          }
+        },
+      }),
+      node({
+        id: "camouflage",
+        name: "Camouflage",
+        branch: "Stride",
+        col: 0,
+        row: 5,
+        fork: 0,
+        kind: "alter",
+        req: ["trailward"],
+        desc: "First 2.2s of each wave you take 14% less per rank",
+        apply: (h, lv) => {
+          h.camo = lv;
+        },
+      }),
+      node({
+        id: "secondwind",
+        name: "Fieldcraft",
+        branch: "Stride",
+        col: 0,
+        row: 5,
+        fork: 1,
+        max: 2,
+        kind: "alter",
+        req: ["poultice"],
+        desc: "At 30% HP, heal 26% (charges = ranks)",
+        apply: (h, lv) => {
+          h.secondWind = lv;
+        },
+      }),
+      node({
+        id: "heirloom",
+        name: "Keepsake",
+        branch: "Stride",
+        col: 0,
+        row: 5,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["quickhands"],
+        desc: "Each run starts with Bodkin I already nocked",
+        apply: (h, lv) => {
+          if (lv > 0) h.heirloom = true;
+        },
+      }),
+      node({
+        id: "veteran",
+        name: "Veteran",
+        branch: "Stride",
+        col: 0,
+        row: 6,
+        fork: 0,
+        max: 1,
+        kind: "alter",
+        req: ["camouflage"],
+        desc: "+1 Fieldcraft charge",
+        apply: (h, lv) => {
+          if (lv > 0) h.secondWind = (h.secondWind || 0) + 1;
+        },
+      }),
+      node({
+        id: "fieldmedic",
+        name: "Trail Medic",
+        branch: "Stride",
+        col: 0,
+        row: 6,
+        fork: 1,
+        kind: "alter",
+        req: ["secondwind"],
+        desc: "Hearts heal +7% of max HP per rank",
+        apply: (h, lv) => {
+          h.heartAmp = (h.heartAmp || 0) + lv * 0.07;
+        },
+      }),
+      node({
+        id: "pathfinder",
+        name: "Pathfinder",
+        branch: "Stride",
+        col: 0,
+        row: 6,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["heirloom"],
+        desc: "Keepsake also starts the run with Swift I",
+        apply: (h, lv) => {
+          if (lv > 0) h.heirloomSwift = true;
+        },
+      }),
+      node({
         id: "edge",
         name: "Edge",
         branch: "Bow",
-        col: 0,
+        col: 1,
         row: 1,
+        kind: "passive",
         req: ["trail"],
         desc: "+4% crit chance each run",
         apply: (h, lv) => {
@@ -1828,44 +2306,75 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "reach",
-        name: "Longshot",
+        id: "unlockvolley",
+        name: "Volley",
         branch: "Bow",
-        col: 0,
+        col: 1,
         row: 2,
+        kind: "unlock",
+        unlockSkill: 1,
         req: ["edge"],
-        desc: "+16 on-road shot range each run",
-        apply: (h, lv) => {
-          h.reach += lv * 16;
-          h.range += lv * 16;
-        },
+        desc: "Unlocks Volley — five arrows",
       }),
       node({
-        id: "echo",
-        name: "Echo",
+        id: "rain",
+        name: "Rain",
         branch: "Bow",
-        col: 0,
+        col: 1,
         row: 3,
         max: 2,
-        req: ["reach"],
-        desc: "+12% chance to repeat an auto per rank",
+        kind: "alter",
+        req: ["unlockvolley"],
+        desc: "Volley +1 arrow per rank",
         apply: (h, lv) => {
-          h.echo = (h.echo || 0) + lv * 0.12;
+          h.volleyExtra = lv;
         },
       }),
       node({
-        id: "marksman",
-        name: "Marksman",
+        id: "pinvolley",
+        name: "Pinning Volley",
         branch: "Bow",
-        col: 0,
+        col: 1,
         row: 4,
-        max: 1,
-        req: ["echo"],
-        desc: "+18% Aimed Shot damage and +1 pierce",
+        fork: 0,
+        choice: "ranger-volley",
+        kind: "choice",
+        req: ["rain"],
+        desc: "CHOICE · Volley arrows slow foes for 1.2s",
+        apply: (h, lv) => {
+          if (lv > 0) h.volleySlow = 1.2;
+        },
+      }),
+      node({
+        id: "broadhead",
+        name: "Broadhead",
+        branch: "Bow",
+        col: 1,
+        row: 4,
+        fork: 1,
+        choice: "ranger-volley",
+        kind: "choice",
+        req: ["rain"],
+        desc: "CHOICE · Volley damage +18%",
+        apply: (h, lv) => {
+          if (lv > 0) h.volleyDmg = (h.volleyDmg || 1) * 1.18;
+        },
+      }),
+      node({
+        id: "rapidfire",
+        name: "Rapid Fire",
+        branch: "Bow",
+        col: 1,
+        row: 4,
+        fork: 2,
+        choice: "ranger-volley",
+        kind: "choice",
+        req: ["rain"],
+        desc: "CHOICE · Volley cooldown −20%",
         apply: (h, lv) => {
           if (lv > 0) {
-            h.strikeMult = (h.strikeMult || 1) * 1.18;
-            h.strikePierce = (h.strikePierce || 0) + 1;
+            h.skillCdMult = h.skillCdMult || [1, 1, 1];
+            h.skillCdMult[1] *= 0.8;
           }
         },
       }),
@@ -1873,10 +2382,11 @@ const PRESTIGE_TREES = {
         id: "multishot",
         name: "Multishot",
         branch: "Bow",
-        col: 0,
+        col: 1,
         row: 5,
         fork: 0,
-        req: ["marksman"],
+        kind: "alter",
+        req: ["pinvolley"],
         desc: "Autos also hit a second foe for 36% per rank",
         apply: (h, lv) => {
           h.multishot = lv;
@@ -1886,62 +2396,74 @@ const PRESTIGE_TREES = {
         id: "headhunter",
         name: "Headhunter",
         branch: "Bow",
-        col: 0,
+        col: 1,
         row: 5,
         fork: 1,
-        req: ["marksman"],
+        kind: "alter",
+        req: ["broadhead"],
         desc: "Critical hits deal +22% extra per rank",
         apply: (h, lv) => {
           h.critDmg = (h.critDmg || 0) + lv * 0.22;
         },
       }),
       node({
-        id: "aimedreach",
-        name: "True Flight",
+        id: "echo",
+        name: "Echo",
         branch: "Bow",
-        col: 0,
-        row: 6,
-        req: ["multishot"],
-        desc: "Aimed Shot +1 pierce and uses your full on-road range",
+        col: 1,
+        row: 5,
+        fork: 2,
+        max: 2,
+        kind: "alter",
+        req: ["rapidfire"],
+        desc: "+12% chance to repeat an auto per rank",
         apply: (h, lv) => {
-          h.strikePierce = (h.strikePierce || 0) + lv;
-        },
-      }),
-      node({
-        id: "volleyplus",
-        name: "Rain",
-        branch: "Bow",
-        col: 0,
-        row: 6,
-        fork: 1,
-        req: ["headhunter"],
-        desc: "Volley +1 arrow per rank",
-        apply: (h, lv) => {
-          h.volleyExtra = lv;
+          h.echo = (h.echo || 0) + lv * 0.12;
         },
       }),
       node({
         id: "deadeye",
         name: "Deadeye",
         branch: "Bow",
-        col: 0,
-        row: 7,
+        col: 1,
+        row: 6,
+        fork: 0,
         max: 1,
-        req: ["aimedreach"],
+        kind: "alter",
+        req: ["multishot"],
         desc: "Foes farther than 200 take +14% damage",
         apply: (h, lv) => {
           if (lv > 0) h.deadeye = true;
         },
       }),
       node({
+        id: "marksman",
+        name: "Marksman",
+        branch: "Bow",
+        col: 1,
+        row: 6,
+        fork: 1,
+        max: 1,
+        kind: "alter",
+        req: ["headhunter"],
+        desc: "+18% Aimed Shot damage and +1 pierce",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.strikeMult = (h.strikeMult || 1) * 1.18;
+            h.strikePierce = (h.strikePierce || 0) + 1;
+          }
+        },
+      }),
+      node({
         id: "sharpshooter",
         name: "Sharpshooter",
         branch: "Bow",
-        col: 0,
-        row: 7,
-        fork: 1,
+        col: 1,
+        row: 6,
+        fork: 2,
         max: 1,
-        req: ["volleyplus"],
+        kind: "alter",
+        req: ["echo"],
         desc: "Echo can also repeat Aimed Shot",
         apply: (h, lv) => {
           if (lv > 0) h.strikeEcho = true;
@@ -1951,8 +2473,9 @@ const PRESTIGE_TREES = {
         id: "pack",
         name: "Pack",
         branch: "Wolf",
-        col: 1,
+        col: 2,
         row: 1,
+        kind: "passive",
         req: ["trail"],
         desc: "Wolf +22% HP and +2 damage per rank",
         apply: (h, lv) => {
@@ -1960,78 +2483,86 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "pelt",
-        name: "Pelt",
+        id: "unlocksic",
+        name: "Sic 'em",
         branch: "Wolf",
-        col: 1,
+        col: 2,
         row: 2,
+        kind: "unlock",
+        unlockSkill: 2,
         req: ["pack"],
-        desc: "Wolf +1.1 armor each run",
-        apply: (h, lv) => {
-          h.wolfArmor = (h.wolfArmor || 0) + lv * 1.1;
-        },
+        desc: "Unlocks Sic 'em — revive the wolf when it is DOWN",
       }),
       node({
         id: "sicmaster",
         name: "Sic Master",
         branch: "Wolf",
-        col: 1,
+        col: 2,
         row: 3,
         max: 2,
-        req: ["pelt"],
+        kind: "alter",
+        req: ["unlocksic"],
         desc: "Sic 'em revive returns the wolf with +10% HP per rank",
         apply: (h, lv) => {
           h.sicRevive = (h.sicRevive || 0) + lv * 0.1;
         },
       }),
       node({
-        id: "alpha",
-        name: "Alpha",
-        branch: "Wolf",
-        col: 1,
-        row: 4,
-        max: 1,
-        req: ["sicmaster"],
-        desc: "Wolf +18% HP and +1.2 regen",
-        apply: (h, lv) => {
-          if (lv > 0) {
-            h.pack = (h.pack || 0) + 1;
-            h.wolfRegen = (h.wolfRegen || 0) + 1.2;
-          }
-        },
-      }),
-      node({
         id: "howl",
         name: "Howl",
         branch: "Wolf",
-        col: 1,
-        row: 5,
+        col: 2,
+        row: 4,
         fork: 0,
-        req: ["alpha"],
-        desc: "Each new wave, the wolf taunts for 1.1s per rank",
+        choice: "ranger-sic",
+        kind: "choice",
+        req: ["sicmaster"],
+        desc: "CHOICE · Each new wave, the wolf taunts for 1.1s",
         apply: (h, lv) => {
-          h.howl = lv;
+          if (lv > 0) h.howl = Math.max(h.howl || 0, 1);
         },
       }),
       node({
         id: "maul",
         name: "Maul",
         branch: "Wolf",
-        col: 1,
-        row: 5,
+        col: 2,
+        row: 4,
         fork: 1,
-        req: ["alpha"],
-        desc: "Wolf lifesteal +4% per rank",
+        choice: "ranger-sic",
+        kind: "choice",
+        req: ["sicmaster"],
+        desc: "CHOICE · Wolf lifesteal +8%",
         apply: (h, lv) => {
-          h.wolfLeech = (h.wolfLeech || 0) + lv * 0.04;
+          if (lv > 0) h.wolfLeech = (h.wolfLeech || 0) + 0.08;
+        },
+      }),
+      node({
+        id: "packrecall",
+        name: "Pack Recall",
+        branch: "Wolf",
+        col: 2,
+        row: 4,
+        fork: 2,
+        choice: "ranger-sic",
+        kind: "choice",
+        req: ["sicmaster"],
+        desc: "CHOICE · Sic 'em cooldown −25%",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.skillCdMult = h.skillCdMult || [1, 1, 1];
+            h.skillCdMult[2] *= 0.75;
+          }
         },
       }),
       node({
         id: "packbond",
         name: "Pack Bond",
         branch: "Wolf",
-        col: 1,
-        row: 6,
+        col: 2,
+        row: 5,
+        fork: 0,
+        kind: "alter",
         req: ["howl"],
         desc: "You heal 10% of the wolf's damage per rank",
         apply: (h, lv) => {
@@ -2042,9 +2573,10 @@ const PRESTIGE_TREES = {
         id: "dire",
         name: "Dire",
         branch: "Wolf",
-        col: 1,
-        row: 6,
+        col: 2,
+        row: 5,
         fork: 1,
+        kind: "alter",
         req: ["maul"],
         desc: "Wolf +12% HP and +1.5 damage per rank",
         apply: (h, lv) => {
@@ -2052,12 +2584,32 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
+        id: "alpha",
+        name: "Alpha",
+        branch: "Wolf",
+        col: 2,
+        row: 5,
+        fork: 2,
+        max: 1,
+        kind: "alter",
+        req: ["packrecall"],
+        desc: "Wolf +18% HP and +1.2 regen",
+        apply: (h, lv) => {
+          if (lv > 0) {
+            h.pack = (h.pack || 0) + 1;
+            h.wolfRegen = (h.wolfRegen || 0) + 1.2;
+          }
+        },
+      }),
+      node({
         id: "huntsman",
         name: "Huntsman",
         branch: "Wolf",
-        col: 1,
-        row: 7,
+        col: 2,
+        row: 6,
+        fork: 0,
         max: 1,
+        kind: "alter",
         req: ["packbond"],
         desc: "Sic 'em revive also heals you for 14% of max HP",
         apply: (h, lv) => {
@@ -2068,10 +2620,11 @@ const PRESTIGE_TREES = {
         id: "alphaaura",
         name: "Alpha Aura",
         branch: "Wolf",
-        col: 1,
-        row: 7,
+        col: 2,
+        row: 6,
         fork: 1,
         max: 1,
+        kind: "alter",
         req: ["dire"],
         desc: "While the wolf lives, incoming melee is reduced 10%",
         apply: (h, lv) => {
@@ -2079,134 +2632,17 @@ const PRESTIGE_TREES = {
         },
       }),
       node({
-        id: "stride",
-        name: "Stride",
-        branch: "Stride",
-        col: 2,
-        row: 1,
-        req: ["trail"],
-        desc: "+5% attack speed and wolf +12% move speed",
-        apply: (h, lv) => {
-          h.atkRate *= Math.pow(1.05, lv);
-          h.wolfStride = (h.wolfStride || 0) + lv * 0.12;
-        },
-      }),
-      node({
-        id: "greed",
-        name: "Trophy",
-        branch: "Stride",
-        col: 2,
-        row: 2,
-        req: ["stride"],
-        desc: "+12% gold find each run",
-        apply: (h, lv) => {
-          h.goldFind += lv * 0.12;
-        },
-      }),
-      node({
-        id: "secondwind",
-        name: "Fieldcraft",
-        branch: "Stride",
-        col: 2,
-        row: 3,
-        max: 2,
-        req: ["greed"],
-        desc: "At 30% HP, heal 26% (charges = ranks)",
-        apply: (h, lv) => {
-          h.secondWind = lv;
-        },
-      }),
-      node({
-        id: "heirloom",
-        name: "Keepsake",
-        branch: "Stride",
-        col: 2,
-        row: 4,
-        max: 1,
-        req: ["secondwind"],
-        desc: "Each run starts with Bodkin I already nocked",
-        apply: (h, lv) => {
-          if (lv > 0) h.heirloom = true;
-        },
-      }),
-      node({
-        id: "camouflage",
-        name: "Camouflage",
-        branch: "Stride",
-        col: 2,
-        row: 5,
-        fork: 0,
-        req: ["heirloom"],
-        desc: "First 2.2s of each wave you take 14% less per rank",
-        apply: (h, lv) => {
-          h.camo = lv;
-        },
-      }),
-      node({
-        id: "looter",
-        name: "Looter",
-        branch: "Stride",
-        col: 2,
-        row: 5,
-        fork: 1,
-        req: ["heirloom"],
-        desc: "+8% gold find and +6 starting gold per rank",
-        apply: (h, lv) => {
-          h.goldFind += lv * 0.08;
-          h.startGold = (h.startGold || 0) + lv * 6;
-        },
-      }),
-      node({
-        id: "trailward",
-        name: "Trail Ward",
-        branch: "Stride",
+        id: "pelt",
+        name: "Pelt",
+        branch: "Wolf",
         col: 2,
         row: 6,
-        req: ["camouflage"],
-        desc: "Field Dress grants 1.6s of 18% damage reduction per rank",
+        fork: 2,
+        kind: "alter",
+        req: ["alpha"],
+        desc: "Wolf +1.1 armor each run",
         apply: (h, lv) => {
-          h.dressWard = lv;
-        },
-      }),
-      node({
-        id: "swiftwind",
-        name: "Swift Wind",
-        branch: "Stride",
-        col: 2,
-        row: 6,
-        fork: 1,
-        req: ["looter"],
-        desc: "+4% attack speed and wolf +8% move speed per rank",
-        apply: (h, lv) => {
-          h.atkRate *= Math.pow(1.04, lv);
-          h.wolfStride = (h.wolfStride || 0) + lv * 0.08;
-        },
-      }),
-      node({
-        id: "veteran",
-        name: "Veteran",
-        branch: "Stride",
-        col: 2,
-        row: 7,
-        max: 1,
-        req: ["trailward"],
-        desc: "+1 Fieldcraft charge",
-        apply: (h, lv) => {
-          if (lv > 0) h.secondWind = (h.secondWind || 0) + 1;
-        },
-      }),
-      node({
-        id: "pathfinder",
-        name: "Pathfinder",
-        branch: "Stride",
-        col: 2,
-        row: 7,
-        fork: 1,
-        max: 1,
-        req: ["swiftwind"],
-        desc: "Keepsake also starts the run with Swift I",
-        apply: (h, lv) => {
-          if (lv > 0) h.heirloomSwift = true;
+          h.wolfArmor = (h.wolfArmor || 0) + lv * 1.1;
         },
       }),
     ],
@@ -2231,7 +2667,110 @@ const LEGACY_PRESTIGE = [
   { id: "heirloom", max: 1, cost: (lv) => 7 + lv * 4 },
 ];
 
-const SAVE_VERSION = 2;
+// Pass-11 class trees (saveVersion 2). Used only to refund Glory on v3 migrate.
+const V2_TREES = {
+  warrior: [
+    { id: "oath", max: 3, costs: [2, 4, 6] },
+    { id: "hide", max: 3, costs: [4, 7, 10] },
+    { id: "secondwind", max: 2, costs: [8, 12] },
+    { id: "thorns", max: 3, costs: [12, 17, 22] },
+    { id: "laststand", max: 1, costs: [18] },
+    { id: "bulwark", max: 3, costs: [26, 34, 42] },
+    { id: "aegis", max: 3, costs: [26, 34, 42] },
+    { id: "fortress", max: 3, costs: [36, 46, 56] },
+    { id: "ironclad", max: 3, costs: [36, 46, 56] },
+    { id: "unbreakable", max: 1, costs: [50] },
+    { id: "bastion", max: 1, costs: [50] },
+    { id: "tempo", max: 3, costs: [4, 7, 10] },
+    { id: "execute", max: 3, costs: [8, 12, 16] },
+    { id: "overkill", max: 2, costs: [12, 17] },
+    { id: "bloodlust", max: 2, costs: [18, 24] },
+    { id: "cleaveform", max: 3, costs: [26, 34, 42] },
+    { id: "deepwounds", max: 3, costs: [26, 34, 42] },
+    { id: "whirlmaster", max: 3, costs: [36, 46, 56] },
+    { id: "heavyhand", max: 3, costs: [36, 46, 56] },
+    { id: "warmaster", max: 1, costs: [50] },
+    { id: "reaper", max: 1, costs: [50] },
+    { id: "purse", max: 3, costs: [4, 7, 10] },
+    { id: "greed", max: 3, costs: [8, 12, 16] },
+    { id: "sanguine", max: 3, costs: [12, 17, 22] },
+    { id: "heirloom", max: 1, costs: [18] },
+    { id: "warchest", max: 3, costs: [26, 34, 42] },
+    { id: "scavenger", max: 3, costs: [26, 34, 42] },
+    { id: "quartermaster", max: 3, costs: [36, 46, 56] },
+    { id: "fieldmedic", max: 3, costs: [36, 46, 56] },
+    { id: "kingpin", max: 1, costs: [50] },
+    { id: "provisioner", max: 1, costs: [50] },
+  ],
+  mage: [
+    { id: "kindle", max: 3, costs: [2, 4, 6] },
+    { id: "cinder", max: 3, costs: [4, 7, 10] },
+    { id: "blaze", max: 3, costs: [8, 12, 16] },
+    { id: "overkill", max: 2, costs: [12, 17] },
+    { id: "wildfire", max: 1, costs: [18] },
+    { id: "conflagrate", max: 3, costs: [26, 34, 42] },
+    { id: "immolate", max: 3, costs: [26, 34, 42] },
+    { id: "kindling", max: 3, costs: [36, 46, 56] },
+    { id: "widerfire", max: 3, costs: [36, 46, 56] },
+    { id: "phoenix", max: 1, costs: [50] },
+    { id: "livingbomb", max: 1, costs: [50] },
+    { id: "chill", max: 3, costs: [4, 7, 10] },
+    { id: "novadepth", max: 3, costs: [8, 12, 16] },
+    { id: "shatter", max: 2, costs: [12, 17] },
+    { id: "permafrost", max: 1, costs: [18] },
+    { id: "frostbite", max: 3, costs: [26, 34, 42] },
+    { id: "icelance", max: 3, costs: [26, 34, 42] },
+    { id: "glacial", max: 3, costs: [36, 46, 56] },
+    { id: "coldsnap", max: 3, costs: [36, 46, 56] },
+    { id: "winterheart", max: 1, costs: [50] },
+    { id: "rime", max: 1, costs: [50] },
+    { id: "spark", max: 3, costs: [4, 7, 10] },
+    { id: "tempest", max: 3, costs: [8, 12, 16] },
+    { id: "fate", max: 3, costs: [12, 17, 22] },
+    { id: "phylactery", max: 1, costs: [18] },
+    { id: "battery", max: 3, costs: [26, 34, 42] },
+    { id: "evocation", max: 3, costs: [26, 34, 42] },
+    { id: "sage", max: 3, costs: [36, 46, 56] },
+    { id: "spellweave", max: 3, costs: [36, 46, 56] },
+    { id: "archon", max: 1, costs: [50] },
+    { id: "ritualist", max: 1, costs: [50] },
+  ],
+  ranger: [
+    { id: "trail", max: 3, costs: [2, 4, 6] },
+    { id: "edge", max: 3, costs: [4, 7, 10] },
+    { id: "reach", max: 3, costs: [8, 12, 16] },
+    { id: "echo", max: 2, costs: [12, 17] },
+    { id: "marksman", max: 1, costs: [18] },
+    { id: "multishot", max: 3, costs: [26, 34, 42] },
+    { id: "headhunter", max: 3, costs: [26, 34, 42] },
+    { id: "aimedreach", max: 3, costs: [36, 46, 56] },
+    { id: "volleyplus", max: 3, costs: [36, 46, 56] },
+    { id: "deadeye", max: 1, costs: [50] },
+    { id: "sharpshooter", max: 1, costs: [50] },
+    { id: "pack", max: 3, costs: [4, 7, 10] },
+    { id: "pelt", max: 3, costs: [8, 12, 16] },
+    { id: "sicmaster", max: 2, costs: [12, 17] },
+    { id: "alpha", max: 1, costs: [18] },
+    { id: "howl", max: 3, costs: [26, 34, 42] },
+    { id: "maul", max: 3, costs: [26, 34, 42] },
+    { id: "packbond", max: 3, costs: [36, 46, 56] },
+    { id: "dire", max: 3, costs: [36, 46, 56] },
+    { id: "huntsman", max: 1, costs: [50] },
+    { id: "alphaaura", max: 1, costs: [50] },
+    { id: "stride", max: 3, costs: [4, 7, 10] },
+    { id: "greed", max: 3, costs: [8, 12, 16] },
+    { id: "secondwind", max: 2, costs: [12, 17] },
+    { id: "heirloom", max: 1, costs: [18] },
+    { id: "camouflage", max: 3, costs: [26, 34, 42] },
+    { id: "looter", max: 3, costs: [26, 34, 42] },
+    { id: "trailward", max: 3, costs: [36, 46, 56] },
+    { id: "swiftwind", max: 3, costs: [36, 46, 56] },
+    { id: "veteran", max: 1, costs: [50] },
+    { id: "pathfinder", max: 1, costs: [50] },
+  ],
+};
+
+const SAVE_VERSION = 3;
 
 function prestigeTree(klass) {
   return PRESTIGE_TREES[klass] || PRESTIGE_TREES.warrior;
@@ -2267,6 +2806,7 @@ function normalizeTrees(trees) {
       out[k][n.id] = Math.max(0, Math.min(n.max, rank));
     }
   }
+  resolveChoiceRanks(out);
   return out;
 }
 
@@ -2278,7 +2818,34 @@ function mergeTrees(a, b) {
       out[k][id] = Math.max(out[k][id] || 0, extra[k][id] || 0);
     }
   }
+  resolveChoiceRanks(out);
   return out;
+}
+
+function glorySpentCatalog(bag, nodes) {
+  if (!bag || !nodes) return 0;
+  let spent = 0;
+  for (const n of nodes) {
+    const lv = Math.max(0, Math.min(n.max, Math.floor(Number(bag[n.id]) || 0)));
+    if (n.costs) {
+      for (let i = 0; i < lv; i++) spent += n.costs[i] || 0;
+    } else if (typeof n.cost === "function") {
+      for (let i = 0; i < lv; i++) spent += n.cost(i);
+    }
+  }
+  return spent;
+}
+
+function glorySpentOn(klass, bag) {
+  return glorySpentCatalog(bag, prestigeNodes(klass));
+}
+
+function respecClassTrees(trees, klass) {
+  const k = PRESTIGE_TREES[klass] ? klass : "warrior";
+  const next = normalizeTrees(trees);
+  const refund = glorySpentOn(k, next[k]);
+  next[k] = emptyTrees()[k];
+  return { trees: next, refund, klass: k };
 }
 
 function glorySpentLegacy(prest) {
@@ -2302,20 +2869,139 @@ function parentRankNeed(klass, parentId) {
   return parent ? parent.max : 1;
 }
 
+function choiceSiblings(klass, node) {
+  if (!node || !node.choice) return [];
+  return prestigeNodes(klass).filter((n) => n.choice === node.choice && n.id !== node.id);
+}
+
+function choiceRival(node, prest, klass) {
+  return choiceSiblings(klass, node).find((n) => (prest[n.id] || 0) > 0) || null;
+}
+
+function resolveChoiceRanks(trees) {
+  for (const k of Object.keys(PRESTIGE_TREES)) {
+    const bag = trees[k];
+    if (!bag) continue;
+    const groups = {};
+    for (const n of PRESTIGE_TREES[k].nodes) {
+      if (!n.choice) continue;
+      if (!groups[n.choice]) groups[n.choice] = [];
+      groups[n.choice].push(n);
+    }
+    for (const nodes of Object.values(groups)) {
+      const ranked = nodes
+        .filter((n) => (bag[n.id] || 0) > 0)
+        .sort((a, b) => (bag[b.id] || 0) - (bag[a.id] || 0) || a.fork - b.fork);
+      ranked.slice(1).forEach((n) => {
+        bag[n.id] = 0;
+      });
+    }
+  }
+  return trees;
+}
+
 function prestReqMet(node, prest, klass) {
   if ((prest[node.id] || 0) > 0) return true;
+  if (choiceRival(node, prest, klass)) return false;
   return (node.req || []).every((id) => (prest[id] || 0) >= parentRankNeed(klass, id));
 }
 
-function prestReqText(node, klass) {
-  if (!node.req || !node.req.length) return "";
-  return node.req
-    .map((id) => {
-      const p = findPrestNode(klass, id);
-      const need = parentRankNeed(klass, id);
-      return (p ? p.name : id) + " " + need + "/" + need;
-    })
-    .join(" · ");
+function prestReqText(node, klass, prest) {
+  const bits = [];
+  if (node.req && node.req.length) {
+    bits.push(
+      node.req
+        .map((id) => {
+          const p = findPrestNode(klass, id);
+          const need = parentRankNeed(klass, id);
+          return (p ? p.name : id) + " " + need + "/" + need;
+        })
+        .join(" · ")
+    );
+  }
+  if (prest) {
+    const rival = choiceRival(node, prest, klass);
+    if (rival) bits.push("Chose " + rival.name);
+  }
+  return bits.join(" · ");
+}
+
+function skillUnlockNode(klass, slot) {
+  return prestigeNodes(klass).find((n) => n.unlockSkill === slot);
+}
+
+function treeGrantsSkill(klass, slot, bag) {
+  const n = skillUnlockNode(klass, slot);
+  return !!(n && bag && (bag[n.id] || 0) > 0);
+}
+
+function classHadRanks(bag) {
+  if (!bag || typeof bag !== "object") return false;
+  return Object.keys(bag).some((id) => (Number(bag[id]) || 0) > 0);
+}
+
+function migrateV2Trees(oldTrees) {
+  const src = oldTrees && typeof oldTrees === "object" && !Array.isArray(oldTrees) ? oldTrees : {};
+  const next = emptyTrees();
+  let refund = 0;
+  for (const k of Object.keys(PRESTIGE_TREES)) {
+    const oldBag = src[k] && typeof src[k] === "object" ? src[k] : {};
+    const oldSpent = glorySpentCatalog(oldBag, V2_TREES[k] || []);
+    for (const n of PRESTIGE_TREES[k].nodes) {
+      if (n.unlockSkill != null) continue;
+      const rank = Math.floor(Number(oldBag[n.id]) || 0);
+      if (rank > 0) next[k][n.id] = Math.max(0, Math.min(n.max, rank));
+    }
+    if (classHadRanks(oldBag)) {
+      for (const n of PRESTIGE_TREES[k].nodes) {
+        if (n.unlockSkill != null) next[k][n.id] = 1;
+      }
+    }
+    resolveChoiceRanks(next);
+    const kept = glorySpentOn(k, next[k]);
+    refund += Math.max(0, oldSpent - kept);
+  }
+  return { trees: normalizeTrees(next), refund };
+}
+
+function migrateSave(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const klass = src.klass && PRESTIGE_TREES[src.klass] ? src.klass : "warrior";
+  if (src.saveVersion >= SAVE_VERSION && src.trees) {
+    return {
+      glory: src.glory || 0,
+      bestWave: src.bestWave || 0,
+      klass,
+      trees: normalizeTrees(src.trees),
+      refundNote: src.refundNote || 0,
+    };
+  }
+  let glory = src.glory || 0;
+  let refund = 0;
+  if (isLegacyPrest(src.prest)) {
+    const blood = glorySpentLegacy(src.prest);
+    glory += blood;
+    refund += blood;
+  }
+  if (src.trees && (src.saveVersion || 0) >= 2) {
+    const mig = migrateV2Trees(src.trees);
+    glory += mig.refund;
+    refund += mig.refund;
+    return {
+      glory,
+      bestWave: src.bestWave || 0,
+      klass,
+      trees: mig.trees,
+      refundNote: refund,
+    };
+  }
+  return {
+    glory,
+    bestWave: src.bestWave || 0,
+    klass,
+    trees: emptyTrees(),
+    refundNote: refund,
+  };
 }
 
 function shopList(klass) {
@@ -2411,6 +3097,34 @@ function allyHealAmount(def, wave, healerCount) {
   return raw * pile;
 }
 
+// Hero HUD / clamp only. World bars must not use this or late bosses
+// label as 900/900 while real damage still lands.
+const HERO_VITAL_CAP = 900;
+
+function formatHpPair(hp, max, cap) {
+  let m = Math.floor(Number(max));
+  if (!Number.isFinite(m) || m < 1) m = 1;
+  if (cap != null && Number.isFinite(cap) && m > cap) m = cap;
+  let n = Math.floor(Number(hp));
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (n > m) n = m;
+  return { hp: n, max: m, text: n + "/" + m };
+}
+
+function heroHpPair(hp, max) {
+  return formatHpPair(hp, max, HERO_VITAL_CAP);
+}
+
+function worldHpPair(hp, max) {
+  return formatHpPair(hp, max, null);
+}
+
+function foeHpAt(type, wave) {
+  const def = ENEMIES[type];
+  if (!def) return 0;
+  return def.hp * waveScale(wave).hp;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CLASSES,
@@ -2428,10 +3142,15 @@ if (typeof module !== "undefined" && module.exports) {
     stageOriginX,
     packWorldX,
     gateWorldX,
+    BOSS_GATE_PAD,
+    bossHoldX,
+    clampBossWorldX,
     roadRangeCap,
     clampCombatRange,
     RUN_UPGRADES,
     PRESTIGE_TREES,
+    V2_TREES,
+    SAVE_VERSION,
     goldCost,
     waveCount,
     isBossWave,
@@ -2442,5 +3161,24 @@ if (typeof module !== "undefined" && module.exports) {
     novaFreezeFor,
     novaCdFor,
     allyHealAmount,
+    HERO_VITAL_CAP,
+    formatHpPair,
+    heroHpPair,
+    worldHpPair,
+    foeHpAt,
+    emptyTrees,
+    normalizeTrees,
+    migrateSave,
+    migrateV2Trees,
+    glorySpentOn,
+    glorySpentCatalog,
+    respecClassTrees,
+    treeGrantsSkill,
+    skillUnlockNode,
+    prestReqMet,
+    choiceRival,
+    findPrestNode,
+    prestigeNodes,
+    prestigeTree,
   };
 }
