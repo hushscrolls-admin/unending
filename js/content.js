@@ -154,6 +154,22 @@ function gateWorldX(stage) {
   return packWorldX(stage, STAGE_LEN) + ROAD.afterBoss;
 }
 
+// Keep a living boss on this side of the biome gate. Power Strike
+// always knocks +x; Charge / Whirl can too. Without a hold they slide
+// through the portal into the next stage.
+const BOSS_GATE_PAD = 56;
+
+function bossHoldX(stage) {
+  return gateWorldX(stage) - BOSS_GATE_PAD;
+}
+
+function clampBossWorldX(x, stage) {
+  const n = Number(x);
+  const cap = bossHoldX(stage);
+  if (!Number.isFinite(n)) return cap;
+  return Math.min(n, cap);
+}
+
 const CLASSES = {
   warrior: {
     id: "warrior",
@@ -3118,6 +3134,9 @@ if (typeof module !== "undefined" && module.exports) {
     stageOriginX,
     packWorldX,
     gateWorldX,
+    BOSS_GATE_PAD,
+    bossHoldX,
+    clampBossWorldX,
     roadRangeCap,
     clampCombatRange,
     RUN_UPGRADES,

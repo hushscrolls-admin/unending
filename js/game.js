@@ -1032,6 +1032,23 @@
     };
   }
 
+  function foeStage(e) {
+    if (e && e.wave) return stageIndex(e.wave);
+    return run.stage || 1;
+  }
+
+  function holdBossToGate(e) {
+    if (!e || !e.def || !e.def.boss) return e;
+    e.x = clampBossWorldX(e.x, foeStage(e));
+    return e;
+  }
+
+  function applyKnock(e, dx) {
+    if (!e || !dx) return e;
+    e.x += dx;
+    return holdBossToGate(e);
+  }
+
   function placePack(wave) {
     const stage = stageIndex(wave);
     const base = packWorldX(stage, wave);
@@ -1241,7 +1258,7 @@
     if (targets[0]) {
       hitEnemy(targets[0], dmg, crit);
       if (extra && extra.stun) applyCc(targets[0], extra.stun);
-      if (extra && extra.knock) targets[0].x += extra.knock;
+      if (extra && extra.knock) applyKnock(targets[0], extra.knock);
       if (h.bleed) applyDot(targets[0], { kind: "bleed", dps: h.dmg * 0.22 * h.bleed, dur: 2.2 });
     }
     if (targets[1] && extra && extra.cleave) {
@@ -1484,7 +1501,7 @@
       hitEnemy(e, dmg, false);
       if (h.whirlStun) applyCc(e, h.whirlStun);
       if (h.whirlSlow) e.slow = Math.max(e.slow || 0, h.whirlSlow);
-      if (h.whirlKnock) e.x += (e.x >= h.x ? 1 : -1) * h.whirlKnock;
+      if (h.whirlKnock) applyKnock(e, (e.x >= h.x ? 1 : -1) * h.whirlKnock);
     }
     shake = 7;
     sfx(170, 0.08, "sawtooth", 0.045);
@@ -1765,7 +1782,7 @@
           hitEnemy(e, h.dmg * (0.8 + (h.chargeDmg || 0)) * autoDmgMult(), false);
           if (h.chargeStun) applyCc(e, h.chargeStun);
           if (h.chargeSlow) e.slow = Math.max(e.slow || 0, h.chargeSlow);
-          if (h.chargeKnock) e.x += (e.x >= h.x ? 1 : -1) * h.chargeKnock;
+          if (h.chargeKnock) applyKnock(e, (e.x >= h.x ? 1 : -1) * h.chargeKnock);
         }
       }
       if (h.x >= (h.chargeTo || h.x)) {
@@ -1968,6 +1985,7 @@
           }
         }
       }
+      holdBossToGate(e);
     }
 
     for (const b of fx.bolts) {
@@ -3797,6 +3815,9 @@
           x: Math.round(e.x),
           aggro: !!e.aggro,
           hp: Math.round(e.hp),
+          boss: !!e.def.boss,
+          hold: e.def.boss ? Math.round(bossHoldX(stageIndex(e.wave))) : null,
+          gate: e.def.boss ? Math.round(gateWorldX(stageIndex(e.wave))) : null,
         })),
         drops: fx.drops.map((d) => d.kind),
       };
@@ -3863,6 +3884,20 @@
             label: worldHpPair(e.hp, e.maxHp).text,
           })),
       };
+    },
+    knockBoss(dx) {
+      const out = [];
+      for (const e of run.enemies) {
+        if (!e.def.boss || e.hp <= 0) continue;
+        applyKnock(e, dx == null ? 18 : dx);
+        out.push({
+          name: e.def.name,
+          x: Math.round(e.x),
+          hold: Math.round(bossHoldX(foeStage(e))),
+          gate: Math.round(gateWorldX(foeStage(e))),
+        });
+      }
+      return out;
     },
     smite() {
       [...run.enemies].forEach(killEnemy);
