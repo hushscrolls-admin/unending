@@ -1101,6 +1101,10 @@
     return camera + W - SHOP_W;
   }
 
+  function viewRight() {
+    return camera + W;
+  }
+
   function followCamera(dt) {
     const target = (run.hero ? run.hero.x : HOME_X) - PLAYER_SCREEN_X;
     if (!dt) {
@@ -1297,7 +1301,40 @@
 
   function spawnLineX() {
     const h = run.hero;
-    return spawnEdgeX(h ? h.x : HOME_X, playRight());
+    return spawnEdgeX(h ? h.x : HOME_X, viewRight());
+  }
+
+  function spawnProbe() {
+    const h = run.hero;
+    const heroX = h ? h.x : HOME_X;
+    const view = viewRight();
+    const spawnX = spawnLineX();
+    const packs = run.enemies
+      .filter((e) => e.hp > 0)
+      .map((e) => ({
+        type: e.type,
+        wave: e.wave,
+        x: Math.round(e.x),
+        dx: Math.round(e.x - heroX),
+        screenX: Math.round(e.x - camera),
+        pastCameraRight: e.x > view,
+      }));
+    return {
+      heroX: Math.round(heroX),
+      camera: Math.round(camera),
+      viewW: W,
+      viewRight: Math.round(view),
+      playRight: Math.round(playRight()),
+      playClipW: playClipW(),
+      spawnX: Math.round(spawnX),
+      spawnDx: Math.round(spawnX - heroX),
+      spawnScreenX: Math.round(spawnX - camera),
+      spawnPad: ROAD.spawnPad,
+      oldCap: RANGE.spawnGap,
+      pastCameraRight: spawnIsPastView(spawnX, view),
+      pastPlayClip: spawnX > camera + playClipW(),
+      packs,
+    };
   }
 
   function spawnWave() {
@@ -3834,7 +3871,10 @@
         road: ROAD,
         spawn: {
           gap: RANGE.spawnGap,
-          edge: spawnEdgeX(h ? h.x : HOME_X, playRight()),
+          pad: ROAD.spawnPad,
+          edge: spawnEdgeX(h ? h.x : HOME_X, viewRight()),
+          viewRight: Math.round(viewRight()),
+          pastCameraRight: spawnIsPastView(spawnEdgeX(h ? h.x : HOME_X, viewRight()), viewRight()),
         },
         kite: {
           rangedKeep: ROAD.rangedKeep,
@@ -3862,6 +3902,9 @@
         spawnX: Math.round(spawnLineX()),
         heroX: h ? Math.round(h.x) : 0,
         camera: Math.round(camera),
+        viewRight: Math.round(viewRight()),
+        spawnDx: Math.round(spawnLineX() - (h ? h.x : HOME_X)),
+        pastCameraRight: spawnIsPastView(spawnLineX(), viewRight()),
         marching: !!(h && shouldMarch()),
         mode: h ? h.mode : "",
         gateOpen: !!run.gateOpen,
@@ -3996,6 +4039,13 @@
     },
     smite() {
       [...run.enemies].forEach(killEnemy);
+    },
+    buy(id) {
+      buyRun(id);
+      return { gold: run.gold, boughtAny: !!run.boughtAny, shopFreeze: run.shopFreeze };
+    },
+    spawnCheck() {
+      return spawnProbe();
     },
     nudge(px) {
       if (!run.hero) return null;

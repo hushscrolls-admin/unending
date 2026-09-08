@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Walk-forward road + right-edge interval spawns, plus Pass 10 curve /
- * Nova / tree guards. Does not replace balance_check.js.
+ * Walk-forward road + off-screen right-edge interval spawns, plus Pass 10
+ * curve / Nova / tree guards. Does not replace balance_check.js.
  */
 "use strict";
 
@@ -21,6 +21,7 @@ const {
   packWorldX,
   gateWorldX,
   spawnEdgeX,
+  spawnIsPastView,
   rangedKeepFor,
   BOSS_GATE_PAD,
   bossHoldX,
@@ -82,9 +83,13 @@ ok(
   "even a full kite leash stays inside Warrior melee"
 );
 ok(ROAD.heroWalk > ENEMIES.archer.speed, "Warrior walk outpaces archer backpedal");
-ok(spawnEdgeX(80, 808) === 80 + RANGE.spawnGap, "wide playfield still caps at the spawn gap");
-ok(spawnEdgeX(80, 200) === 220, "narrow playfield uses the right edge");
-ok(spawnEdgeX(400, 400 + 728) === 400 + RANGE.spawnGap, "spawn rides the hero, not a world camp");
+ok(ROAD.spawnPad >= 64, "spawn pad hides the sprite past the viewport");
+ok(spawnEdgeX(80, 808) === 808 + ROAD.spawnPad, "wide viewport spawn sits past camera right");
+ok(spawnEdgeX(80, 200) === 200 + ROAD.spawnPad, "narrow viewport still uses the camera right edge");
+ok(spawnEdgeX(400, 400 + 1060) === 400 + 1060 + ROAD.spawnPad, "spawn rides the camera edge, not hero+390");
+ok(spawnEdgeX(400, 400 + 1060) > 400 + RANGE.spawnGap, "off-screen spawn is past the old 390 cap");
+ok(spawnIsPastView(spawnEdgeX(80, 1280), 1280), "spawn X is past the camera right edge");
+ok(spawnIsPastView(80 + RANGE.spawnGap, 80 + 1060) === false, "old hero+390 cap is on-screen under walk-forward camera");
 
 ok(NOVA.reach === 172 && NOVA.reachCap === 220, "Nova stay pack-scale");
 ok(NOVA.cd === 9 && NOVA.cdMin === 7 && NOVA.mana === 28, "Nova 9s / 7s floor / 28 mana");
@@ -126,13 +131,14 @@ ok(CLASSES.mage.style === "ranged" && CLASSES.ranger.style === "ranged", "Mage/R
 // Walk-up sim: shield parks Warrior; archer must still sit in melee.
 {
   let hx = 80;
-  let ax = spawnEdgeX(hx, hx + 728) + 56;
-  let sx = spawnEdgeX(hx, hx + 728);
+  const viewRight = hx - 220 + 1280;
+  let ax = spawnEdgeX(hx, viewRight) + 56;
+  let sx = spawnEdgeX(hx, viewRight);
   let plant = null;
   const keep = rangedKeepFor(ENEMIES.archer);
   const reach = CLASSES.warrior.reach + 16;
   const dt = 1 / 60;
-  for (let t = 0; t < 10; t += dt) {
+  for (let t = 0; t < 25; t += dt) {
     if (Math.abs(sx - hx) > 56) sx += Math.sign(hx + 70 - sx) * ENEMIES.shield.speed * dt;
     let desired = Math.min(hx + keep, hx + 728 - 36);
     if (plant == null && ax <= desired + 12) plant = ax;
@@ -156,7 +162,8 @@ console.log(
     {
       biomes: BIOMES.map((b) => b.name),
       firstPack: packWorldX(1, 1),
-      spawn: spawnEdgeX(80, 808),
+      spawn: spawnEdgeX(80, 80 - 220 + 1280),
+      spawnPastView: spawnIsPastView(spawnEdgeX(80, 1140), 1140),
       kite: { keep: ROAD.rangedKeep, face: ROAD.kiteFace, leash: ROAD.kiteLeash },
       bossX: packWorldX(1, 10),
       hold: bossHoldX(1),

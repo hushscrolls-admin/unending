@@ -34,7 +34,8 @@ function clampCombatRange(range, playSpan) {
   return Math.min(n, roadRangeCap(playSpan));
 }
 
-// Walk-forward road. Trash packs enter from screen-right on a timer.
+// Walk-forward road. Trash packs enter from past the camera's right
+// edge (true off-screen) on a timer, then march left onto the road.
 // Stage span / gate math still space biomes; bosses cap each area.
 const ROAD = {
   firstGap: 420,
@@ -49,14 +50,19 @@ const ROAD = {
   rangedKeep: 100,
   kiteFace: 56,
   kiteLeash: 8,
+  // Half a grunt body past camera+W so the sprite is fully off-canvas.
+  spawnPad: 80,
 };
 
-function spawnEdgeX(heroX, playRightX) {
-  const far = (Number(playRightX) || 0) + 20;
-  const cap = (Number(heroX) || 80) + RANGE.spawnGap;
-  if (!Number.isFinite(far)) return cap;
-  if (!Number.isFinite(cap)) return far;
-  return Math.min(far, cap);
+function spawnEdgeX(heroX, viewRightX) {
+  const edge = Number(viewRightX);
+  const pad = Number(ROAD.spawnPad) || 80;
+  if (Number.isFinite(edge)) return edge + pad;
+  return (Number(heroX) || 80) + RANGE.spawnGap + pad;
+}
+
+function spawnIsPastView(spawnX, viewRightX) {
+  return Number(spawnX) > Number(viewRightX);
 }
 
 function rangedKeepFor(def) {
@@ -3162,6 +3168,7 @@ if (typeof module !== "undefined" && module.exports) {
     packWorldX,
     gateWorldX,
     spawnEdgeX,
+    spawnIsPastView,
     rangedKeepFor,
     BOSS_GATE_PAD,
     bossHoldX,
