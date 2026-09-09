@@ -1,7 +1,10 @@
 (() => {
   const canvas = document.getElementById("view");
   const ctx = canvas.getContext("2d");
-  const SAVE_KEY = "unending-save-v1";
+  const SAVE_KEY = "unending-save-v2";
+  const RUN_KEY = "unending-run-v2";
+  let saveTimer = 0;
+  let buyAmount = 1;
   const PLAYER_SCREEN_X = 220;
   const HOME_X = 80;
   const GROUND = 0.78;
@@ -10,7 +13,6 @@
   const FORWARD_X = HOME_X + 280;
   const CHARGE_SPEED = 560;
   const RETURN_SPEED = 500;
-  const SHOP_W = 332;
 
   const img = {};
   const meta = { loaded: false };
@@ -22,7 +24,6 @@
   let camera = 0;
   let shake = 0;
   let toastT = 0;
-  let waveBanner = 0;
   let paused = false;
 
   const persist = loadSave();
@@ -31,11 +32,14 @@
 
   function emptyRun() {
     return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       wave: 0,
       kills: 0,
       gold: 0,
       waveTimer: 0.45,
-      spawning: false,
+      cleared: [], ledger: {}, bosses: [], talents: {}, offers: [], pendingChoices: 0,
+      elapsed: 0, idleTime: 0, purchases: 0, damageTaken: {}, bossTimes: {},
+      autoBuy: "off", autoTimer: 0, claimedGlory: 0, campaignDone: false, victoryPending: false,
       hero: null,
       enemies: [],
       levels: Object.fromEntries(RUN_UPGRADES.map((u) => [u.id, 0])),
@@ -43,38 +47,80 @@
   }
 
   function loadSave() {
+    const blank = { glory: 0, bestWave: 0, prest: {}, branch: "vanguard", milestones: [], endless: false };
     try {
       const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
       if (raw && typeof raw === "object") {
-        return {
-          glory: raw.glory || 0,
-          bestWave: raw.bestWave || 0,
-          prest: Object.assign(
-            Object.fromEntries(PRESTIGE_UPGRADES.map((u) => [u.id, 0])),
-            raw.prest || {}
-          ),
-        };
+        const result = { ...blank, ...raw };
+        result.glory = Math.max(0, Number(result.glory) || 0);
+        result.prest = Object.fromEntries(PRESTIGE_UPGRADES.map(u => [u.id, Math.min(u.max, Math.max(0, Math.floor(Number(raw.prest?.[u.id]) || 0)))]));
+        if (!BRANCHES.some(b => b.id === result.branch)) result.branch = "vanguard";
+        if (!Array.isArray(result.milestones)) result.milestones = [];
+        return result;
       }
-    } catch (e) {
-      /* ignore */
-    }
-    return {
-      glory: 0,
-      bestWave: 0,
-      prest: Object.fromEntries(PRESTIGE_UPGRADES.map((u) => [u.id, 0])),
-    };
+      const old = JSON.parse(localStorage.getItem("unending-save-v1") || "null");
+      if (old) {
+        blank.glory = Math.max(0, Number(old.glory) || 0);
+        for (const [id, value] of Object.entries(old.prest || {})) {
+          const lv = Math.max(0, Math.floor(Number(value) || 0));
+          if (["blood", "might", "purse"].includes(id)) blank.glory += lv * lv;
+          if (["greed", "spark"].includes(id)) blank.glory += lv * (lv + 1);
+          if (id === "fate") blank.glory += 2 * lv + 1.5 * lv * (lv - 1);
+        }
+        blank.bestWave = Math.max(0, (Number(old.bestWave) || 0) - 1);
+        blank.migrated = true;
+      }
+    } catch (e) { /* A damaged save starts safely; the legacy save is retained. */ }
+    return blank;
   }
 
   function save() {
-    localStorage.setItem(
-      SAVE_KEY,
-      JSON.stringify({
-        glory: persist.glory,
-        bestWave: persist.bestWave,
-        prest: persist.prest,
-      })
-    );
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(persist)); }
+    catch (e) { toast("Saving unavailable in this browser"); }
   }
+
+  function saveRun() {
+    if (!["fight", "talent", "victory"].includes(state) || !run.hero) return;
+    try {
+      localStorage.setItem(RUN_KEY, JSON.stringify({ version: 2, state, run: {
+        ...run, enemies: run.enemies.map(({ def, ...enemy }) => enemy),
+      }, bolts: fx.bolts, drops: fx.drops }));
+    } catch (e) { /* The live run remains playable if storage is full. */ }
+  }
+
+  function savedRun() {
+    try {
+      const data = JSON.parse(localStorage.getItem(RUN_KEY) || "null");
+      if (data?.version === 2 && ["fight", "talent", "victory"].includes(data.state) &&
+          data.run?.hero?.hp > 0 && Array.isArray(data.run.enemies) &&
+          data.run.enemies.every(e => ENEMIES[e.type]) && Array.isArray(data.run.cleared)) return data;
+    } catch (e) { /* Ignore an incomplete snapshot. */ }
+    return null;
+  }
+
+  function resumeRun() {
+    const data = savedRun();
+    if (!data) return;
+    Object.assign(run, emptyRun(), data.run);
+    run.enemies = run.enemies.map(e => ({ ...e, def: ENEMIES[e.type] }));
+    fx.bolts = data.bolts || []; fx.drops = data.drops || [];
+    paused = false; state = "fight";
+    showFight();
+    if (data.state === "talent") showTalent();
+    else if (data.state === "victory") showVictory();
+    syncHud();
+  }
+
+  function showFight() {
+    for (const id of ["title", "dead", "talent", "victory"]) document.getElementById(id).classList.add("hidden");
+    for (const id of ["hud", "shop", "keys"]) document.getElementById(id).classList.remove("hidden");
+    document.getElementById("auto-buy").value = run.autoBuy;
+    document.getElementById("pause-label").classList.add("hidden");
+    buildShop();
+  }
+
+  function rank(id) { return run.talents[id] || 0; }
+  function keystone(branch) { return persist.branch === branch && persist.prest[branch + "_keystone"] > 0; }
 
   function fmt(n) {
     n = Math.floor(n);
@@ -85,33 +131,36 @@
 
   function makeHero() {
     const p = persist.prest;
+    const branch = persist.branch;
+    const body = p[branch + "_body"] || 0;
+    const craft = p[branch + "_craft"] || 0;
     const hero = {
       x: HOME_X,
       homeX: HOME_X,
       mode: "home",
-      hp: 100 + p.blood * 20,
-      maxHp: 100 + p.blood * 20,
-      dmg: 8 + p.might * 2,
-      armor: 0,
+      hp: 140 * (1 + body * 0.05),
+      maxHp: 140 * (1 + body * 0.05),
+      dmg: 12 * (1 + (branch === "ravager" ? craft * 0.04 : 0)),
+      armor: branch === "vanguard" ? craft : 0,
       atkRate: 0.9,
       atkT: 0,
       reach: 92,
       walk: 95,
       crit: 0.05,
       leech: 0,
-      goldFind: 1 + p.greed * 0.12,
-      mana: 20 + p.spark * 5,
-      maxMana: 80 + p.spark * 10,
-      manaRegen: 2.2 + p.spark * 0.7,
+      goldFind: 1,
+      mana: 30,
+      maxMana: 80,
+      manaRegen: 1.8 + (branch === "spellblade" ? craft * 0.2 : 0),
       anim: "idle",
       animT: 0,
       flash: 0,
-      strikeCd: 0,
+      strikeCd: 0, mendCd: 0, shield: 0, shieldT: 0, shieldCd: 0, empowered: false,
       whirlCd: 0,
       whirl: null,
       buffs: { rage: 0, haste: 0 },
     };
-    run.gold = p.purse * 18;
+    run.gold = 24;
     for (const u of RUN_UPGRADES) {
       const lv = run.levels[u.id] || 0;
       for (let i = 0; i < lv; i++) u.apply(hero);
@@ -124,30 +173,30 @@
     Object.assign(run, emptyRun());
     run.hero = makeHero();
     camera = HOME_X - PLAYER_SCREEN_X;
-    fx.floats.length = 0;
-    fx.bolts.length = 0;
-    fx.drops.length = 0;
-    fx.gibs.length = 0;
-    state = "fight";
-    document.getElementById("title").classList.add("hidden");
-    document.getElementById("dead").classList.add("hidden");
-    document.getElementById("hud").classList.remove("hidden");
-    document.getElementById("shop").classList.remove("hidden");
-    document.getElementById("keys").classList.remove("hidden");
-    buildShop();
+    fx.floats.length = 0; fx.bolts.length = 0; fx.drops.length = 0; fx.gibs.length = 0;
+    paused = false; state = "fight";
+    document.querySelector("#dead h1").textContent = "FALLEN";
+    showFight(); syncHud(); save(); saveRun();
     sfx(220, 0.12, "square", 0.04);
   }
 
-  function gloryFor(wave, kills) {
-    const raw = Math.max(0, (wave - 1) * 2 + Math.floor(kills * 0.2));
-    return Math.floor(raw * (1 + persist.prest.fate * 0.18));
+  function gloryFor() { return run.cleared.length + run.bosses.length * 8; }
+  function bankGlory() {
+    // Keep the bank receipt with permanent currency so an older run snapshot
+    // cannot pay the same Glory twice after a crash between storage writes.
+    const receipt = persist.lastBank?.id === run.id ? persist.lastBank.total : 0;
+    run.claimedGlory = Math.max(run.claimedGlory, receipt);
+    const earned = Math.max(0, gloryFor() - run.claimedGlory);
+    persist.glory += earned; run.claimedGlory += earned;
+    persist.lastBank = { id: run.id, total: run.claimedGlory };
+    persist.bestWave = Math.max(persist.bestWave, ...run.cleared, 0);
+    save(); return earned;
   }
 
   function die() {
-    const g = gloryFor(run.wave, run.kills);
-    persist.glory += g;
-    persist.bestWave = Math.max(persist.bestWave, run.wave);
-    save();
+    if (state !== "fight") return;
+    const g = bankGlory();
+    try { localStorage.removeItem(RUN_KEY); } catch (e) { /* optional storage */ }
     state = "dead";
     shake = 0;
     document.getElementById("dead").classList.remove("hidden");
@@ -155,8 +204,9 @@
     document.getElementById("keys").classList.add("hidden");
     document.getElementById("hud").classList.add("hidden");
     document.getElementById("dead-summary").textContent =
-      `Wave ${run.wave}  ·  ${run.kills} kills  ·  best ${persist.bestWave}`;
+      `Cleared ${run.cleared.length} waves · ${run.kills} kills · best cleared ${persist.bestWave}`;
     document.getElementById("dead-glory").textContent = fmt(g);
+    document.getElementById("run-recap").textContent = recap();
     buildPrestige();
     sfx(70, 0.5, "sawtooth", 0.06);
   }
@@ -190,7 +240,6 @@
     el.textContent = msg;
     el.classList.add("show");
     toastT = 1.4;
-    waveBanner = 1.4;
   }
 
   // --- combat helpers ---
@@ -214,9 +263,14 @@
     });
   }
 
-  function hitHero(amount, srcX, crit) {
+  function hitHero(amount, srcX, crit, source = "Enemy") {
+    if (state !== "fight") return;
     const h = run.hero;
-    const d = dmgIn(amount, h.armor);
+    const raw = dmgIn(amount, h.armor);
+    const absorbed = Math.min(h.shield, raw); h.shield -= absorbed;
+    const d = raw - absorbed;
+    run.damageTaken[source] = (run.damageTaken[source] || 0) + d;
+    run.lastHit = source;
     h.hp -= d;
     h.flash = 0.12;
     shake = Math.max(shake, 6);
@@ -237,23 +291,25 @@
     let dmg = e.dmg;
     const crit = Math.random() < (e.def.crit || 0);
     if (crit) dmg *= 2;
-    hitHero(dmg, e.x, crit);
+    hitHero(dmg, e.x, crit, e.def.name);
   }
 
-  function hitEnemy(e, amount, crit) {
-    const d = dmgIn(amount, e.armor);
+  function hitEnemy(e, amount, crit, area = false, dot = false) {
+    if (e.hp <= 0 || !run.enemies.includes(e)) return;
+    const d = Math.min(e.hp, dot ? amount * (100 / (100 + e.armor * 8)) : dmgIn(amount, e.armor));
     e.hp -= d;
     e.flash = 0.1;
     floatText(e.x, groundY() - 160, (crit ? "CRIT " : "") + fmt(d), crit ? "#ffe27a" : "#fff");
     const h = run.hero;
-    if (h.leech > 0) {
-      const heal = d * h.leech;
+    if (h.leech > 0 && !dot) {
+      const heal = d * Math.min(0.08, h.leech) * (area ? 0.25 : 1);
       h.hp = Math.min(h.maxHp, h.hp + heal);
     }
     if (e.hp <= 0) killEnemy(e);
   }
 
   function killEnemy(e) {
+    if (!run.enemies.includes(e)) return;
     run.kills += 1;
     const gold = Math.floor(e.gold * run.hero.goldFind);
     run.gold += gold;
@@ -275,34 +331,32 @@
       });
     }
     sfx(320, 0.07, "triangle", 0.05);
-    const wasBoss = e.def.boss;
     run.enemies = run.enemies.filter((x) => x !== e);
-    if (wasBoss && !bossAlive()) {
-      run.waveTimer = nextWaveDelay(run.wave);
-    }
+    const ledger = run.ledger[e.wave];
+    if (ledger && --ledger.remaining === 0) clearWave(e.wave);
+    if (!run.enemies.length) run.waveTimer = Math.min(run.waveTimer, e.def.boss ? 5 : 2);
   }
 
   function bossAlive() {
     return run.enemies.some((e) => e.def.boss);
   }
 
-  function playRight() {
-    return camera + W - SHOP_W;
-  }
-
   function spawnWave() {
     const n = run.wave;
     const roster = waveRoster(n);
     const sc = waveScale(n);
-    const base = playRight() + 80;
+    // Fixed world-space approach: viewport size cannot change combat timing.
+    const base = HOME_X + 520;
+    run.ledger[n] = { remaining: roster.length, started: run.elapsed };
     roster.forEach((type, i) => {
       const def = ENEMIES[type];
       run.enemies.push({
         type,
         def,
-        x: base,
-        hp: def.hp * sc.hp,
-        maxHp: def.hp * sc.hp,
+        x: base + i * 18,
+        wave: n, bleed: 0, bleedT: 0,
+        hp: def.hp * sc.hp * (def.boss ? 3 : 1),
+        maxHp: def.hp * sc.hp * (def.boss ? 3 : 1),
         dmg: def.dmg * sc.dmg,
         armor: def.armor,
         gold: def.gold * sc.gold,
@@ -362,19 +416,27 @@
     h.animT = 0;
     const bonus = h.buffs.rage > 0 ? 1.35 : 1;
     let dmg = h.dmg * (mult || 1) * bonus;
-    const crit = Math.random() < h.crit;
+    const crit = Math.random() < Math.min(0.35, h.crit);
     if (crit) dmg *= 2;
     const target = nearest(
       h.x,
       (e) => inMelee(e, h.reach + 16) && !shadowedBehind(e)
     );
-    if (target) hitEnemy(target, dmg, crit);
+    if (target) {
+      if (!run.enemies.some(e => e !== target && Math.abs(e.x - target.x) < 150)) dmg *= 1 + rank("duelist") * 0.12;
+      if (h.empowered) { dmg *= 1.6; h.empowered = false; }
+      if (mult > 1 && target.def.heal) {
+        target.healT = Math.max(target.healT, 2.4);
+        floatText(target.x, groundY() - 205, "INTERRUPT", "#6ec4ff");
+      }
+      hitEnemy(target, dmg, crit);
+    }
     sfx(crit ? 520 : 240, 0.06, "square", 0.05);
   }
 
   function powerStrike() {
     const h = run.hero;
-    if (state !== "fight" || h.strikeCd > 0) return;
+    if (state !== "fight" || paused || h.strikeCd > 0) return;
     h.strikeCd = 1.35;
     swing(2.15);
     shake = 8;
@@ -382,21 +444,18 @@
 
   function mend() {
     const h = run.hero;
-    if (state !== "fight" || h.mana < 25) return;
-    h.mana -= 25;
-    const heal = h.maxHp * 0.28;
+    if (state !== "fight" || paused || h.mendCd > 0 || h.mana < 25) return;
+    h.mana -= 25; h.mendCd = 4;
+    if (keystone("spellblade")) h.empowered = true;
+    const heal = h.maxHp * (0.18 + rank("ward") * 0.03);
     h.hp = Math.min(h.maxHp, h.hp + heal);
     floatText(h.x, groundY() - 200, "+" + fmt(heal), "#8fd18f");
     sfx(480, 0.12, "sine", 0.05);
   }
 
-  function nextWaveDelay(wave) {
-    return 5.5 + wave * 0.5;
-  }
-
   function charge() {
     const h = run.hero;
-    if (state !== "fight") return;
+    if (state !== "fight" || paused) return;
     if (h.mode === "home" || h.mode === "return") {
       h.mode = "charge";
       sfx(300, 0.1, "square", 0.05);
@@ -409,16 +468,19 @@
   function whirlHit() {
     const h = run.hero;
     const bonus = h.buffs.rage > 0 ? 1.35 : 1;
-    const dmg = h.dmg * 0.85 * bonus;
-    const targets = run.enemies.filter((e) => Math.abs(e.x - h.x) < WHIRL_RANGE);
-    for (const e of targets) hitEnemy(e, dmg, false);
+    const dmg = h.dmg * 0.65 * bonus * (1 + rank("reach") * 0.08);
+    const targets = run.enemies.filter((e) => Math.abs(e.x - h.x) < WHIRL_RANGE + rank("reach") * 25);
+    for (const e of targets) {
+      hitEnemy(e, dmg, false, true);
+      if (keystone("ravager") && e.hp > 0) { e.bleed = h.dmg * 0.45 / 3; e.bleedT = 3; }
+    }
     shake = 7;
     sfx(170, 0.08, "sawtooth", 0.045);
   }
 
   function whirlwind() {
     const h = run.hero;
-    if (state !== "fight" || h.whirlCd > 0 || h.whirl) return;
+    if (state !== "fight" || paused || h.whirlCd > 0 || h.whirl) return;
     h.whirlCd = WHIRL_CD;
     h.whirl = { t: 0, next: 0, left: 3 };
     h.anim = "atk";
@@ -428,7 +490,7 @@
   function pickup(d) {
     const h = run.hero;
     if (d.kind === "heart") {
-      const heal = h.maxHp * 0.18;
+      const heal = h.maxHp * 0.10;
       h.hp = Math.min(h.maxHp, h.hp + heal);
       floatText(h.x, groundY() - 180, "heal", "#ff8a8a");
     } else if (d.kind === "mana") {
@@ -460,6 +522,11 @@
       return;
     }
     const h = run.hero;
+    run.elapsed += dt;
+    if (!run.enemies.length) run.idleTime += dt;
+    h.mendCd = Math.max(0, h.mendCd - dt);
+    h.shieldCd = Math.max(0, h.shieldCd - dt); h.shieldT = Math.max(0, h.shieldT - dt);
+    if (!h.shieldT) h.shield = 0;
     h.flash = Math.max(0, h.flash - dt);
     h.strikeCd = Math.max(0, h.strikeCd - dt);
     h.whirlCd = Math.max(0, h.whirlCd - dt);
@@ -471,10 +538,11 @@
 
     if (!bossAlive()) {
       run.waveTimer -= dt;
-      if (run.waveTimer <= 0) {
+      if (run.waveTimer <= 0 && run.enemies.length + waveRoster(run.wave + 1).length <= 14 &&
+          !(isBossWave(run.wave + 1) && run.enemies.length) && !(run.wave >= 50 && !run.campaignDone)) {
         run.wave += 1;
         spawnWave();
-        run.waveTimer = isBossWave(run.wave) ? 1e9 : nextWaveDelay(run.wave);
+        run.waveTimer = nextWaveDelay(run.wave);
       }
     }
 
@@ -497,6 +565,9 @@
       if (h.x <= h.homeX) {
         h.x = h.homeX;
         h.mode = "home";
+        if (keystone("vanguard") && h.shieldCd <= 0) {
+          h.shield = h.maxHp * 0.15; h.shieldT = 4; h.shieldCd = 10;
+        }
       }
     }
 
@@ -512,22 +583,20 @@
       if (h.whirl.left <= 0 && h.whirl.t >= 0.42) h.whirl = null;
     } else if (h.mode === "charge" || h.mode === "return") {
       /* dashing */
-    } else if (h.anim === "atk") {
-      h.animT += dt;
-      if (h.animT >= 0.34) h.anim = "idle";
-    } else if (melee.length) {
-      const rate = h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1);
-      h.atkT -= dt * rate;
-      if (h.atkT <= 0) {
-        h.atkT = 1;
-        swing(1);
-      }
     } else {
-      h.anim = "idle";
+      // Animation and cooldown advance together, so displayed speed matches attacks.
       h.animT += dt;
+      if (h.anim === "atk" && h.animT >= 0.34) h.anim = "idle";
+      h.atkT = Math.max(0, h.atkT - dt * h.atkRate * (h.buffs.haste > 0 ? 1.35 : 1));
+      if (melee.length && h.atkT <= 0) { h.atkT = 1; swing(1); }
     }
 
-    for (const e of run.enemies) {
+    for (const e of [...run.enemies]) {
+      if (e.bleedT > 0) {
+        const tick = Math.min(dt, e.bleedT); e.bleedT -= tick;
+        hitEnemy(e, e.bleed * tick, false, true, true);
+        if (e.hp <= 0) continue;
+      }
       e.flash = Math.max(0, e.flash - dt);
       e.animT += dt;
       if (e.def.enrage && !e.enraged && e.hp < e.maxHp * 0.45) {
@@ -562,7 +631,7 @@
             let hurt = nearest(e.x, (o) => o !== e && o.hp < o.maxHp - 1);
             if (!hurt && e.hp < e.maxHp - 1) hurt = e;
             if (hurt) {
-              const amt = e.def.heal * waveScale(Math.max(1, run.wave - 1)).hp;
+              const amt = e.def.heal * waveScale(e.wave).hp * 0.55;
               hurt.hp = Math.min(hurt.maxHp, hurt.hp + amt);
               floatText(hurt.x, groundY() - 180, "+" + fmt(amt), "#c9a227");
               sfx(640, 0.08, "sine", 0.03);
@@ -583,7 +652,7 @@
                   x: e.x + dir * 16,
                   y: groundY() - 90 - i * 22,
                   vx: dir * e.def.projSpeed,
-                  dmg: e.dmg,
+                  dmg: e.dmg, source: e.def.name,
                 });
               }
               sfx(e.def.projectile === "bolt" ? 420 : 500, 0.05, "triangle", 0.03);
@@ -603,6 +672,7 @@
             e.anim = "atk";
             e.animT = 0;
             enemyStrike(e);
+            if (state !== "fight") return;
           }
         }
       }
@@ -611,10 +681,11 @@
     for (const b of fx.bolts) {
       b.x += b.vx * dt;
       if (Math.abs(b.x - h.x) < 30) {
-        hitHero(b.dmg, b.x);
+        hitHero(b.dmg, b.x, false, b.source);
+        if (state !== "fight") return;
         b.dead = true;
       }
-      if (b.x < camera - 80 || b.x > camera + W + 80) b.dead = true;
+      if (b.x < HOME_X - 600 || b.x > HOME_X + 1200) b.dead = true;
     }
     fx.bolts = fx.bolts.filter((b) => !b.dead);
 
@@ -636,6 +707,16 @@
     }
     fx.drops = fx.drops.filter((d) => d.life > 0);
 
+    run.autoTimer -= dt;
+    if (run.autoBuy !== "off" && run.autoTimer <= 0) {
+      run.autoTimer = 0.5;
+      const id = run.autoBuy === "balanced" ? balancedUpgrade() : run.autoBuy;
+      if (id) buyRun(id, 1, true);
+    }
+    if (run.pendingChoices > 0) showTalent();
+    else if (run.victoryPending) showVictory();
+    saveTimer += dt;
+    if (saveTimer >= 3) { saveTimer = 0; saveRun(); }
     updateFx(dt);
     syncHud();
   }
@@ -722,7 +803,7 @@
     const gy = groundY();
     const h = run.hero;
 
-    if (h && (state === "fight" || state === "dead")) {
+    if (h) {
       let spr = img.hero;
       if (h.anim === "atk" && img.heroAtk.length) {
         const i = Math.min(img.heroAtk.length - 1, Math.floor(h.animT / 0.08));
@@ -844,7 +925,15 @@
     const buffEl = document.getElementById("st-buffs");
     buffEl.textContent = buffs.length ? buffs.join(" · ") : "—";
     buffEl.classList.toggle("hot", buffs.length > 0);
-    document.getElementById("btn-mend").disabled = h.mana < 25;
+    document.getElementById("btn-mend").disabled = h.mana < 25 || h.mendCd > 0;
+    document.getElementById("btn-mend").textContent = h.mendCd > 0 ? `Mend (${Math.ceil(h.mendCd)}s)` : "Mend (25)";
+    const next = Math.max(1, run.wave + (run.cleared.includes(run.wave) ? 1 : 0));
+    document.getElementById("milestone").textContent = next > 50 ? `Endless · next boss ${Math.ceil(next / 10) * 10}` : `${CHAPTERS[Math.floor((next - 1) / 10)]} · boss ${Math.ceil(next / 10) * 10}`;
+    document.getElementById("wave-status").textContent = bossAlive() ? "Defeat the boss · Power Strike interrupts healing" : (run.waveTimer <= 0 && run.enemies.length ? "Next wave waiting · clear enemies" : `${run.enemies.length} enemies · next wave ${Math.ceil(Math.max(0, run.waveTimer))}s`);
+    document.getElementById("btn-next").disabled = paused || state !== "fight" || bossAlive() || run.enemies.length > 0;
+    document.getElementById("btn-pause").textContent = paused ? "Resume (P)" : "Pause (P)";
+    document.getElementById("talent-list").textContent = Object.entries(run.talents).map(([id, lv]) => `${TALENTS.find(t => t.id === id).name} ${lv}/3`).join(" · ") || "First talent after wave 5";
+    document.getElementById("specialization").textContent = `${BRANCHES.find(b => b.id === persist.branch).name}${h.shield > 0 ? ` · Shield ${fmt(h.shield)}` : ""}${h.empowered ? " · Spellsteel ready" : ""}`;
     const whirlBtn = document.getElementById("btn-whirl");
     if (h.whirlCd > 0) {
       whirlBtn.disabled = true;
@@ -863,8 +952,9 @@
       if (!btn) continue;
       const lv = run.levels[u.id] || 0;
       const c = u.cost(lv);
-      btn.textContent = fmt(c);
-      btn.disabled = run.gold < c;
+      const quote = purchaseQuote(u);
+      btn.textContent = lv >= u.max ? "Max" : `${fmt(quote.cost)}g${quote.count > 1 ? ` ×${quote.count}` : ""}`;
+      btn.disabled = lv >= u.max || run.gold < quote.cost;
     }
   }
 
@@ -883,41 +973,174 @@
     }
   }
 
-  function buyRun(id) {
-    const u = RUN_UPGRADES.find((x) => x.id === id);
-    const lv = run.levels[id] || 0;
-    const c = u.cost(lv);
-    if (run.gold < c || state !== "fight") return;
-    run.gold -= c;
-    run.levels[id] = lv + 1;
-    u.apply(run.hero);
+  function balancedUpgrade() {
+    const h = run.hero;
+    const score = u => {
+      const cost = u.cost(run.levels[u.id] || 0);
+      if (u.id === "iron") return 1.8 * 1.5 / h.dmg / cost;
+      if (u.id === "swift") return 1.8 * 0.04 / h.atkRate / cost;
+      return (12 / h.maxHp + 0.048 / (1 + h.armor * 0.08)) / cost * (h.hp < h.maxHp * 0.6 ? 2 : 1);
+    };
+    return RUN_UPGRADES.filter(u => (run.levels[u.id] || 0) < u.max && u.cost(run.levels[u.id] || 0) <= run.gold)
+      .sort((a, b) => score(b) - score(a))[0]?.id;
+  }
+
+  function purchaseQuote(u, count = buyAmount) {
+    let lv = run.levels[u.id] || 0, cost = 0, bought = 0;
+    const limit = count === "max" ? u.max : Number(count);
+    while (lv + bought < u.max && bought < limit) {
+      const next = u.cost(lv + bought);
+      if (bought && cost + next > run.gold) break;
+      cost += next; bought++;
+    }
+    return { cost, count: bought };
+  }
+
+  function buyRun(id, count = buyAmount, automatic = false) {
+    const u = RUN_UPGRADES.find(x => x.id === id);
+    if (!u || state !== "fight" || paused || (run.levels[id] || 0) >= u.max) return;
+    const quote = purchaseQuote(u, count);
+    if (run.gold < quote.cost || !quote.count) return;
+    run.gold -= quote.cost;
+    run.levels[id] = (run.levels[id] || 0) + quote.count;
+    for (let i = 0; i < quote.count; i++) u.apply(run.hero);
+    run.purchases += quote.count;
+    if (!automatic) run.manualPurchases = (run.manualPurchases || 0) + 1;
     buildShop();
-    sfx(560, 0.08, "square", 0.05);
+    if (!automatic) { sfx(560, 0.08, "square", 0.05); saveRun(); }
   }
 
   function buildPrestige() {
-    const box = document.getElementById("prestige-shop");
-    box.innerHTML = "";
-    for (const u of PRESTIGE_UPGRADES) {
-      const lv = persist.prest[u.id] || 0;
-      const c = u.cost(lv);
-      const row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = `<div class="name">${u.name} <span style="color:#8ea0b5">${lv}</span></div>
-        <button type="button">${c} glory</button>
-        <div class="desc">${u.desc}</div>`;
-      box.appendChild(row);
-      row.querySelector("button").onclick = () => {
-        if (persist.glory < c) return;
-        persist.glory -= c;
-        persist.prest[u.id] = lv + 1;
-        save();
-        document.getElementById("glory").textContent = fmt(persist.glory);
-        buildPrestige();
-        sfx(500, 0.1, "sine", 0.05);
-      };
-      row.querySelector("button").disabled = persist.glory < c;
+    const box = document.getElementById("prestige-shop"); box.innerHTML = "";
+    document.getElementById("prestige-glory").textContent = `${fmt(persist.glory)} Glory · only your selected branch applies`;
+    for (const branch of BRANCHES) {
+      const panel = document.createElement("section"); panel.className = "branch";
+      const heading = document.createElement("button"); heading.className = "branch-select";
+      heading.textContent = `${persist.branch === branch.id ? "✓ " : ""}${branch.name}`;
+      heading.onclick = () => { if (state !== "dead") return; persist.branch = branch.id; save(); buildPrestige(); };
+      panel.appendChild(heading);
+      const desc = document.createElement("p"); desc.className = "branch-desc"; desc.textContent = branch.desc; panel.appendChild(desc);
+      const invested = (persist.prest[branch.id + "_body"] || 0) + (persist.prest[branch.id + "_craft"] || 0);
+      for (const u of PRESTIGE_UPGRADES.filter(u => u.branch === branch.id)) {
+        const lv = persist.prest[u.id] || 0, cost = u.cost(lv);
+        const row = document.createElement("div"); row.className = "row";
+        row.innerHTML = `<div class="name">${u.name} ${lv}/${u.max}</div><button type="button">${lv >= u.max ? "Max" : cost + " Glory"}</button><div class="desc">${u.desc}${u.requires ? " · Requires 6 minor ranks" : ""}</div>`;
+        const btn = row.querySelector("button");
+        btn.disabled = lv >= u.max || persist.glory < cost || invested < (u.requires || 0);
+        btn.onclick = () => {
+          if (state !== "dead" || btn.disabled) return;
+          persist.glory -= cost; persist.prest[u.id] = lv + 1; save(); buildPrestige();
+        };
+        panel.appendChild(row);
+      }
+      box.appendChild(panel);
     }
+  }
+
+  function clearWave(n) {
+    if (run.cleared.includes(n)) return;
+    run.cleared.push(n);
+    if (isBossWave(n)) {
+      run.bosses.push(n);
+      run.bossTimes[n] = run.elapsed - run.ledger[n].started;
+      const reward = Math.floor(65 * waveScale(n).gold);
+      run.gold += reward;
+      run.hero.hp = Math.min(run.hero.maxHp, run.hero.hp + run.hero.maxHp * 0.15);
+      run.hero.mana = Math.min(run.hero.maxMana, run.hero.mana + 20);
+      if (!persist.milestones.includes(n)) {
+        persist.milestones.push(n); persist.glory += 10; save();
+        toast(`Boss cleared · +${reward}g · +10 first-clear Glory`);
+      } else toast(`Boss cleared · +${reward}g · health and mana restored`);
+    }
+    if (n % 5 === 0) run.pendingChoices++;
+    if (n === 50 && !run.campaignDone) run.victoryPending = true;
+  }
+
+  function talentPool() {
+    const owned = Object.keys(run.talents).length;
+    return TALENTS.filter(t => rank(t.id) < 3 && (rank(t.id) > 0 || owned < 4));
+  }
+
+  function showTalent() {
+    if (run.pendingChoices <= 0) return;
+    const pool = talentPool();
+    if (!pool.length) { run.pendingChoices = 0; run.offers = []; return; }
+    state = "talent";
+    if (!run.offers.length) {
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      run.offers = shuffled.slice(0, 3).map(t => t.id);
+    }
+    const box = document.getElementById("talent-options"); box.innerHTML = "";
+    for (const id of run.offers) {
+      const t = TALENTS.find(t => t.id === id); if (!t) continue;
+      const btn = document.createElement("button"); btn.className = "talent-card";
+      btn.innerHTML = `<strong>${t.name}</strong><span>Rank ${rank(id) + 1}/3</span><p>${t.desc}</p>`;
+      btn.onclick = () => chooseTalent(id); box.appendChild(btn);
+    }
+    document.getElementById("talent").classList.remove("hidden");
+    saveRun();
+  }
+
+  function chooseTalent(id) {
+    if (state !== "talent" || !run.offers.includes(id) || !talentPool().some(t => t.id === id)) return;
+    run.talents[id] = rank(id) + 1;
+    if (id === "edge") run.hero.crit = Math.min(0.35, run.hero.crit + 0.05);
+    if (id === "leech") run.hero.leech = Math.min(0.08, run.hero.leech + 0.02);
+    if (id === "fortune") run.hero.goldFind += 0.08;
+    run.pendingChoices--; run.offers = [];
+    document.getElementById("talent").classList.add("hidden"); state = "fight";
+    if (run.pendingChoices > 0) showTalent();
+    if (state === "fight" && run.victoryPending) showVictory();
+    syncHud(); saveRun();
+  }
+
+  function recap() {
+    const top = Object.entries(run.damageTaken).sort((a, b) => b[1] - a[1])[0];
+    const talents = Object.entries(run.talents).map(([id, lv]) => `${TALENTS.find(t => t.id === id)?.name || id} ${lv}`).join(", ") || "No talents yet";
+    const minutes = run.elapsed / 60;
+    const bosses = Object.entries(run.bossTimes).map(([n, seconds]) => `W${n}: ${Math.round(seconds)}s`).join(" · ");
+    return `${Math.floor(minutes)}m ${Math.floor(run.elapsed % 60)}s · ${Math.round(100 * run.idleTime / Math.max(1, run.elapsed))}% without enemies · ${run.purchases} ranks bought (${((run.manualPurchases || 0) / Math.max(1 / 60, minutes)).toFixed(1)} manual purchases/min). ${run.lastHit && state === "dead" ? `Final hit: ${run.lastHit}. ` : ""}${top ? `Most damage: ${top[0]} (${fmt(top[1])}). ` : ""}${bosses ? `Boss times: ${bosses}. ` : ""}Build: ${talents}.`;
+  }
+
+  function showVictory() {
+    run.victoryPending = false; run.campaignDone = true;
+    if (!persist.endless) { persist.endless = true; persist.glory += 50; }
+    bankGlory(); state = "victory";
+    document.getElementById("victory-recap").textContent = recap();
+    document.getElementById("victory").classList.remove("hidden");
+    saveRun();
+  }
+
+  function returnToCamp() {
+    if (state !== "victory") return;
+    state = "fight";
+    document.getElementById("victory").classList.add("hidden");
+    die();
+    document.querySelector("#dead h1").textContent = "ROAD COMPLETE";
+  }
+
+  function togglePause() {
+    if (state !== "fight") return;
+    paused = !paused;
+    document.getElementById("pause-label").classList.toggle("hidden", !paused);
+    syncHud(); saveRun();
+  }
+
+  function callWave() {
+    if (state !== "fight" || paused || bossAlive() || run.enemies.length) return;
+    run.waveTimer = 0;
+  }
+
+  function respec() {
+    if (state !== "dead") return;
+    for (const u of PRESTIGE_UPGRADES) {
+      for (let lv = 0; lv < (persist.prest[u.id] || 0); lv++) persist.glory += u.cost(lv);
+    }
+    persist.prest = {}; save(); buildPrestige();
   }
 
   // --- loop / resize ---
@@ -978,7 +1201,7 @@
 
   // --- input ---
   document.getElementById("btn-start").onclick = () => {
-    audio();
+    try { audio(); } catch (e) { /* Audio is optional. */ }
     startRun();
   };
   document.getElementById("btn-again").onclick = () => startRun();
@@ -990,6 +1213,8 @@
     if (state === "fight") powerStrike();
   });
   window.addEventListener("keydown", (ev) => {
+    if (["INPUT", "SELECT"].includes(ev.target.tagName)) return;
+    if (ev.code === "Space" && ev.target.tagName === "BUTTON") return;
     if (ev.code === "Space") {
       ev.preventDefault();
       if (state === "title") startRun();
@@ -998,7 +1223,8 @@
     if (ev.key === "1") mend();
     if (ev.key === "2") whirlwind();
     if (ev.key === "3") charge();
-    if (ev.key === "p" || ev.key === "P") paused = !paused;
+    if (ev.key === "p" || ev.key === "P") togglePause();
+    if (ev.key === "n" || ev.key === "N") callWave();
   });
   window.addEventListener("resize", resize);
 
@@ -1026,12 +1252,42 @@
       run.wave = Math.max(0, (wave || 1) - 1);
       run.enemies = [];
       run.waveTimer = 0.05;
+      run.ledger = {};
     },
     smite() {
       [...run.enemies].forEach(killEnemy);
     },
   };
 
+  document.getElementById("btn-camp-title").classList.toggle("hidden", !!savedRun());
+  document.getElementById("btn-camp-title").onclick = () => {
+    if (state !== "title" || savedRun()) return;
+    state = "dead";
+    document.getElementById("title").classList.add("hidden");
+    document.getElementById("dead").classList.remove("hidden");
+    document.querySelector("#dead h1").textContent = "CAMP";
+    document.getElementById("dead-summary").textContent = `Best cleared wave: ${persist.bestWave}`;
+    document.getElementById("dead-glory").textContent = "0";
+    buildPrestige();
+  };
+  document.getElementById("btn-resume").onclick = resumeRun;
+  document.getElementById("btn-resume").classList.toggle("hidden", !savedRun());
+  document.getElementById("btn-next").onclick = callWave;
+  document.getElementById("btn-pause").onclick = togglePause;
+  document.getElementById("btn-respec").onclick = respec;
+  document.getElementById("buy-amount").onchange = ev => { buyAmount = ev.target.value; syncHud(); };
+  document.getElementById("auto-buy").onchange = ev => { run.autoBuy = ev.target.value; saveRun(); };
+  document.getElementById("btn-endless").onclick = () => {
+    if (state !== "victory") return;
+    state = "fight"; paused = false;
+    document.getElementById("victory").classList.add("hidden"); run.waveTimer = 5; saveRun();
+  };
+  document.getElementById("btn-camp").onclick = returnToCamp;
+  document.getElementById("save-note").textContent = persist.migrated ? "Your old prestige spending has been refunded as Glory. Choose a branch at camp." : "Runs save automatically. Five bosses stand between you and the end of the road.";
+  window.addEventListener("pagehide", saveRun);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && state === "fight" && !paused) togglePause();
+  });
   resize();
   loadAll()
     .then(() => requestAnimationFrame(loop))

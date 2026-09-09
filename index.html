@@ -36,7 +36,11 @@
           <button id="btn-whirl" type="button">Whirlwind (6s)</button>
           <button id="btn-charge" type="button">Charge</button>
         </div>
-        <h2>Stats</h2>
+        <div id="specialization" class="hint"></div>
+        <h2>The road</h2>
+        <div id="milestone" class="hint"></div><div id="wave-status" class="hint"></div>
+        <div class="controls"><button id="btn-next">Call next (N)</button><button id="btn-pause">Pause (P)</button></div>
+        <details><summary>Combat stats</summary>
         <div id="char-stats">
           <div><span>Damage</span><b id="st-dmg">8</b></div>
           <div><span>Speed</span><b id="st-spd">0.90/s</b></div>
@@ -47,34 +51,56 @@
           <div><span>Regen</span><b id="st-regen">2.2/s</b></div>
           <div><span>Buffs</span><b id="st-buffs">—</b></div>
         </div>
+        </details>
         <h2>Upgrades</h2>
+        <div class="controls"><label>Buy <select id="buy-amount"><option value="1">1 rank</option><option value="5">Up to 5</option><option value="max">Max</option></select></label>
+        <label>Auto <select id="auto-buy"><option value="off">Off</option><option value="balanced">Balanced</option><option value="iron">Steel</option><option value="vital">Resolve</option><option value="swift">Tempo</option></select></label></div>
         <div id="upgrades"></div>
+        <h2>Talents · 4 slots</h2><div id="talent-list" class="hint"></div>
       </aside>
 
-      <div id="keys" class="hidden">Click / Space: Power Strike · 1 Mend · 2 Whirlwind · 3 Charge / Return</div>
-      <div id="toast"></div>
+      <div id="keys" class="hidden">Click / Space: Power Strike · 1 Mend · 2 Whirlwind · 3 Charge / Return · P Pause</div>
+      <div id="toast"></div><div id="pause-label" class="hidden">PAUSED · P to resume</div>
 
       <div id="title" class="overlay">
         <h1>UNENDING</h1>
         <p>A lone fighter. An endless road. They will not stop coming.</p>
         <p class="sub">
           He stands on the left and cuts down whatever walks out of the trees.
-          Buy steel with gold. Die, and spend Glory on permanent blood.
+          Buy steel with gold. Shape a build. Defeat five bosses, then brave the endless road.
         </p>
-        <button class="cta" id="btn-start" type="button">Begin the road</button>
+        <p id="save-note" class="sub"></p>
+        <button class="cta hidden" id="btn-resume" type="button">Resume saved run</button>
+        <button class="cta" id="btn-start" type="button">Begin a new run</button>
+        <button id="btn-camp-title" class="secondary">Camp · choose prestige</button>
       </div>
 
       <div id="dead" class="overlay hidden">
         <h1>FALLEN</h1>
         <p id="dead-summary">Wave 1 · 0 kills</p>
-        <p class="sub">Glory earned this death: <span id="dead-glory">0</span></p>
+        <p class="sub">Unbanked run Glory earned: <span id="dead-glory">0</span></p>
+        <p id="run-recap" class="sub"></p>
         <h2 style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #d9a0ff">
           Prestige
         </h2>
+        <p id="prestige-glory" class="sub"></p>
         <div id="prestige-shop"></div>
+        <button id="btn-respec" class="secondary">Refund all ranks · free respec</button>
         <button class="cta" id="btn-again" type="button" style="margin-top: 16px">
           Rise again
         </button>
+      </div>
+      <div id="talent" class="overlay hidden">
+        <h1>CHOOSE A TALENT</h1><p>A stronger build, one decision at a time.</p>
+        <p class="sub">Combat is paused. Up to four talents, three ranks each.</p>
+        <div id="talent-options"></div>
+      </div>
+      <div id="victory" class="overlay hidden">
+        <h1>THE ROAD IS YOURS</h1><p>The Sunfallen has fallen. Campaign complete.</p>
+        <p class="sub">Glory banked. Endless mode unlocked. First completion grants 50 bonus Glory.</p>
+        <p id="victory-recap" class="sub"></p>
+        <button id="btn-endless" class="cta">Continue into endless</button>
+        <button id="btn-camp" class="secondary">Return to camp · spend Glory</button>
       </div>
     </div>
 

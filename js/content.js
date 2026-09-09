@@ -134,7 +134,7 @@ const ENEMIES = {
     scale: 1.5,
     hp: 110,
     dmg: 11,
-    armor: 16,
+    armor: 8,
     speed: 28,
     atkRate: 0.48,
     reach: 115,
@@ -208,155 +208,61 @@ const ENEMIES = {
 
 const BOSS_ORDER = ["butcher", "ironhide", "skycleaver", "stormcaller", "sunfallen"];
 
+// The campaign is tuned as five ten-wave chapters; endless adds a steeper curve.
 const RUN_UPGRADES = [
-  {
-    id: "iron",
-    name: "Iron",
-    desc: "+2 damage",
-    icon: "⚔",
-    cost: (lv) => Math.floor(18 * Math.pow(1.38, lv)),
-    apply: (hero) => {
-      hero.dmg += 2;
-    },
-  },
-  {
-    id: "swift",
-    name: "Swift",
-    desc: "+8% attack speed",
-    icon: "»",
-    cost: (lv) => Math.floor(20 * Math.pow(1.4, lv)),
-    apply: (hero) => {
-      hero.atkRate *= 1.08;
-    },
-  },
-  {
-    id: "vital",
-    name: "Vitality",
-    desc: "+25 max HP, heal 25",
-    icon: "♥",
-    cost: (lv) => Math.floor(22 * Math.pow(1.36, lv)),
-    apply: (hero) => {
-      hero.maxHp += 25;
-      hero.hp = Math.min(hero.maxHp, hero.hp + 25);
-    },
-  },
-  {
-    id: "guard",
-    name: "Guard",
-    desc: "+1.5 armor",
-    icon: "🛡",
-    cost: (lv) => Math.floor(24 * Math.pow(1.4, lv)),
-    apply: (hero) => {
-      hero.armor += 1.5;
-    },
-  },
-  {
-    id: "fortune",
-    name: "Fortune",
-    desc: "+12% gold find",
-    icon: "●",
-    cost: (lv) => Math.floor(25 * Math.pow(1.42, lv)),
-    apply: (hero) => {
-      hero.goldFind += 0.12;
-    },
-  },
-  {
-    id: "leech",
-    name: "Leech",
-    desc: "+3% lifesteal",
-    icon: "◈",
-    cost: (lv) => Math.floor(28 * Math.pow(1.45, lv)),
-    apply: (hero) => {
-      hero.leech += 0.03;
-    },
-  },
-  {
-    id: "edge",
-    name: "Edge",
-    desc: "+6% crit chance",
-    icon: "✦",
-    cost: (lv) => Math.floor(30 * Math.pow(1.45, lv)),
-    apply: (hero) => {
-      hero.crit += 0.06;
-    },
-  },
+  { id: "iron", name: "Steel", desc: "+1.5 damage", icon: "⚔", max: 40,
+    cost: lv => Math.floor(16 * 1.16 ** lv), apply: h => { h.dmg += 1.5; } },
+  { id: "vital", name: "Resolve", desc: "+12 HP, heal 12, +0.6 armor", icon: "♥", max: 40,
+    cost: lv => Math.floor(18 * 1.16 ** lv),
+    apply: h => { h.maxHp += 12; h.hp = Math.min(h.maxHp, h.hp + 12); h.armor += 0.6; } },
+  { id: "swift", name: "Tempo", desc: "+0.04 attacks/sec", icon: "»", max: 30,
+    cost: lv => Math.floor(20 * 1.18 ** lv), apply: h => { h.atkRate = Math.min(2.5, h.atkRate + 0.04); } },
 ];
 
-const PRESTIGE_UPGRADES = [
-  {
-    id: "blood",
-    name: "Blood",
-    desc: "+20 starting HP each run",
-    cost: (lv) => 1 + lv * 2,
-  },
-  {
-    id: "might",
-    name: "Might",
-    desc: "+2 starting damage each run",
-    cost: (lv) => 1 + lv * 2,
-  },
-  {
-    id: "purse",
-    name: "Purse",
-    desc: "+18 starting gold each run",
-    cost: (lv) => 1 + lv * 2,
-  },
-  {
-    id: "greed",
-    name: "Greed",
-    desc: "+12% gold find each run",
-    cost: (lv) => 2 + lv * 2,
-  },
-  {
-    id: "fate",
-    name: "Fate",
-    desc: "+18% glory on death",
-    cost: (lv) => 2 + lv * 3,
-  },
-  {
-    id: "spark",
-    name: "Spark",
-    desc: "+0.7 mana regen each run",
-    cost: (lv) => 2 + lv * 2,
-  },
+const BRANCHES = [
+  { id: "vanguard", name: "Vanguard", desc: "Hold the line. Return home to shield yourself." },
+  { id: "ravager", name: "Ravager", desc: "Break crowds. Whirlwind leaves enemies bleeding." },
+  { id: "spellblade", name: "Spellblade", desc: "Time your magic. Mend empowers your next strike." },
 ];
+const PRESTIGE_UPGRADES = BRANCHES.flatMap(b => [
+  { id: b.id + "_body", branch: b.id, name: "Conditioning", desc: "+5% starting HP per rank", max: 3, cost: lv => 5 + lv * 5 },
+  { id: b.id + "_craft", branch: b.id, name: "Discipline",
+    desc: b.id === "vanguard" ? "+1 armor per rank" : b.id === "ravager" ? "+4% damage per rank" : "+0.2 mana/sec per rank",
+    max: 3, cost: lv => 5 + lv * 5 },
+  { id: b.id + "_keystone", branch: b.id, name: b.id === "vanguard" ? "Safe Return" : b.id === "ravager" ? "Open Wounds" : "Spellsteel",
+    desc: b.id === "vanguard" ? "Return: 15% HP shield for 4s (10s cooldown)" : b.id === "ravager" ? "Whirlwind: bleed for 45% damage over 3s" : "Mend: next weapon strike deals +60% damage",
+    max: 1, requires: 6, cost: () => 25 },
+]);
+const TALENTS = [
+  { id: "reach", name: "Sweeping Steel", desc: "+25 Whirlwind reach and +8% Whirlwind damage per rank" },
+  { id: "duelist", name: "Duelist", desc: "+12% weapon damage against isolated enemies per rank" },
+  { id: "edge", name: "Keen Edge", desc: "+5% critical chance per rank (35% total cap)" },
+  { id: "leech", name: "Blood Drinker", desc: "+2% lifesteal per rank (8% total cap; area hits heal at 25%)" },
+  { id: "ward", name: "Second Wind", desc: "Mend heals an extra 3% max HP per rank" },
+  { id: "fortune", name: "Scavenger", desc: "+8% kill gold per rank" },
+];
+const CHAPTERS = ["The Treeline", "Broken Shields", "The Hunting Ground", "Storm Road", "The Last Light"];
 
-function waveCount(n) {
-  return Math.min(7, Math.max(1, Math.ceil(n / 1.5)));
-}
-
-function isBossWave(n) {
-  return n > 0 && n % 10 === 0;
-}
-
-function bossTypeFor(n) {
-  const idx = (Math.floor(n / 10) - 1) % BOSS_ORDER.length;
-  return BOSS_ORDER[idx];
-}
-
+function waveCount(n) { return Math.min(7, Math.max(1, Math.ceil(n / 2))); }
+function isBossWave(n) { return n > 0 && n % 10 === 0; }
+function bossTypeFor(n) { return BOSS_ORDER[(Math.floor(n / 10) - 1) % BOSS_ORDER.length]; }
 function waveRoster(n) {
   if (isBossWave(n)) return [bossTypeFor(n)];
-  const count = waveCount(n);
-  const units = [];
-  for (let i = 0; i < count; i++) {
-    let type = "grunt";
-    if (n >= 13 && i === count - 1) type = "healer";
-    else if (n >= 11 && i === count - 1 && count >= 3) type = "mage";
-    else if (n >= 7 && i === count - 1) type = "archer";
-    else if (n >= 11 && i === count - 2 && count >= 4) type = "archer";
-    else if (n >= 8 && i % 4 === 3) type = "assassin";
-    else if (n >= 5 && i % 3 === 2) type = "berserk";
-    else if (n >= 3 && i % 2 === 1) type = "shield";
-    units.push(type);
-  }
-  if (n === 1) return ["grunt"];
-  return units;
+  const packs = [
+    ["grunt", "grunt", "shield", "berserk", "archer"],
+    ["shield", "berserk", "grunt", "archer", "healer", "grunt", "mage"],
+    ["assassin", "archer", "grunt", "berserk", "mage", "shield", "healer"],
+    ["mage", "shield", "berserk", "healer", "archer", "assassin", "grunt"],
+    ["shield", "mage", "assassin", "healer", "berserk", "archer", "shield"],
+  ];
+  const chapter = Math.min(4, Math.floor((n - 1) / 10));
+  if (n <= 2) return Array(waveCount(n)).fill("grunt");
+  const pack = packs[chapter];
+  return Array.from({ length: waveCount(n) }, (_, i) => pack[(i + (chapter ? n % pack.length : 0)) % pack.length]);
 }
-
 function waveScale(n) {
-  return {
-    hp: Math.pow(1.17, n - 1),
-    dmg: Math.pow(1.09, n - 1),
-    gold: 1 + (n - 1) * 0.08,
-  };
+  const extra = Math.max(0, n - 50);
+  return { hp: 1.065 ** (n - 1) * 1.035 ** extra,
+    dmg: 1.03 ** (n - 1) * 1.025 ** extra, gold: 1 + (n - 1) * 0.14 };
 }
+function nextWaveDelay() { return 18; }

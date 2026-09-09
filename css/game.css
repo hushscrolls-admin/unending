@@ -359,3 +359,47 @@ body {
   pointer-events: none;
   text-shadow: 0 2px 0 #000;
 }
+
+/* Progression panels share the existing pixel-art palette. */
+.hidden { display: none !important; }
+#shop { overflow-y: auto; }
+#upgrades { flex: none; overflow: visible; }
+.controls { display: flex; gap: 8px; justify-content: space-between; font-size: 18px; }
+.controls button, select, .secondary, .branch-select {
+  font: inherit; color: var(--ink); background: #1c2740; border: 1px solid #3a5080;
+  padding: 7px 9px; cursor: pointer;
+}
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.secondary { margin: 12px 0; font-size: 22px; }
+#prestige-shop { width: min(1080px, 96vw); grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.branch { padding: 10px; border: 1px solid var(--line); background: var(--panel); }
+.branch-select { width: 100%; color: var(--gold); font-size: 26px; }
+.overlay .branch-desc { font-size: 18px; min-height: 44px; margin: 8px 0; }
+.branch .row { margin-top: 6px; }
+.branch .name { font-size: 20px; }
+.branch .row button { min-width: 65px; padding: 6px; }
+#talent-options { display: flex; gap: 16px; max-width: 960px; }
+.talent-card { width: 260px; padding: 24px 18px; background: #111c30; border: 2px solid #526685; color: var(--ink); cursor: pointer; font: inherit; }
+.talent-card:hover { border-color: var(--gold); background: #202d42; }
+.talent-card strong { display: block; color: var(--gold); font-size: 28px; }
+.talent-card span { display: block; font-size: 22px; margin: 12px; }
+.overlay .talent-card p { font-size: 22px; margin: 0; }
+.overlay h1 { font-size: clamp(20px, 3vw, 42px); }
+.overlay { overflow-y: auto; }
+.overlay button.cta { margin: 8px; }
+#pause-label { position: absolute; top: 45%; left: 20px; padding: 20px; background: var(--panel); font-size: 28px; color: var(--gold); pointer-events: none; }
+#run-recap, #victory-recap { font-size: 20px; line-height: 1.35; }
+@media (max-width: 800px) {
+  #prestige-shop { grid-template-columns: 1fr; }
+  #talent-options { flex-direction: column; gap: 8px; }
+  .talent-card { width: min(90vw, 420px); padding: 12px; }
+  #talent { justify-content: flex-start; }
+  .stat { font-size: 20px; }
+  #hud { gap: 4px; }
+}
+
+details { flex: none; }
+summary { color: var(--muted); font-size: 20px; cursor: pointer; padding: 5px 0; }
+#keys { right: 340px; }
+#talent-list { margin-bottom: 0; }
